@@ -12,37 +12,39 @@ Tailwind CSS. No inline styles. No separate CSS files unless absolutely necessar
 ```
 frontend/
 ├── app/
-│   ├── page.jsx                        ← Homepage
-│   ├── events/page.jsx
-│   ├── announcements/page.jsx
-│   ├── gallery/page.jsx
-│   ├── resources/page.jsx
+│   ├── layout.tsx                      ← Root layout (required by App Router)
+│   ├── globals.css                     ← Tailwind CSS entry point
+│   ├── page.tsx                        ← Homepage
+│   ├── events/page.tsx
+│   ├── announcements/page.tsx
+│   ├── gallery/page.tsx
+│   ├── resources/page.tsx
 │   └── admin/
-│       ├── page.jsx                    ← Admin dashboard (lists all posts, edit/delete)
-│       └── [section]/page.jsx          ← Post creation form per section
+│       ├── page.tsx                    ← Admin dashboard (lists all posts, edit/delete)
+│       └── [section]/page.tsx          ← Post creation form per section
 ├── components/
 │   ├── ui/                             ← Reusable primitives, no business logic
-│   │   ├── Button.jsx
-│   │   ├── Input.jsx
-│   │   ├── Modal.jsx
-│   │   └── Navbar.jsx
+│   │   ├── Button.tsx
+│   │   ├── Input.tsx
+│   │   ├── Modal.tsx
+│   │   └── Navbar.tsx
 │   └── features/                       ← Feature-specific, may contain business logic
 │       ├── posts/
-│       │   ├── PostCard.jsx            ← The "Facebook-style" post card
-│       │   ├── PostFeed.jsx            ← List of PostCards
-│       │   └── ReactionBar.jsx         ← 👍 ❤️ 🙏 😂 row on each card
+│       │   ├── PostCard.tsx            ← The "Facebook-style" post card
+│       │   ├── PostFeed.tsx            ← List of PostCards
+│       │   └── ReactionBar.tsx         ← 👍 ❤️ 🙏 😂 row on each card
 │       ├── gallery/
-│       │   ├── AlbumGrid.jsx           ← Grid of albums
-│       │   └── RecentMoments.jsx       ← Flat photo grid
+│       │   ├── AlbumGrid.tsx           ← Grid of albums
+│       │   └── RecentMoments.tsx       ← Flat photo grid
 │       └── admin/
-│           ├── AdminPostForm.jsx        ← Create/edit post form
-│           └── AdminNav.jsx
+│           ├── AdminPostForm.tsx        ← Create/edit post form
+│           └── AdminNav.tsx
 ├── lib/
-│   ├── supabase.js                     ← Supabase client (auth + direct public reads)
-│   └── api.js                          ← Fetch wrapper for Go backend calls
+│   ├── supabase.ts                     ← Supabase client (auth + direct public reads)
+│   └── api.ts                          ← Fetch wrapper for Go backend calls
 ├── public/
 ├── .env.local
-└── next.config.js
+└── next.config.ts
 ```
 
 ---
@@ -60,20 +62,20 @@ frontend/
 
 **Public reads (viewer pages):** Fetch directly from Supabase using the anon key. No need to go through the Go backend for reads.
 
-```js
-// lib/supabase.js
+```ts
+// lib/supabase.ts
 import { createClient } from '@supabase/supabase-js'
 export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 ```
 
-**Admin writes (create/edit/delete):** Always go through the Go backend via `lib/api.js`. The frontend attaches the Supabase JWT to the Authorization header.
+**Admin writes (create/edit/delete):** Always go through the Go backend via `lib/api.ts`. The frontend attaches the Supabase JWT to the Authorization header.
 
-```js
-// lib/api.js
-export async function apiPost(path, body, session) {
+```ts
+// lib/api.ts
+export async function apiPost(path: string, body: unknown, session: { access_token: string }) {
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
     method: 'POST',
     headers: {
