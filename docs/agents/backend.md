@@ -1,0 +1,167 @@
+# docs/agents/backend.md — Go Backend Reference
+
+## Entry point
+`backend/cmd/server/main.go` — wires together the router, middleware, database connection, and starts the HTTP server.
+
+## Router
+Using `github.com/go-chi/chi/v5`. Lightweight, idiomatic Go, close to Express in feel.
+
+---
+
+## Architecture: handler → service → repository
+
+Every feature follows this strict 3-layer pattern. Never skip a layer.
+
+```
+HTTP Request
+     ↓
+  handler/       ← parse request, validate input, call service, write response
+     ↓
+  service/       ← business logic, orchestration, calls repository + discord
+     ↓
+  repository/    ← raw pgx SQL queries, no logic, just data in/out
+     ↓
+  Postgres (Supabase)
+```
+
+**Rule:** A handler must never import `repository`. A repository must never import `service`. Dependencies only flow downward.
+
+---
+
+## Folder structure
+```
+backend/
+├── cmd/server/main.go          ← entry point
+├── internal/
+│   ├── handler/
+│   │   ├── posts.go            ← GET /posts, POST /posts, PATCH /posts/:id, DELETE /posts/:id
+│   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
+│   │   └── gallery.go          ← POST /gallery (album + images)
+│   ├── service/
+│   │   ├── posts.go            ← CreatePost (saves to DB + fires Discord webhook)
+│   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
+│   │   └── gallery.go          ← CreateAlbum, attaches images
+│   ├── repository/
+│   │   ├── posts.go            ← InsertPost, GetPosts, GetPostByID, UpdatePost, DeletePost
+│   │   ├── reactions.go        ← UpsertReaction, GetReactionCounts, DeleteReaction
+│   │   └── gallery.go          ← InsertPostImage, GetImagesByPostID
+│   ├── middleware/
+│   │   ├── auth.go             ← Verify Supabase JWT → check admins table → attach to ctx
+│   │   ├── cors.go             ← Allow frontend origin
+│   │   └── logger.go           ← Request logging
+│   ├── model/
+│   │   └── types.go            ← Post, Admin, Reaction, PostImage structs
+│   └── discord/
+│       └── webhook.go          ← SendToDiscord(channelType, message)
+├── pkg/database/
+│   └── postgres.go             ← pgx connection pool, returns *pgxpool.Pool
+├── .env
+├── go.mod
+└── Dockerfile
+```
+
+---
+
+## API routes
+
+All routes are prefixed `/api/v1/`.
+
+### Public (no auth)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?limit=20`, `?offset=0` |
+| GET | `/api/v1/posts/:id` | Single post with images and reaction counts |
+| GET | `/api/v1/reactions/:post_id` | Reaction counts grouped by emoji |
+| POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
+| DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
+
+### Admin only (JWT required)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/v1/posts` | Create a new post |
+| PATCH | `/api/v1/posts/:id` | Edit a post |
+| DELETE | `/api/v1/posts/:id` | Delete a post |
+
+---
+
+## Model types (`internal/model/types.go`)
+
+```go
+type PostType string
+
+const (
+    PostTypeEvent        PostType = "event"
+    PostTypeAnnouncement PostType = "announcement"
+    PostTypeBibleStudy   PostType = "bible_study"
+    PostTypePlaylist     PostType = "playlist"
+    PostTypeGalleryAlbum PostType = "gallery_album"
+)
+
+type Post struct {
+    ID           string     `json:"id"`
+    Type         PostType   `json:"type"`
+    Title        string     `json:"title"`
+    Body         *string    `json:"body"`
+    EventDate    *time.Time `json:"event_date"`
+    ExternalLink *string    `json:"external_link"`
+    AdminID      *string    `json:"admin_id"`
+    CreatedAt    time.Time  `json:"created_at"`
+    UpdatedAt    time.Time  `json:"updated_at"`
+    Images       []PostImage `json:"images,omitempty"`
+    Reactions    []ReactionCount `json:"reactions,omitempty"`
+}
+
+type PostImage struct {
+    ID           string `json:"id"`
+    PostID       string `json:"post_id"`
+    StorageURL   string `json:"storage_url"`
+    DisplayOrder int    `json:"display_order"`
+}
+
+type Reaction struct {
+    ID          string `json:"id"`
+    PostID      string `json:"post_id"`
+    Emoji       string `json:"emoji"`
+    Fingerprint string `json:"fingerprint"`
+}
+
+type ReactionCount struct {
+    Emoji string `json:"emoji"`
+    Count int    `json:"count"`
+}
+```
+
+---
+
+## Error handling convention
+Return JSON errors in this shape:
+```json
+{ "error": "human-readable message" }
+```
+Use standard HTTP status codes: 400 bad input, 401 unauthenticated, 403 not admin, 404 not found, 500 server error.
+Never leak internal error messages or stack traces to the client. Log them server-side only.
+
+---
+
+## Environment variables (`.env`)
+```
+PORT=8080
+DATABASE_URL=postgresql://...           # Supabase Postgres connection string (service role)
+SUPABASE_JWT_SECRET=...                 # From Supabase dashboard → Settings → API → JWT Secret
+DISCORD_WEBHOOK_EVENTS=https://...
+DISCORD_WEBHOOK_ANNOUNCEMENTS=https://...
+DISCORD_WEBHOOK_BIBLE_STUDIES=https://...
+DISCORD_WEBHOOK_PLAYLISTS=https://...
+DISCORD_WEBHOOK_GALLERY=https://...
+FRONTEND_ORIGIN=http://localhost:3000   # or https://your-domain.vercel.app in prod
+```
+
+---
+
+## Key packages
+```
+github.com/go-chi/chi/v5       ← router
+github.com/jackc/pgx/v5        ← Postgres driver
+github.com/jackc/pgx/v5/pgxpool ← connection pooling
+github.com/joho/godotenv       ← load .env file
+```
