@@ -24,3 +24,29 @@ Goal: make `backend/` fully bootstrapped so it compiles, runs, and has dependenc
 
 - Server startup now validates environment at runtime and may skip DB wiring when `DATABASE_URL` is missing in local dev.
 - CORS behavior is strict to configured origin unless wildcard is set.
+
+---
+
+## Environment bootstrap scratchpad
+
+Goal: provide ready-to-edit local env files for frontend, backend, and database connection placeholders.
+
+### Files to add/update
+
+1. `.gitignore`
+   - Add environment ignore patterns to prevent local secrets from being committed.
+2. `backend/.env`
+   - Add placeholder backend runtime variables, including database URL and Discord webhooks.
+3. `frontend/.env.local`
+   - Add placeholder frontend public runtime variables.
+
+### Order of changes
+
+1. Update ignore rules first.
+2. Add backend env template values with empty placeholders.
+3. Add frontend env template values with empty placeholders.
+
+### Side effects / risks
+
+- New local env files are intentionally not committed after ignore rules are in place.
+- Backend may still run in degraded mode if required values are left empty.

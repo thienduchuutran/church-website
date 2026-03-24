@@ -1,0 +1,16 @@
+# Environment files
+.env
+.env.local
+.env.*.local
+backend/.env
+frontend/.env.local
+
+# Dependencies and build output
+node_modules/
+frontend/.next/
+backend/server
+backend/tmp/
+
+# OS junk
+.DS_Store
+Thumbs.db
