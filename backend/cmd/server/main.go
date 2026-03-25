@@ -15,6 +15,8 @@ import (
 
 	"github.com/thienduchuutran/church-website/backend/internal/handler"
 	appMiddleware "github.com/thienduchuutran/church-website/backend/internal/middleware"
+	"github.com/thienduchuutran/church-website/backend/internal/repository"
+	"github.com/thienduchuutran/church-website/backend/internal/service"
 	"github.com/thienduchuutran/church-website/backend/pkg/database"
 )
 
@@ -43,8 +45,31 @@ func main() {
 
 	healthHandler := handler.NewHealthHandler()
 
+	var postHandler *handler.PostHandler
+	var adminRepo *repository.AdminRepository
+	if dbPool != nil {
+		adminRepo = repository.NewAdminRepository(dbPool)
+		postRepo := repository.NewPostRepository(dbPool)
+		postSvc := service.NewPostService(postRepo)
+		postHandler = handler.NewPostHandler(postSvc)
+	}
+
+	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", healthHandler.ServeHTTP)
+
+		if postHandler != nil {
+			r.Get("/posts", postHandler.List)
+			r.Get("/posts/{id}", postHandler.Get)
+
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwtSecret))
+				r.Post("/posts", postHandler.Create)
+				r.Patch("/posts/{id}", postHandler.Update)
+				r.Delete("/posts/{id}", postHandler.Delete)
+			})
+		}
 	})
 
 	server := &http.Server{

@@ -50,3 +50,43 @@ Goal: provide ready-to-edit local env files for frontend, backend, and database 
 
 - New local env files are intentionally not committed after ignore rules are in place.
 - Backend may still run in degraded mode if required values are left empty.
+
+---
+
+## Frontend cornerstone scratchpad
+
+Goal: shared site shell with viewer-default PostCard/PostFeed, then admin chrome, then write path.
+
+### Milestone 1 — shell-postcard (public reads)
+
+Files to create/modify:
+1. `frontend/lib/types.ts` — TS types matching database schema
+2. `frontend/lib/supabase.ts` — Supabase anon client for public reads
+3. `frontend/lib/api.ts` — Fetch wrapper for Go backend writes (stubbed, fleshed out in milestone 3)
+4. `frontend/app/globals.css` — Church design tokens (Tailwind v4 CSS-first)
+5. `frontend/next.config.ts` — Image remote patterns for Supabase Storage
+6. `frontend/components/ui/Navbar.tsx` — Responsive nav with mobile menu
+7. `frontend/components/features/posts/PostCard.tsx` — Facebook-style post card (server component)
+8. `frontend/components/features/posts/PostFeed.tsx` — List of PostCards + empty state
+9. `frontend/components/features/posts/ReactionBar.tsx` — Emoji display (client component)
+10. `frontend/app/layout.tsx` — Root layout with Navbar + footer
+11. `frontend/app/page.tsx` — Homepage: hero + latest announcements + upcoming events
+12. `frontend/app/announcements/page.tsx` — Full announcement feed
+13. `frontend/app/events/page.tsx` — Full events feed
+
+### Milestone 2 — admin-layer (auth + admin chrome)
+
+1. `frontend/lib/auth.ts` — Auth context/provider, session helpers, admin check
+2. `frontend/components/features/admin/AdminControls.tsx` — Edit/delete overlays on PostCard
+3. `frontend/app/admin/page.tsx` — Admin dashboard (login prompt + all posts)
+4. Update Navbar with login/logout button
+5. Update PostCard/PostFeed to accept `isAdmin` and show controls
+
+### Milestone 3 — writes-api (create/edit/delete wiring)
+
+1. Flesh out `frontend/lib/api.ts` with POST/PATCH/DELETE
+2. `frontend/components/features/admin/AdminPostForm.tsx` — Create/edit form
+3. `frontend/app/admin/[section]/page.tsx` — Section-specific create/edit page
+4. Backend: implement PostService, PostHandler CRUD methods
+5. Backend: wire routes + services + repos in main.go
+6. Backend: unit tests for handler and service layers

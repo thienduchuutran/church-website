@@ -2,6 +2,7 @@ package model
 
 import (
 	"errors"
+	"fmt"
 	"time"
 )
 
@@ -66,6 +67,22 @@ type CreatePostRequest struct {
 	Body         *string    `json:"body"`
 	EventDate    *time.Time `json:"event_date"`
 	ExternalLink *string    `json:"external_link"`
+}
+
+// Validate checks required fields and type-specific constraints.
+func (r *CreatePostRequest) Validate() error {
+	if r.Title == "" {
+		return errors.New("title is required")
+	}
+	switch r.Type {
+	case PostTypeEvent, PostTypeAnnouncement, PostTypeBibleStudy, PostTypePlaylist, PostTypeGalleryAlbum:
+	default:
+		return fmt.Errorf("invalid post type: %s", r.Type)
+	}
+	if r.Type == PostTypeEvent && r.EventDate == nil {
+		return errors.New("event_date is required for events")
+	}
+	return nil
 }
 
 type UpdatePostRequest struct {

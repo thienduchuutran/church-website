@@ -1,0 +1,9 @@
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":false,"errCode":"PGRST116"},"timestamp":1774408623427}
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":false,"errCode":"PGRST116"},"timestamp":1774408623572}
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":false,"errCode":"PGRST116"},"timestamp":1774409416770}
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":false,"errCode":"PGRST116"},"timestamp":1774410082814}
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":false,"errCode":"PGRST116"},"timestamp":1774410146128}
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":true,"errCode":null},"timestamp":1774415578638}
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":true,"errCode":null},"timestamp":1774415593776}
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":true,"errCode":null},"timestamp":1774415593870}
+{"sessionId":"c2745d","location":"auth.tsx:checkAdmin","message":"admins lookup","hypothesisId":"H1-RLS","data":{"hasRow":true,"errCode":null},"timestamp":1774415593956}

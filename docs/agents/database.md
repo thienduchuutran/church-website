@@ -129,6 +129,6 @@ The resulting public URL is then sent to the Go backend and saved in `post_image
 ---
 
 ## Migration files
-All schema changes go in `backend/db/migrations/` as numbered `.sql` files.
+All schema changes go in `supabase/migrations/` as YYYYMMDDHHMMSS_description.sql (the CLI generates these if you use supabase migration new description).
 Never modify the database schema directly via the Supabase dashboard UI without also adding a migration file.
-Format: `001_initial_schema.sql`, `002_add_index_posts_type.sql`, etc.
+Format: `YYYYMMDDHHMMSS_description.sql`, `YYYYMMDDHHMMSS_description.sql`, etc.
