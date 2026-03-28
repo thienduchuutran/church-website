@@ -5,7 +5,7 @@ import PostFeed from '@/components/features/posts/PostFeed'
 import AdminFeedActions from '@/components/features/admin/AdminFeedActions'
 
 export const metadata: Metadata = {
-  title: 'Announcements — Our Church',
+  title: 'Announcements - Our Church',
 }
 
 export const revalidate = 60

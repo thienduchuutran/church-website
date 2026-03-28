@@ -28,12 +28,23 @@ func main() {
 		port = "8080"
 	}
 
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	if supabaseURL == "" {
+		log.Fatalf("SUPABASE_URL not set in environment")
+	}
+
 	ctx := context.Background()
 	dbPool, err := database.NewPool(ctx)
 	if err != nil {
 		log.Printf("warning: database connection not initialized (%v)", err)
 	} else {
 		defer dbPool.Close()
+	}
+
+	// Initialize JWKS cache and fetch Supabase public keys
+	jwksCache := appMiddleware.NewJWKSCache()
+	if err := jwksCache.FetchAndCacheKeys(supabaseURL); err != nil {
+		log.Fatalf("failed to fetch Supabase JWKS: %v", err)
 	}
 
 	router := chi.NewRouter()

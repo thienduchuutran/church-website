@@ -46,6 +46,12 @@ func RequireAdmin(checker AdminChecker, jwksCache *JWKSCache) func(http.Handler)
 			})
 
 			if err != nil {
+				fmt.Printf("JWT parse error: %v\n", err)
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
+
+			if !token.Valid {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}

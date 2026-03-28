@@ -147,7 +147,8 @@ Never leak internal error messages or stack traces to the client. Log them serve
 ```
 PORT=8080
 DATABASE_URL=postgresql://...           # Supabase Postgres connection string (service role)
-SUPABASE_JWT_SECRET=...                 # From Supabase dashboard → Settings → API → JWT Secret
+SUPABASE_URL=https://your-project-id.supabase.co  # used for Supabase JWKS
+SUPABASE_JWT_SECRET=...                 # From Supabase dashboard → Settings → API → JWT Secret (used only for non-ES tokens / legacy support)
 DISCORD_WEBHOOK_EVENTS=https://...
 DISCORD_WEBHOOK_ANNOUNCEMENTS=https://...
 DISCORD_WEBHOOK_BIBLE_STUDIES=https://...
@@ -155,6 +156,18 @@ DISCORD_WEBHOOK_PLAYLISTS=https://...
 DISCORD_WEBHOOK_GALLERY=https://...
 FRONTEND_ORIGIN=http://localhost:3000   # or https://your-domain.vercel.app in prod
 ```
+
+---
+
+## JWT verification update (ES256 via JWKS)
+This project uses Supabase JWTs signed with `ES256` (ECDSA). The middleware now:
+
+- Fetches JWKS from `https://<SUPABASE_URL>/auth/v1/.well-known/jwks.json`
+- Caches keyset for 1 hour in `internal/middleware/jwks.go`
+- Validates incoming requests by `kid` + public key lookup
+- Verifies token method type `SigningMethodECDSA` in `internal/middleware/auth.go`
+
+This is required because old flow using `[]byte(SUPABASE_JWT_SECRET)` only worked for `HS256`.
 
 ---
 
