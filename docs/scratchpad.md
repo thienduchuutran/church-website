@@ -1,3 +1,11 @@
+## Scratchpad (deprecated)
+
+We are consolidating design/progress tracking into `docs/progress.md`.
+
+`docs/progress.md` now contains feature-level design decisions, architecture notes, metrics, and implementation diary entries.
+
+---
+
 ## Backend setup scratchpad
 
 Goal: make `backend/` fully bootstrapped so it compiles, runs, and has dependency management in place.

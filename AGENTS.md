@@ -35,6 +35,7 @@ cd backend && go run ./cmd/server
 - Prefer explicit over clever. Readable code beats terse code.
 - Every new function needs at least one sentence comment explaining *why*, not just what.
 - When in doubt about where a piece of logic belongs, prefer putting it in `service/` over `handler/` or `repository/`.
+- Document every non-trivial architecture/security change in `docs/progress.md` and update the relevant child doc (`docs/agents/backend.md`, `docs/agents/auth.md`, etc.) as part of the same PR.
 
 ---
 
