@@ -101,6 +101,13 @@ func (j *JWKSCache) GetKey(kid string) *ecdsa.PublicKey {
 	return j.keys[kid]
 }
 
+// SetKey adds or updates a public key for a kid. Useful for tests or manual injection.
+func (j *JWKSCache) SetKey(kid string, key *ecdsa.PublicKey) {
+	j.mu.Lock()
+	defer j.mu.Unlock()
+	j.keys[kid] = key
+}
+
 // ecdsaPublicKeyFromJWK converts x and y coordinates to an ECDSA public key.
 func ecdsaPublicKeyFromJWK(x, y string) (*ecdsa.PublicKey, error) {
 	xBytes, err := base64.RawURLEncoding.DecodeString(x)

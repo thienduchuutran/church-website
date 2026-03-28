@@ -65,6 +65,16 @@ func main() {
 		postHandler = handler.NewPostHandler(postSvc)
 	}
 
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	if supabaseURL == "" {
+		log.Fatal("SUPABASE_URL must be set")
+	}
+
+	jwksCache := appMiddleware.NewJWKSCache()
+	if err := jwksCache.FetchAndCacheKeys(supabaseURL); err != nil {
+		log.Fatalf("failed to initialize JWKS cache: %v", err)
+	}
+
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", healthHandler.ServeHTTP)
 

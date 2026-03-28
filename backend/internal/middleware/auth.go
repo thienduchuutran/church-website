@@ -28,18 +28,15 @@ func RequireAdmin(checker AdminChecker, jwksCache *JWKSCache) func(http.Handler)
 
 			claims := jwt.MapClaims{}
 			token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
-				// Verify the signing method is ECDSA (ES256)
 				if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
 
-				// Get the kid (key ID) from token header
 				kid, ok := token.Header["kid"].(string)
 				if !ok {
 					return nil, fmt.Errorf("token missing kid")
 				}
 
-				// Fetch the public key from cache
 				pubKey := jwksCache.GetKey(kid)
 				if pubKey == nil {
 					return nil, fmt.Errorf("key not found in cache: %s", kid)
@@ -50,6 +47,11 @@ func RequireAdmin(checker AdminChecker, jwksCache *JWKSCache) func(http.Handler)
 
 			if err != nil {
 				fmt.Printf("JWT parse error: %v\n", err)
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
+
+			if !token.Valid {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}
