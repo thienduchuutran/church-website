@@ -2,6 +2,9 @@ package middleware_test
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -20,16 +23,30 @@ func (f *fakeAdminChecker) AdminExists(_ context.Context, email string) (bool, e
 	return f.emails[email], nil
 }
 
-func signJWT(claims jwt.MapClaims, secret string) string {
-	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	s, _ := tok.SignedString([]byte(secret))
+func generateES256Key(t *testing.T) *ecdsa.PrivateKey {
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+	return key
+}
+
+func signJWT(claims jwt.MapClaims, privateKey *ecdsa.PrivateKey, kid string) string {
+	tok := jwt.NewWithClaims(jwt.SigningMethodES256, claims)
+	tok.Header["kid"] = kid
+	s, _ := tok.SignedString(privateKey)
 	return s
 }
 
-const testSecret = "test-jwt-secret-32-chars-long!!!"
+func newTestJWKSCacheForToken(kid string, key *ecdsa.PublicKey) *mw.JWKSCache {
+	cache := mw.NewJWKSCache()
+	cache.SetKey(kid, key)
+	return cache
+}
 
 func TestRequireAdmin_NoHeader(t *testing.T) {
-	h := mw.RequireAdmin(&fakeAdminChecker{}, testSecret)(
+	cache := mw.NewJWKSCache()
+	h := mw.RequireAdmin(&fakeAdminChecker{}, cache)(
 		http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Fatal("handler should not be called")
 		}),
@@ -43,7 +60,8 @@ func TestRequireAdmin_NoHeader(t *testing.T) {
 }
 
 func TestRequireAdmin_InvalidToken(t *testing.T) {
-	h := mw.RequireAdmin(&fakeAdminChecker{}, testSecret)(
+	cache := mw.NewJWKSCache()
+	h := mw.RequireAdmin(&fakeAdminChecker{}, cache)(
 		http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Fatal("handler should not be called")
 		}),
@@ -59,13 +77,15 @@ func TestRequireAdmin_InvalidToken(t *testing.T) {
 
 func TestRequireAdmin_NonAdmin(t *testing.T) {
 	checker := &fakeAdminChecker{emails: map[string]bool{}}
+	key := generateES256Key(t)
+	cache := newTestJWKSCacheForToken("test-kid", &key.PublicKey)
 	token := signJWT(jwt.MapClaims{
 		"email": "nobody@test.com",
 		"sub":   "user-456",
 		"exp":   time.Now().Add(time.Hour).Unix(),
-	}, testSecret)
+	}, key, "test-kid")
 
-	h := mw.RequireAdmin(checker, testSecret)(
+	h := mw.RequireAdmin(checker, cache)(
 		http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 			t.Fatal("handler should not be called")
 		}),
@@ -81,14 +101,16 @@ func TestRequireAdmin_NonAdmin(t *testing.T) {
 
 func TestRequireAdmin_ValidAdmin(t *testing.T) {
 	checker := &fakeAdminChecker{emails: map[string]bool{"admin@test.com": true}}
+	key := generateES256Key(t)
+	cache := newTestJWKSCacheForToken("test-kid", &key.PublicKey)
 	token := signJWT(jwt.MapClaims{
 		"email": "admin@test.com",
 		"sub":   "user-123",
 		"exp":   time.Now().Add(time.Hour).Unix(),
-	}, testSecret)
+	}, key, "test-kid")
 
 	var gotEmail, gotUserID string
-	h := mw.RequireAdmin(checker, testSecret)(
+	h := mw.RequireAdmin(checker, cache)(
 		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			gotEmail = mw.AdminEmailFromContext(r.Context())
 			gotUserID = mw.UserIDFromContext(r.Context())

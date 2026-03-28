@@ -54,7 +54,15 @@ func main() {
 		postHandler = handler.NewPostHandler(postSvc)
 	}
 
-	jwtSecret := os.Getenv("SUPABASE_JWT_SECRET")
+	supabaseURL := os.Getenv("SUPABASE_URL")
+	if supabaseURL == "" {
+		log.Fatal("SUPABASE_URL must be set")
+	}
+
+	jwksCache := appMiddleware.NewJWKSCache()
+	if err := jwksCache.FetchAndCacheKeys(supabaseURL); err != nil {
+		log.Fatalf("failed to initialize JWKS cache: %v", err)
+	}
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", healthHandler.ServeHTTP)
@@ -64,7 +72,7 @@ func main() {
 			r.Get("/posts/{id}", postHandler.Get)
 
 			r.Group(func(r chi.Router) {
-				r.Use(appMiddleware.RequireAdmin(adminRepo, jwtSecret))
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Post("/posts", postHandler.Create)
 				r.Patch("/posts/{id}", postHandler.Update)
 				r.Delete("/posts/{id}", postHandler.Delete)
