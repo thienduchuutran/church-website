@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -13,23 +14,47 @@ type AdminChecker interface {
 	AdminExists(ctx context.Context, email string) (bool, error)
 }
 
-// RequireAdmin verifies the Supabase JWT and checks the email against the admins whitelist.
-func RequireAdmin(checker AdminChecker, jwtSecret string) func(http.Handler) http.Handler {
-	secretBytes := []byte(jwtSecret)
-
+// RequireAdmin verifies the Supabase JWT (ES256 signed) and checks the email against the admins whitelist.
+// jwksCache should be pre-populated by calling FetchAndCacheKeys on startup.
+func RequireAdmin(checker AdminChecker, jwksCache *JWKSCache) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			tokenStr := extractBearerToken(r)
+
 			if tokenStr == "" {
 				http.Error(w, `{"error":"missing or malformed authorization header"}`, http.StatusUnauthorized)
 				return
 			}
 
 			claims := jwt.MapClaims{}
-			_, err := jwt.ParseWithClaims(tokenStr, claims, func(_ *jwt.Token) (any, error) {
-				return secretBytes, nil
+			token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
+				// Verify the signing method is ECDSA (ES256)
+				if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+
+				// Get the kid (key ID) from token header
+				kid, ok := token.Header["kid"].(string)
+				if !ok {
+					return nil, fmt.Errorf("token missing kid")
+				}
+
+				// Fetch the public key from cache
+				pubKey := jwksCache.GetKey(kid)
+				if pubKey == nil {
+					return nil, fmt.Errorf("key not found in cache: %s", kid)
+				}
+
+				return pubKey, nil
 			})
+
 			if err != nil {
+				fmt.Printf("JWT parse error: %v\n", err)
+				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				return
+			}
+
+			if !token.Valid {
 				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
 				return
 			}

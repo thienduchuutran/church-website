@@ -116,6 +116,23 @@ This secret must never be in the frontend or in any public file.
 
 ---
 
+## Supabase JWT signing behavior
+Supabase tokens are usually signed with `ES256` (ECDSA), not `HS256`.
+
+- `ES256` requires a **public key**, not a shared secret bytes string.
+- The public key is published via JWKS endpoint:
+  `https://<SUPABASE_URL>/auth/v1/.well-known/jwks.json`
+- `kid` from JWT header selects the right key.
+
+### Implementation details in this project
+- `internal/middleware/jwks.go` fetches JWKS and caches keys.
+- `internal/middleware/auth.go` checks `token.Header["alg"] == "ES256"` and uses keyed `*ecdsa.PublicKey`.
+- `cmd/server/main.go` initializes the cache at startup.
+
+This is the correct secure flow for production-grade JWT verification.
+
+---
+
 ## Adding a new admin
 1. Go to Supabase dashboard → Table Editor → `admins`
 2. Insert a new row with the person's Google account email address
