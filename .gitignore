@@ -11,6 +11,12 @@ frontend/.next/
 backend/server
 backend/tmp/
 
+# Claude Code
+.claude/settings.local.json
+
+# Compiled binaries
+*.exe
+
 # OS junk
 .DS_Store
 Thumbs.db
