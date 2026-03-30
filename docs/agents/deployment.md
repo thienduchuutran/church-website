@@ -68,7 +68,7 @@ PORT=8080
 Go compiles to a single static binary — the Docker image is tiny (~15MB).
 
 ```dockerfile
-FROM golang:1.22-alpine AS builder
+FROM golang:1.25-alpine AS builder
 WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
