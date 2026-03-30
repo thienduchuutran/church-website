@@ -8,7 +8,7 @@ Each post auto-fires a Discord webhook to the matching channel.
 
 ## Tech stack
 - **Frontend**: Next.js (App Router) → deployed on Vercel
-- **Backend**: Go (`chi` router, handler/service/repository pattern) → deployed on Fly.io
+- **Backend**: Go (`chi` router, handler/service/repository pattern) → deployed on Render
 - **Database + Auth + Storage**: Supabase (Postgres + Auth + Storage)
 
 ## Monorepo layout

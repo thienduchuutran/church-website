@@ -4,7 +4,7 @@
 ```
 GitHub (monorepo)
 ├── frontend/ → Vercel (auto-deploys on push to main)
-└── backend/  → Fly.io (deploy via flyctl or GitHub Action)
+└── backend/  → Render (auto-deploys on push to main via GitHub connection)
 ```
 
 ---
@@ -20,51 +20,47 @@ GitHub (monorepo)
    ```
    NEXT_PUBLIC_SUPABASE_URL
    NEXT_PUBLIC_SUPABASE_ANON_KEY
-   NEXT_PUBLIC_API_URL        ← set to your Fly.io backend URL after deploying backend
+   NEXT_PUBLIC_API_URL        ← set to your Render backend URL after deploying backend (e.g. https://your-app.onrender.com)
    ```
 
 **After setup:** every `git push` to `main` triggers an automatic Vercel deployment. Preview deployments are created for every PR automatically.
 
 ---
 
-## Backend: Fly.io
+## Backend: Render
 
-**Install flyctl (one time):**
-```bash
-curl -L https://fly.io/install.sh | sh
-fly auth login
+Render free tier: 750 hours/month, no credit card required. The service sleeps after 15 minutes of inactivity — Go cold starts are fast (under 1 second) so this is acceptable. No CLI needed; everything is configured through the Render dashboard and GitHub integration.
+
+**Setup (one time):**
+1. Go to [render.com](https://render.com) → sign up (or log in)
+2. Click **New +** → **Web Service**
+3. Connect your GitHub account → select the `church-website` repository
+4. Configure the service:
+   - **Name**: `church-website-api` (or whatever you like)
+   - **Region**: Oregon (US West) or Ohio (US East) — pick closest to your users
+   - **Root Directory**: `backend`
+   - **Runtime**: Docker (Render auto-detects the Dockerfile in `backend/`)
+   - **Instance Type**: Free
+5. Click **Create Web Service**
+
+**Set environment variables (Render dashboard → your service → Environment tab):**
+```
+DATABASE_URL=postgresql://...
+SUPABASE_JWT_SECRET=...
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=...
+DISCORD_WEBHOOK_EVENTS=https://discord.com/api/webhooks/...
+DISCORD_WEBHOOK_ANNOUNCEMENTS=https://...
+DISCORD_WEBHOOK_BIBLE_STUDIES=https://...
+DISCORD_WEBHOOK_PLAYLISTS=https://...
+DISCORD_WEBHOOK_GALLERY=https://...
+FRONTEND_ORIGIN=https://your-site.vercel.app
+PORT=8080
 ```
 
-**Initialize (one time, run from `backend/` folder):**
-```bash
-cd backend
-fly launch
-# follow prompts: app name, region (choose closest to US East), no Postgres (using Supabase)
-# this creates fly.toml in backend/
-```
+**After setup:** every `git push` to `main` triggers an automatic Render deployment. You can also trigger manual deploys from the dashboard.
 
-**Set secrets on Fly.io (never commit these):**
-```bash
-fly secrets set DATABASE_URL="postgresql://..."
-fly secrets set SUPABASE_JWT_SECRET="..."
-fly secrets set DISCORD_WEBHOOK_EVENTS="https://discord.com/api/webhooks/..."
-fly secrets set DISCORD_WEBHOOK_ANNOUNCEMENTS="https://..."
-fly secrets set DISCORD_WEBHOOK_BIBLE_STUDIES="https://..."
-fly secrets set DISCORD_WEBHOOK_PLAYLISTS="https://..."
-fly secrets set DISCORD_WEBHOOK_GALLERY="https://..."
-fly secrets set FRONTEND_ORIGIN="https://your-site.vercel.app"
-```
-
-**Deploy:**
-```bash
-cd backend
-fly deploy
-```
-
-**View logs:**
-```bash
-fly logs
-```
+**View logs:** Render dashboard → your service → **Logs** tab.
 
 ---
 
@@ -91,16 +87,18 @@ CMD ["./server"]
 
 ## Environment variables: where each one lives
 
-| Variable | Frontend `.env.local` | Backend `.env` | Vercel dashboard | Fly.io secrets |
+| Variable | Frontend `.env.local` | Backend `.env` | Vercel dashboard | Render Environment tab |
 |---|---|---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | | ✅ | |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | | ✅ | |
 | `NEXT_PUBLIC_API_URL` | ✅ | | ✅ | |
 | `DATABASE_URL` | | ✅ | | ✅ |
 | `SUPABASE_JWT_SECRET` | | ✅ | | ✅ |
+| `SUPABASE_URL` | | ✅ | | ✅ |
+| `SUPABASE_SERVICE_ROLE_KEY` | | ✅ | | ✅ |
 | `DISCORD_WEBHOOK_*` (all 5) | | ✅ | | ✅ |
 | `FRONTEND_ORIGIN` | | ✅ | | ✅ |
-| `PORT` | | ✅ (8080) | | auto-set by Fly |
+| `PORT` | | ✅ (8080) | | ✅ (8080) |
 
 ---
 
@@ -127,16 +125,10 @@ Thumbs.db
 
 ---
 
-## Keep-alive for Fly.io free tier
-If using Fly.io's free tier, the app may sleep after inactivity.
-Set up a free cron job at cron-job.org to ping `https://your-app.fly.dev/health` every 10 minutes.
-Add a health check route in Go:
-```go
-r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-    w.WriteHeader(http.StatusOK)
-    w.Write([]byte("ok"))
-})
-```
+## Keep-alive for Render free tier
+Render free tier sleeps the service after 15 minutes of inactivity. To minimize cold starts for real users, set up a free cron job at [cron-job.org](https://cron-job.org) to ping `https://your-app.onrender.com/api/v1/health` every 14 minutes.
+
+The health check route already exists in the codebase at `backend/internal/handler/health.go`, mounted at `GET /api/v1/health`.
 
 ---
 
