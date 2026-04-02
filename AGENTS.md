@@ -63,3 +63,5 @@ Do not write implementation code until you have written the unit test for it fir
 
 ## Self-documentation rule
 When a non-obvious bug is solved, add it to `docs/agents/known-quirks.md` and add a routing rule in this file.
+
+When updating/adding/developing any features/components/functions/layers, update the corresponding .md file along the way

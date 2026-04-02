@@ -1,8 +1,39 @@
-## Scratchpad (deprecated)
+## Scratchpad (deprecated for new features — use progress.md)
 
 We are consolidating design/progress tracking into `docs/progress.md`.
 
 `docs/progress.md` now contains feature-level design decisions, architecture notes, metrics, and implementation diary entries.
+
+---
+
+## Facebook-style emoji reaction picker (hover popup)
+
+**Goal:** Replace the flat emoji row in `ReactionBar.tsx` with a Facebook-style UX: a single "Like" button that reveals a smooth hover popup with 👍 ❤️ 🙏 😂 options. Clicking a reaction saves it anonymously via fingerprint.
+
+### Files to change (in order)
+
+1. `backend/internal/handler/reactions_test.go` ← TDD: write tests first
+2. `backend/internal/service/reactions.go` ← wire ReactionRepository into service
+3. `backend/internal/handler/reactions.go` ← HTTP handlers (Upsert, Delete, GetCounts)
+4. `backend/cmd/server/main.go` ← add reaction routes to chi router
+5. `frontend/lib/api.ts` ← add `apiPostAnon` / `apiDeleteAnon` (no auth token)
+6. `frontend/components/features/posts/ReactionBar.tsx` ← full redesign
+
+### Design decisions
+
+- **Fingerprint**: random UUID stored in `localStorage` under key `church_reaction_fp`. Generated once per browser, persisted forever. No login required.
+- **Hover trigger**: `onMouseEnter`/`onMouseLeave` on a container `div` wrapping both the picker and the Like button — so moving the mouse from button to picker does not close it.
+- **Picker animation**: Tailwind `transition-all duration-200` + `translate-y-2 opacity-0` → `translate-y-0 opacity-100`. Uses `pointer-events-none` when hidden.
+- **Toggle off**: Clicking your own active reaction removes it (DELETE). Clicking a different emoji changes it (POST upsert).
+- **Optimistic update**: Update `counts` and `myReaction` immediately; no loading state beyond a `pending` lock to prevent double-submit.
+- **Reads**: Still go directly to Supabase anon client (no need to go through Go for reads).
+- **Writes**: Go through Go backend (`POST /api/v1/reactions`, `DELETE /api/v1/reactions/:post_id`).
+
+### Potential side effects
+
+- `ReactionBar` no longer shows all four emojis by default — it shows a Like button + counts for emojis that have reactions. This is a UX change visible site-wide on PostCard.
+- The `apiPostAnon` / `apiDeleteAnon` helpers bypass the auth header — only valid for public endpoints.
+- Backend reaction routes must be registered **before** the admin-only group in `main.go` so they don't inherit the `RequireAdmin` middleware.
 
 ---
 
