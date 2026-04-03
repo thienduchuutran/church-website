@@ -17,6 +17,8 @@ type reactionService interface {
 	UpsertReaction(ctx context.Context, postID, emoji, fingerprint string) error
 	DeleteReaction(ctx context.Context, postID, fingerprint string) error
 	GetCounts(ctx context.Context, postID string) ([]model.ReactionCount, error)
+	// GetMyReaction returns the emoji for the given fingerprint on a post, or nil if none.
+	GetMyReaction(ctx context.Context, postID, fingerprint string) (*string, error)
 }
 
 // allowedEmojis mirrors the CHECK constraint on the reactions table.
@@ -87,13 +89,16 @@ func (h *ReactionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// GetCounts handles GET /api/v1/reactions/{post_id} — returns per-emoji counts.
+// GetCounts handles GET /api/v1/reactions/{post_id}[?fingerprint=<fp>].
+// Returns per-emoji counts and, when a fingerprint is provided, the caller's own reaction.
+// No auth required — fingerprint is the anonymous identity.
 func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
 	postID := chi.URLParam(r, "post_id")
 	if postID == "" {
 		writeError(w, http.StatusBadRequest, "post_id is required")
 		return
 	}
+
 	counts, err := h.svc.GetCounts(r.Context(), postID)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to fetch reactions")
@@ -103,5 +108,18 @@ func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
 	if counts == nil {
 		counts = []model.ReactionCount{}
 	}
-	writeJSON(w, http.StatusOK, counts)
+
+	summary := model.ReactionSummary{Counts: counts}
+
+	// Only look up the caller's reaction when they supply their fingerprint.
+	if fp := r.URL.Query().Get("fingerprint"); fp != "" {
+		myReaction, err := h.svc.GetMyReaction(r.Context(), postID, fp)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "failed to fetch your reaction")
+			return
+		}
+		summary.MyReaction = myReaction
+	}
+
+	writeJSON(w, http.StatusOK, summary)
 }

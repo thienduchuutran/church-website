@@ -31,3 +31,8 @@ func (s *ReactionService) DeleteReaction(ctx context.Context, postID, fingerprin
 func (s *ReactionService) GetCounts(ctx context.Context, postID string) ([]model.ReactionCount, error) {
 	return s.repo.GetReactionCounts(ctx, postID)
 }
+
+// GetMyReaction returns the emoji the given fingerprint reacted with, or nil if none.
+func (s *ReactionService) GetMyReaction(ctx context.Context, postID, fingerprint string) (*string, error) {
+	return s.repo.GetMyReaction(ctx, postID, fingerprint)
+}

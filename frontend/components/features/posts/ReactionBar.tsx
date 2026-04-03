@@ -1,8 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { supabase } from '@/lib/supabase'
-import { apiPostAnon, apiDeleteAnon } from '@/lib/api'
+import { apiGet, apiPostAnon, apiDeleteAnon } from '@/lib/api'
 
 const EMOJIS = ['👍', '❤️', '🙏', '😂'] as const
 type Emoji = (typeof EMOJIS)[number]
@@ -46,29 +45,16 @@ export default function ReactionBar({
 
     const fp = getFingerprint()
 
-    // Load all reaction counts for this post.
-    supabase
-      .from('reactions')
-      .select('emoji')
-      .eq('post_id', postId)
-      .then(({ data }) => {
-        if (!data) return
+    // Single backend call: returns both per-emoji counts and this browser's reaction.
+    // Routing through the backend keeps DB access out of the UI layer.
+    apiGet(`/api/v1/reactions/${postId}?fingerprint=${encodeURIComponent(fp)}`)
+      .then((data: { counts: { emoji: string; count: number }[]; my_reaction: string | null }) => {
         const grouped: Record<string, number> = {}
-        for (const r of data) {
-          grouped[r.emoji] = (grouped[r.emoji] || 0) + 1
+        for (const r of data.counts) {
+          grouped[r.emoji] = r.count
         }
         setCounts(grouped)
-      })
-
-    // Check if this browser has already reacted.
-    supabase
-      .from('reactions')
-      .select('emoji')
-      .eq('post_id', postId)
-      .eq('fingerprint', fp)
-      .maybeSingle()
-      .then(({ data }) => {
-        setMyReaction(data?.emoji ?? null)
+        setMyReaction(data.my_reaction ?? null)
       })
   }, [postId, showReactions])
 
