@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,7 +16,15 @@ func NewPool(ctx context.Context) (*pgxpool.Pool, error) {
 		return nil, fmt.Errorf("DATABASE_URL environment variable is not set")
 	}
 
-	pool, err := pgxpool.New(ctx, dbURL)
+	config, err := pgxpool.ParseConfig(dbURL)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse database URL: %w", err)
+	}
+	// Supabase uses PgBouncer in transaction mode (port 6543), which does not
+	// support prepared statements. Use simple protocol to avoid 42P05 errors.
+	config.ConnConfig.DefaultQueryExecMode = pgx.QueryExecModeSimpleProtocol
+
+	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create connection pool: %w", err)
 	}

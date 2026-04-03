@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -101,6 +102,7 @@ func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
 
 	counts, err := h.svc.GetCounts(r.Context(), postID)
 	if err != nil {
+		log.Printf("GetCounts error for post %s: %v", postID, err)
 		writeError(w, http.StatusInternalServerError, "failed to fetch reactions")
 		return
 	}
