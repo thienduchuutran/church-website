@@ -25,9 +25,6 @@ export default function Navbar() {
           href="/"
           className="flex items-center gap-2 text-lg font-bold tracking-tight text-primary"
         >
-          <span className="text-2xl" aria-hidden="true">
-            ✝
-          </span>
           Our Church
         </Link>
 
@@ -36,11 +33,10 @@ export default function Navbar() {
             <li key={href}>
               <Link
                 href={href}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  pathname === href
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${pathname === href
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted hover:bg-primary/5 hover:text-primary'
-                }`}
+                  }`}
               >
                 {label}
               </Link>
@@ -56,11 +52,10 @@ export default function Navbar() {
                   {isAdmin && (
                     <Link
                       href="/admin"
-                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                        pathname.startsWith('/admin')
+                      className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${pathname.startsWith('/admin')
                           ? 'bg-accent/15 text-accent'
                           : 'text-muted hover:text-accent'
-                      }`}
+                        }`}
                     >
                       Admin
                     </Link>
@@ -115,11 +110,10 @@ export default function Navbar() {
               <Link
                 href={href}
                 onClick={() => setOpen(false)}
-                className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                  pathname === href
+                className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${pathname === href
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted hover:bg-primary/5 hover:text-primary'
-                }`}
+                  }`}
               >
                 {label}
               </Link>

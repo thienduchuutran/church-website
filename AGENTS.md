@@ -50,8 +50,136 @@ cd backend && go run ./cmd/server
 | Discord webhooks, channel mapping, webhook payload format | `docs/agents/discord.md`               |
 | Hosting, deployment, environment variables, CI/CD         | `docs/agents/deployment.md`            |
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
+| REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
+| Frontend components, props, data flow                     | `docs/components.md`                   |
 
 > When routing, read the child file **silently** before responding. Do not announce that you are reading it.
+
+---
+
+---
+
+## Feature development workflow
+
+Follow these steps **in order** every time you build a new backend feature or endpoint.
+Never skip a step, never do them out of order.
+
+### Step 1 — Write the test first (TDD)
+File: `backend/internal/handler/<feature>_test.go`
+
+Write a mock of the service interface and HTTP tests for every case:
+success, missing fields, invalid input, service error. The code will not
+compile yet — that is expected and correct.
+
+```go
+// Example: reactions_test.go
+type mockReactionService struct { ... }
+func TestReactionHandler_Upsert_success(t *testing.T) { ... }
+func TestReactionHandler_Upsert_missingFields(t *testing.T) { ... }
+```
+
+### Step 2 — Define the model / types
+File: `backend/internal/model/types.go`
+
+Add any new structs the feature needs — domain objects, request shapes,
+response shapes. Think of this as declaring what the data looks like before
+writing any logic.
+
+```go
+// Example: new response type
+type ReactionSummary struct {
+    Counts     []ReactionCount `json:"counts"`
+    MyReaction *string         `json:"my_reaction"`
+}
+```
+
+### Step 3 — Write the repository function
+File: `backend/internal/repository/<feature>.go`
+
+Write the raw SQL query. No business logic here — just take inputs, run a
+query against the DB, return rows or an error. Use `pgx.ErrNoRows` for
+not-found cases; do not let pgx errors leak upward as-is.
+
+```go
+// Example
+func (r *ReactionRepository) GetMyReaction(ctx context.Context, postID, fingerprint string) (*string, error) {
+    // SELECT ... WHERE post_id = $1 AND fingerprint = $2
+}
+```
+
+### Step 4 — Write the service function
+File: `backend/internal/service/<feature>.go`
+
+Call the repository function. This is where business logic lives — rate
+limiting, combining multiple repo calls, enforcing rules that go beyond a
+single query. For simple pass-throughs it may just delegate, but the layer
+must always exist so logic has a home when it grows.
+
+```go
+func (s *ReactionService) GetMyReaction(ctx context.Context, postID, fingerprint string) (*string, error) {
+    return s.repo.GetMyReaction(ctx, postID, fingerprint)
+}
+```
+
+Also add the new method to the **service interface** declared at the top of
+`handler/<feature>.go` — the handler depends on the interface, not the
+concrete struct. This is what lets tests swap in a mock.
+
+### Step 5 — Write the handler function
+File: `backend/internal/handler/<feature>.go`
+
+Parse and validate the HTTP request, call the service, write the response.
+Three responsibilities only — no SQL, no business logic.
+
+```go
+func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
+    // 1. Parse inputs (URL params, query params, body)
+    // 2. Validate (missing fields, invalid values) → 400 on failure
+    // 3. Call service → 500 on error
+    // 4. Write JSON response with correct status code
+}
+```
+
+### Step 6 — Register the route
+File: `backend/cmd/server/main.go`
+
+Wire the handler method to a URL path and HTTP method inside the chi router.
+Public endpoints go outside the `RequireAdmin` group. Admin-only endpoints
+go inside it.
+
+```go
+// Public
+r.Get("/reactions/{post_id}", reactionHandler.GetCounts)
+
+// Admin only
+r.Group(func(r chi.Router) {
+    r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+    r.Post("/posts", postHandler.Create)
+})
+```
+
+This is the step that makes the endpoint callable from the outside world.
+Without it, the handler exists but nothing routes HTTP traffic to it.
+
+### Step 7 — Build the UI
+Files: `frontend/components/features/<domain>/` or `frontend/app/`
+
+- Use `apiGet` / `apiPostAnon` / `apiDeleteAnon` from `lib/api.ts` — never
+  call Supabase directly for data that goes through the backend.
+- Add `"use client"` only when the component needs `useState`, `useEffect`,
+  event handlers, or browser APIs.
+- Keep components in `components/ui/` if they have no business logic, or
+  `components/features/` if they do.
+
+### Step 8 — Update the docs
+Do this in the same commit, not as an afterthought.
+
+| What changed | Update this file |
+|---|---|
+| New or changed endpoint | `docs/api.md` + route table in `docs/agents/backend.md` |
+| New or changed component | `docs/components.md` + folder list in `docs/agents/frontend.md` |
+| Non-obvious bug fixed | `docs/agents/known-quirks.md` + routing rule in `AGENTS.md` |
+| New model type | Models section of `docs/api.md` and `docs/agents/backend.md` |
 
 ---
 
@@ -63,3 +191,16 @@ Do not write implementation code until you have written the unit test for it fir
 
 ## Self-documentation rule
 When a non-obvious bug is solved, add it to `docs/agents/known-quirks.md` and add a routing rule in this file.
+
+When updating/adding/developing any features/components/functions/layers, update the corresponding .md file along the way.
+
+## API documentation rule
+Every new or changed REST endpoint **must** be documented in `docs/api.md` in the same PR/commit:
+- Add the route, method, query params, request body, and response shape.
+- Add or update any model types in the Models section.
+- Update the route table in `docs/agents/backend.md`.
+
+## Component documentation rule
+Every new or changed frontend component **must** be documented in `docs/components.md` in the same PR/commit:
+- Add the component name, props table, client/server designation, and a brief data-flow description.
+- Update the folder structure in `docs/agents/frontend.md` if the file is new.

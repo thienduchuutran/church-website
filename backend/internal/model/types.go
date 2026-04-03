@@ -52,6 +52,13 @@ type ReactionCount struct {
 	Count int    `json:"count"`
 }
 
+// ReactionSummary is the response shape for GET /api/v1/reactions/{post_id}.
+// MyReaction is nil when no fingerprint was provided or no reaction exists for that fingerprint.
+type ReactionSummary struct {
+	Counts     []ReactionCount `json:"counts"`
+	MyReaction *string         `json:"my_reaction"`
+}
+
 type Admin struct {
 	ID          string    `json:"id"`
 	Email       string    `json:"email"`

@@ -57,12 +57,17 @@ func main() {
 	healthHandler := handler.NewHealthHandler()
 
 	var postHandler *handler.PostHandler
+	var reactionHandler *handler.ReactionHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
 		postRepo := repository.NewPostRepository(dbPool)
 		postSvc := service.NewPostService(postRepo)
 		postHandler = handler.NewPostHandler(postSvc)
+
+		reactionRepo := repository.NewReactionRepository(dbPool)
+		reactionSvc := service.NewReactionService(reactionRepo)
+		reactionHandler = handler.NewReactionHandler(reactionSvc)
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
@@ -78,6 +83,13 @@ func main() {
 				r.Patch("/posts/{id}", postHandler.Update)
 				r.Delete("/posts/{id}", postHandler.Delete)
 			})
+		}
+
+		// Reaction routes are public — no auth middleware.
+		if reactionHandler != nil {
+			r.Get("/reactions/{post_id}", reactionHandler.GetCounts)
+			r.Post("/reactions", reactionHandler.Upsert)
+			r.Delete("/reactions/{post_id}", reactionHandler.Delete)
 		}
 	})
 

@@ -60,7 +60,7 @@ frontend/
 
 ## Data fetching
 
-**Public reads (viewer pages):** Fetch directly from Supabase using the anon key. No need to go through the Go backend for reads.
+**Public reads — simple list/detail data (posts, images):** May fetch directly from Supabase using the anon key when there is no business logic involved and no per-user context is required.
 
 ```ts
 // lib/supabase.ts
@@ -70,6 +70,8 @@ export const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 )
 ```
+
+**Public reads that require per-user context (e.g. reactions by fingerprint):** Must go through the Go backend via `lib/api.ts → apiGet(...)`. Never query Supabase directly for fingerprint-scoped or business-logic-bearing reads — doing so bypasses the service layer and couples the UI to the DB schema.
 
 **Admin writes (create/edit/delete):** Always go through the Go backend via `lib/api.ts`. The frontend attaches the Supabase JWT to the Authorization header.
 

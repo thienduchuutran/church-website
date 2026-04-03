@@ -59,3 +59,25 @@ export async function apiDelete(path: string, accessToken: string) {
     }),
   )
 }
+
+// apiPostAnon sends a POST without an auth token — for public endpoints like reactions.
+export async function apiPostAnon(path: string, body: unknown) {
+  return handleResponse(
+    await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
+// apiDeleteAnon sends a DELETE without an auth token, with an optional JSON body.
+export async function apiDeleteAnon(path: string, body?: unknown) {
+  return handleResponse(
+    await fetch(`${API_URL}${path}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    }),
+  )
+}

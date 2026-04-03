@@ -71,9 +71,11 @@ All routes are prefixed `/api/v1/`.
 |--------|------|-------------|
 | GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?limit=20`, `?offset=0` |
 | GET | `/api/v1/posts/:id` | Single post with images and reaction counts |
-| GET | `/api/v1/reactions/:post_id` | Reaction counts grouped by emoji |
+| GET | `/api/v1/reactions/:post_id` | Returns `ReactionSummary` — per-emoji counts + caller's reaction. Optional `?fingerprint=<fp>` query param; when omitted `my_reaction` is null. |
 | POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
+
+> Full request/response shapes and model definitions live in `docs/api.md`.
 
 ### Admin only (JWT required)
 | Method | Path | Description |
@@ -128,6 +130,11 @@ type Reaction struct {
 type ReactionCount struct {
     Emoji string `json:"emoji"`
     Count int    `json:"count"`
+}
+
+type ReactionSummary struct {
+    Counts     []ReactionCount `json:"counts"`
+    MyReaction *string         `json:"my_reaction"` // nil when fingerprint absent or no reaction
 }
 ```
 

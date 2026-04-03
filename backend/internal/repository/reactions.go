@@ -2,7 +2,9 @@ package repository
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/thienduchuutran/church-website/backend/internal/model"
@@ -57,4 +59,21 @@ func (r *ReactionRepository) DeleteReaction(ctx context.Context, postID, fingerp
 		postID, fingerprint,
 	)
 	return err
+}
+
+// GetMyReaction returns the emoji this fingerprint has reacted with on a post, or nil if none.
+func (r *ReactionRepository) GetMyReaction(ctx context.Context, postID, fingerprint string) (*string, error) {
+	var emoji string
+	err := r.pool.QueryRow(ctx,
+		`SELECT emoji FROM reactions WHERE post_id = $1 AND fingerprint = $2`,
+		postID, fingerprint,
+	).Scan(&emoji)
+	if err != nil {
+		// pgx.ErrNoRows means the fingerprint hasn't reacted yet — not an error.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &emoji, nil
 }
