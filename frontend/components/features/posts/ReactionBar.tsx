@@ -91,7 +91,6 @@ export default function ReactionBar({
 
   // Only show the count row for emojis that have at least one reaction.
   const activeEmojis = EMOJIS.filter((e) => (counts[e] ?? 0) > 0)
-  const myLabel = myReaction ? (EMOJI_LABEL[myReaction as Emoji] ?? 'React') : 'Like'
 
   return (
     <div className="pt-3">
@@ -102,27 +101,39 @@ export default function ReactionBar({
         onMouseEnter={() => setPickerOpen(true)}
         onMouseLeave={() => setPickerOpen(false)}
       >
-        {/* Emoji picker popup — slides up smoothly on hover */}
+        {/*
+          Outer wrapper: transparent, positioned from bottom-full down to the button top.
+          pb-2 fills the visual gap between the pill and the button, so the mouse never
+          leaves the container while crossing that space — no mouseleave fires mid-transit.
+        */}
         <div
-          role="toolbar"
-          aria-label="Reaction picker"
-          className={`absolute bottom-full left-0 mb-2 flex gap-1 rounded-full border border-border bg-surface px-2 py-1.5 shadow-lg transition-all duration-200 ${pickerOpen
-            ? 'translate-y-0 opacity-100 pointer-events-auto'
-            : 'translate-y-2 opacity-0 pointer-events-none'
-            }`}
+          className={`absolute bottom-full left-0 pb-2 ${
+            pickerOpen ? 'pointer-events-auto' : 'pointer-events-none'
+          }`}
         >
-          {EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              title={EMOJI_LABEL[emoji]}
-              onClick={() => handleReact(emoji)}
-              className={`flex h-9 w-9 items-center justify-center rounded-full text-xl transition-transform duration-150 hover:scale-125 active:scale-95 ${myReaction === emoji ? 'bg-primary/15' : 'hover:bg-muted/20'
-                }`}
-            >
-              {emoji}
-            </button>
-          ))}
+          {/* Inner pill: visible styling + slide-up animation */}
+          <div
+            role="toolbar"
+            aria-label="Reaction picker"
+            className={`flex gap-1 rounded-full border border-border bg-surface px-2 py-1.5 shadow-lg transition-all duration-200 ${
+              pickerOpen
+                ? 'translate-y-0 opacity-100'
+                : 'translate-y-2 opacity-0'
+            }`}
+          >
+            {EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                title={EMOJI_LABEL[emoji]}
+                onClick={() => handleReact(emoji)}
+                className={`flex h-9 w-9 items-center justify-center rounded-full text-xl transition-transform duration-150 hover:scale-125 active:scale-95 ${myReaction === emoji ? 'bg-primary/15' : 'hover:bg-muted/20'
+                  }`}
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Primary trigger: shows the current reaction (or default 👍 Like) */}
