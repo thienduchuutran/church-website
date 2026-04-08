@@ -17,6 +17,14 @@ Site-wide navigation bar. Includes mobile hamburger menu.
 
 ---
 
+### `PageTransition`
+Wraps page content and replays a CSS fade-in animation on every route change.  
+**Props:** `children: React.ReactNode`  
+**Client component:** yes (`usePathname` to detect navigation)  
+**How it works:** passes `key={pathname}` to a wrapping `div` — when the key changes React unmounts and remounts the element, which restarts the `.animate-page-fade-in` CSS animation defined in `globals.css`. Used once in `layout.tsx`; all pages get the effect automatically.
+
+---
+
 ## Feature components (`components/features/`)
 
 May contain business logic, API calls, and local state.

@@ -31,7 +31,7 @@ func RequireAdmin(checker AdminChecker, jwksCache *JWKSCache) func(http.Handler)
 				if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
 					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 				}
-
+																						
 				kid, ok := token.Header["kid"].(string)
 				if !ok {
 					return nil, fmt.Errorf("token missing kid")

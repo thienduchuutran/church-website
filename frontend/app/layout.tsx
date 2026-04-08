@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth'
 import Navbar from '@/components/ui/Navbar'
+import PageTransition from '@/components/ui/PageTransition'
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -32,7 +33,7 @@ export default function RootLayout({
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <AuthProvider>
           <Navbar />
-          <main className="flex-1">{children}</main>
+          <main className="flex-1"><PageTransition>{children}</PageTransition></main>
           <footer className="border-t border-border py-8">
             <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted sm:px-6 lg:px-8">
               © {new Date().getFullYear()} Our Church. All rights reserved.

@@ -27,7 +27,8 @@ frontend/
 │   │   ├── Button.tsx
 │   │   ├── Input.tsx
 │   │   ├── Modal.tsx
-│   │   └── Navbar.tsx
+│   │   ├── Navbar.tsx
+│   │   └── PageTransition.tsx          ← Fade-in wrapper; used in layout.tsx
 │   └── features/                       ← Feature-specific, may contain business logic
 │       ├── posts/
 │       │   ├── PostCard.tsx            ← The "Facebook-style" post card
