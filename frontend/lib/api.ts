@@ -20,7 +20,10 @@ async function handleResponse(res: Response) {
 }
 
 export async function apiGet(path: string) {
-  return handleResponse(await fetch(`${API_URL}${path}`))
+  // no-store ensures the browser (and any intermediate cache) always hits the
+  // network — needed for endpoints like /reactions whose response changes
+  // whenever the user reacts on another page but the URL stays identical.
+  return handleResponse(await fetch(`${API_URL}${path}`, { cache: 'no-store' }))
 }
 
 export async function apiPost(path: string, body: unknown, accessToken: string) {

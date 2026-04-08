@@ -123,5 +123,9 @@ func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
 		summary.MyReaction = myReaction
 	}
 
+	// Reaction totals change on every POST/DELETE, so the browser must never
+	// serve a cached copy — otherwise the same GET URL on different pages would
+	// return stale counts and a stale my_reaction after the user reacted.
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, summary)
 }
