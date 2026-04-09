@@ -15,6 +15,9 @@ Site-wide navigation bar. Includes mobile hamburger menu.
 **Props:** none (reads session state internally for login/logout button)  
 **Client component:** yes (session state, mobile menu toggle)
 
+**Nav structure:** Home → News (hover dropdown: Events, Announcements) → Gallery → Resources.  
+The `navItems` array is type-discriminated (`kind: 'link' | 'dropdown'`). Desktop dropdown uses CSS `group-hover` — no extra state. Mobile renders dropdown children as indented sub-items. The "News" parent is highlighted whenever `pathname` matches any child route.
+
 ---
 
 ### `PageTransition`
