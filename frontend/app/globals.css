@@ -58,5 +58,5 @@ body {
 }
 
 .animate-page-fade-in {
-  animation: page-fade-in 1.15s ease-out both;
+  animation: page-fade-in 1.15s ease-out both !important;
 }
