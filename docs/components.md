@@ -15,8 +15,8 @@ Site-wide navigation bar. Includes mobile hamburger menu.
 **Props:** none (reads session state internally for login/logout button)  
 **Client component:** yes (session state, mobile menu toggle)
 
-**Nav structure:** Home → News (hover dropdown: Events, Announcements) → Gallery → Resources.  
-The `navItems` array is type-discriminated (`kind: 'link' | 'dropdown'`). Desktop dropdown uses CSS `group-hover` — no extra state. Mobile renders dropdown children as indented sub-items. The "News" parent is highlighted whenever `pathname` matches any child route.
+**Nav structure:** Home → News (hover dropdown: Events, Announcements) → Gallery → Resources → About. A separate **Connect** CTA button is rendered to the right of the nav (next to Sign in) — it lives outside `navItems` so it can use a call-to-action style instead of a plain link.  
+The `navItems` array is type-discriminated (`kind: 'link' | 'dropdown'`). Desktop dropdown uses CSS `group-hover` — no extra state. Mobile renders dropdown children as indented sub-items and appends Connect as a regular link at the bottom of the nav list. The "News" parent is highlighted whenever `pathname` matches any child route.
 
 ---
 

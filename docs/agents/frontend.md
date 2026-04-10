@@ -19,6 +19,8 @@ frontend/
 │   ├── announcements/page.tsx
 │   ├── gallery/page.tsx
 │   ├── resources/page.tsx
+│   ├── about/page.tsx                  ← Static placeholder; edit `content` const at top of file
+│   ├── connect/page.tsx                ← Static placeholder; edit `content` const at top of file
 │   └── admin/
 │       ├── page.tsx                    ← Admin dashboard (lists all posts, edit/delete)
 │       └── [section]/page.tsx          ← Post creation form per section
@@ -103,6 +105,8 @@ export async function apiPost(path: string, body: unknown, session: { access_tok
 | Announcements | `/announcements` | Supabase — all posts where type = 'announcement' |
 | Gallery | `/gallery` | Supabase — all gallery_album posts + their images |
 | Resources | `/resources` | Supabase — bible_study + playlist posts |
+| About | `/about` | Static content (hardcoded in `content` const at top of page file) |
+| Connect | `/connect` | Static content (hardcoded in `content` const at top of page file) |
 | Admin dashboard | `/admin` | Supabase — all posts (requires Google login) |
 | Admin editor | `/admin/[section]` | Go backend (POST/PATCH) |
 

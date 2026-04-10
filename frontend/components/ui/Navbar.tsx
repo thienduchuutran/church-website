@@ -21,7 +21,11 @@ const navItems: NavItem[] = [
   },
   { kind: 'link', href: '/gallery', label: 'Gallery' },
   { kind: 'link', href: '/resources', label: 'Resources' },
+  { kind: 'link', href: '/about', label: 'About' },
 ]
+
+// Connect is rendered separately as a CTA button, not part of navItems
+const connectHref = '/connect'
 
 export default function Navbar() {
   const pathname = usePathname()
@@ -104,6 +108,19 @@ export default function Navbar() {
         </ul>
 
         <div className="flex items-center gap-2">
+          {/* Connect CTA — visible on desktop, rendered outside navItems so it can
+              be styled as a call-to-action button instead of a plain nav link */}
+          <Link
+            href={connectHref}
+            className={`hidden rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors md:inline-block ${
+              pathname === connectHref
+                ? 'bg-primary text-surface'
+                : 'bg-primary/10 text-primary hover:bg-primary/20'
+            }`}
+          >
+            Connect
+          </Link>
+
           {!loading && (
             <div className="hidden items-center gap-2 md:flex">
               {session ? (
@@ -216,6 +233,22 @@ export default function Navbar() {
               </li>
             )
           })}
+
+          {/* Connect link in mobile — rendered outside the navItems loop so it
+              stays in sync with the desktop CTA button */}
+          <li>
+            <Link
+              href={connectHref}
+              onClick={() => setOpen(false)}
+              className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                pathname === connectHref
+                  ? 'bg-primary/10 text-primary'
+                  : 'text-muted hover:bg-primary/5 hover:text-primary'
+              }`}
+            >
+              Connect
+            </Link>
+          </li>
 
           {!loading && (
             <li className="border-t border-border pt-2">
