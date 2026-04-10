@@ -78,6 +78,26 @@ export default function AdminPage() {
 
       <div className="mb-8 space-y-4">
         <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+          Edit Pages
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {[
+            { slug: 'about', label: 'About' },
+            { slug: 'connect', label: 'Connect' },
+          ].map(({ slug, label }) => (
+            <Link
+              key={slug}
+              href={`/admin/pages/${slug}`}
+              className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
+            >
+              Edit {label} Page
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      <div className="mb-8 space-y-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
           Create New Post
         </h2>
         <div className="flex flex-wrap gap-2">

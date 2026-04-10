@@ -89,6 +89,22 @@ create table reactions (
 
 ---
 
+### `page_content`
+Editable text sections for static pages (about, connect). Each row is one key-value pair scoped to a page slug.
+```sql
+create table page_content (
+  id          uuid primary key default gen_random_uuid(),
+  page_slug   text not null,        -- 'about' or 'connect'
+  section_key text not null,        -- e.g. 'hero_title', 'mission_body'
+  content     text not null default '',
+  updated_at  timestamptz default now(),
+  unique (page_slug, section_key)
+);
+```
+> Admins edit these via `/admin/pages/:slug`. The frontend reads them via `GET /api/v1/pages/:slug`.
+
+---
+
 ## Relationships
 ```
 auth.users  ──< admins        (one Google user whitelisted as one admin row)
@@ -106,6 +122,7 @@ create index on posts(created_at desc);
 create index on posts(event_date) where event_date is not null;
 create index on post_images(post_id);
 create index on reactions(post_id);
+create index on page_content(page_slug);
 ```
 
 ---
@@ -115,6 +132,7 @@ create index on reactions(post_id);
 - `posts` — public SELECT, no public INSERT/UPDATE/DELETE
 - `post_images` — public SELECT, no public INSERT/UPDATE/DELETE
 - `reactions` — public SELECT, INSERT, UPDATE, DELETE (fingerprint abuse handled in Go service layer)
+- `page_content` — public SELECT, no public INSERT/UPDATE/DELETE (admin writes via backend service role)
 
 All writes to `posts` and `post_images` go through the Go backend, which uses the service role key that bypasses RLS entirely.
 

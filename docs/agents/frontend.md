@@ -19,9 +19,12 @@ frontend/
 │   ├── announcements/page.tsx
 │   ├── gallery/page.tsx
 │   ├── resources/page.tsx
+│   ├── about/page.tsx                  ← Fetches from GET /api/v1/pages/about; falls back to defaults
+│   ├── connect/page.tsx                ← Fetches from GET /api/v1/pages/connect; falls back to defaults
 │   └── admin/
-│       ├── page.tsx                    ← Admin dashboard (lists all posts, edit/delete)
-│       └── [section]/page.tsx          ← Post creation form per section
+│       ├── page.tsx                    ← Admin dashboard (lists all posts, edit/delete, edit pages)
+│       ├── [section]/page.tsx          ← Post creation form per section
+│       └── pages/[slug]/page.tsx       ← Page content editor (about, connect)
 ├── components/
 │   ├── ui/                             ← Reusable primitives, no business logic
 │   │   ├── Button.tsx
@@ -103,8 +106,11 @@ export async function apiPost(path: string, body: unknown, session: { access_tok
 | Announcements | `/announcements` | Supabase — all posts where type = 'announcement' |
 | Gallery | `/gallery` | Supabase — all gallery_album posts + their images |
 | Resources | `/resources` | Supabase — bible_study + playlist posts |
+| About | `/about` | Go backend — `GET /api/v1/pages/about` (falls back to hardcoded defaults) |
+| Connect | `/connect` | Go backend — `GET /api/v1/pages/connect` (falls back to hardcoded defaults) |
 | Admin dashboard | `/admin` | Supabase — all posts (requires Google login) |
 | Admin editor | `/admin/[section]` | Go backend (POST/PATCH) |
+| Page editor | `/admin/pages/[slug]` | Go backend — `GET` + `PUT /api/v1/pages/:slug` (admin only) |
 
 ---
 

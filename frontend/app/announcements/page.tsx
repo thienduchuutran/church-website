@@ -20,7 +20,7 @@ export default async function AnnouncementsPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8 flex items-center justify-between">
-        <h1 className="text-3xl font-bold text-foreground">Announcements</h1>
+        <h1 className="text-3xl font-bold text-foreground">Announcements </h1>
         <AdminFeedActions section="announcement" />
       </div>
       <PostFeed

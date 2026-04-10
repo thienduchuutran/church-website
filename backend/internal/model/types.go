@@ -116,3 +116,19 @@ type CreateImageRequest struct {
 	StorageURL   string `json:"storage_url"`
 	DisplayOrder int    `json:"display_order"`
 }
+
+// --- Page content types ---
+
+// PageContent represents a single editable section on a static page (about, connect).
+type PageContent struct {
+	ID         string    `json:"id"`
+	PageSlug   string    `json:"page_slug"`
+	SectionKey string    `json:"section_key"`
+	Content    string    `json:"content"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// UpdatePageRequest is the request body for PUT /api/v1/pages/:slug.
+type UpdatePageRequest struct {
+	Sections map[string]string `json:"sections"`
+}
