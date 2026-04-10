@@ -95,9 +95,46 @@ Remove a reaction by fingerprint.
 
 ---
 
+### `GET /api/v1/pages/:slug`
+Returns all editable sections for a static page (e.g. `about`, `connect`).
+
+**Response `200`**
+```json
+{
+  "sections": {
+    "hero_title": "About Our Church",
+    "hero_subtitle": "Welcome",
+    "mission_heading": "Our Mission",
+    "mission_body": "..."
+  }
+}
+```
+`sections` is always an object (never `null`). Missing keys mean no content has been saved yet — the frontend fills defaults.
+
+---
+
 ## Admin endpoints (JWT required)
 
 All admin routes require a valid Supabase JWT in the `Authorization: Bearer <token>` header, and the token's email must exist in the `admins` table.
+
+### `PUT /api/v1/pages/:slug`
+Upsert editable sections for a static page. Only supplied keys are updated; existing keys not in the request body are left unchanged.
+
+**Request body**
+```json
+{
+  "sections": {
+    "hero_title": "New Title",
+    "mission_body": "Updated mission statement."
+  }
+}
+```
+
+**Response `204`** — no body
+**Response `400`** — missing slug or empty sections
+**Response `401` / `403`** — unauthenticated or not an admin
+
+---
 
 ### `POST /api/v1/posts`
 Create a new post.
@@ -187,6 +224,18 @@ Delete a post and its images.
   "my_reaction": "👍"
 }
 ```
+
+### PageContent
+```json
+{
+  "id": "uuid",
+  "page_slug": "about",
+  "section_key": "hero_title",
+  "content": "About Our Church",
+  "updated_at": "2026-04-09T00:00:00Z"
+}
+```
+> The API never returns raw `PageContent` rows — it returns `{ sections: { key: value, ... } }`. This model is for reference only.
 
 ---
 

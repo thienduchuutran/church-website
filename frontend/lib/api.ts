@@ -52,6 +52,19 @@ export async function apiPatch(path: string, body: unknown, accessToken: string)
   )
 }
 
+export async function apiPut(path: string, body: unknown, accessToken: string) {
+  return handleResponse(
+    await fetch(`${API_URL}${path}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify(body),
+    }),
+  )
+}
+
 export async function apiDelete(path: string, accessToken: string) {
   return handleResponse(
     await fetch(`${API_URL}${path}`, {

@@ -147,6 +147,22 @@ Navigation sidebar shown inside the admin layout.
 
 ---
 
+### Page editor (`app/admin/pages/[slug]/page.tsx`)
+
+Inline page component (not extracted to `components/`) that lets admins edit the About and Connect pages.
+
+**Route:** `/admin/pages/[slug]` where `slug` is `about` or `connect`
+
+**How it works**
+1. On mount, fetches `GET /api/v1/pages/:slug` via `apiGet` to load existing section values.
+2. Renders grouped form fields driven by a `PAGE_SCHEMA` constant — each page has named groups (Hero, Mission, etc.) with typed section keys.
+3. On submit, sends `PUT /api/v1/pages/:slug` via `apiPut` with the admin's JWT.
+4. Shows success/error feedback inline.
+
+**Client component:** yes (form state, auth)
+
+---
+
 ## Adding a new component — checklist
 
 1. Place it in `components/ui/` (no business logic) or `components/features/<domain>/` (with logic).

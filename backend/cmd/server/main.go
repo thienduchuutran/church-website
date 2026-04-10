@@ -58,6 +58,7 @@ func main() {
 
 	var postHandler *handler.PostHandler
 	var reactionHandler *handler.ReactionHandler
+	var pageHandler *handler.PageHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
@@ -68,6 +69,10 @@ func main() {
 		reactionRepo := repository.NewReactionRepository(dbPool)
 		reactionSvc := service.NewReactionService(reactionRepo)
 		reactionHandler = handler.NewReactionHandler(reactionSvc)
+
+		pageRepo := repository.NewPageRepository(dbPool)
+		pageSvc := service.NewPageService(pageRepo)
+		pageHandler = handler.NewPageHandler(pageSvc)
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
@@ -90,6 +95,16 @@ func main() {
 			r.Get("/reactions/{post_id}", reactionHandler.GetCounts)
 			r.Post("/reactions", reactionHandler.Upsert)
 			r.Delete("/reactions/{post_id}", reactionHandler.Delete)
+		}
+
+		// Page content routes — public read, admin-only write.
+		if pageHandler != nil {
+			r.Get("/pages/{slug}", pageHandler.Get)
+
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Put("/pages/{slug}", pageHandler.Update)
+			})
 		}
 	})
 

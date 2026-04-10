@@ -6,6 +6,64 @@ We are consolidating design/progress tracking into `docs/progress.md`.
 
 ---
 
+## DB-backed page content (About & Connect) — Phase 2
+
+**Goal:** Replace hardcoded `content` constants in `/about` and `/connect` pages with
+DB-backed content that admins can edit via `/admin/pages/:slug`.
+
+### Database table: `page_content`
+```sql
+create table page_content (
+  id          uuid primary key default gen_random_uuid(),
+  page_slug   text not null,
+  section_key text not null,
+  content     text not null default '',
+  updated_at  timestamptz default now(),
+  unique (page_slug, section_key)
+);
+```
+RLS: public SELECT, no public INSERT/UPDATE/DELETE.
+
+### API endpoints
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/v1/pages/:slug` | public | Returns `{ sections: { "key": "value", ... } }` |
+| PUT | `/api/v1/pages/:slug` | admin | Upserts sections: `{ sections: { "key": "value", ... } }` |
+
+### Backend files (AGENTS.md order)
+1. `backend/internal/handler/pages_test.go` — mock service, test Get + Update
+2. `backend/internal/model/types.go` — add PageContent struct + request type
+3. `backend/internal/repository/pages.go` — GetSections, UpsertSections
+4. `backend/internal/service/pages.go` — GetPageContent, UpdatePageContent
+5. `backend/internal/handler/pages.go` — service interface, Get, Update handlers
+6. `backend/cmd/server/main.go` — register routes
+
+### Frontend files
+7. `frontend/app/about/page.tsx` — fetch from API, fall back to defaults
+8. `frontend/app/connect/page.tsx` — fetch from API, fall back to defaults
+9. `frontend/app/admin/pages/[slug]/page.tsx` — admin editor form
+10. `frontend/app/admin/page.tsx` — add "Edit Pages" links
+
+### Section keys per page
+
+**about:** hero_title, hero_subtitle, mission_heading, mission_body,
+beliefs_heading, beliefs_body, story_heading, story_body,
+values_heading, values_item_1, values_item_2, values_item_3, values_item_4
+
+**connect:** hero_title, hero_subtitle,
+service_times_heading, service_time_1_day, service_time_1_time, service_time_1_label,
+service_time_2_day, service_time_2_time, service_time_2_label,
+location_heading, location_address, location_city_state_zip, location_directions_note,
+contact_heading, contact_email, contact_phone, contact_note,
+plan_a_visit_heading, plan_a_visit_body
+
+### Potential side effects
+- Frontend pages become async server components fetching from backend
+- If backend is down, pages use hardcoded defaults as fallback
+- No Discord webhook needed for page content updates
+
+---
+
 ## Facebook-style emoji reaction picker (hover popup)
 
 **Goal:** Replace the flat emoji row in `ReactionBar.tsx` with a Facebook-style UX: a single "Like" button that reveals a smooth hover popup with 👍 ❤️ 🙏 😂 options. Clicking a reaction saves it anonymously via fingerprint.
@@ -56,7 +114,7 @@ Goal: make `backend/` fully bootstrapped so it compiles, runs, and has dependenc
 
 ### Command steps
 
-1. Run `go mod tidy` in `backend/` to resolve and lock dependencies.
+1. Run `go mod tidy` in `backend/` to verify setup.
 2. Run `go test ./...` to verify setup.
 
 ### Side effects / risks
