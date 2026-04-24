@@ -36,7 +36,7 @@ type Post struct {
 type PostImage struct {
 	ID           string `json:"id"`
 	PostID       string `json:"post_id"`
-	StorageURL   string `json:"storage_url"`
+	StorageKey   string `json:"storage_key"`
 	DisplayOrder int    `json:"display_order"`
 }
 
@@ -113,7 +113,7 @@ type CreateAlbumRequest struct {
 }
 
 type CreateImageRequest struct {
-	StorageURL   string `json:"storage_url"`
+	StorageKey   string `json:"storage_key"`
 	DisplayOrder int    `json:"display_order"`
 }
 
