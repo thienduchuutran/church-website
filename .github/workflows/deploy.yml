@@ -22,7 +22,7 @@ jobs:
       - name: Build Go binary
         working-directory: ./backend
         run: |
-          GOOS=linux GOARCH=amd64 go build -o church-backend ./cmd/main.go
+          GOOS=linux GOARCH=amd64 go build -o church-backend ./cmd/server/main.go
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
