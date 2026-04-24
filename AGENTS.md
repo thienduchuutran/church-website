@@ -7,9 +7,33 @@ Admins log in via Google (Supabase Auth) to create, edit, and delete posts.
 Each post auto-fires a Discord webhook to the matching channel.
 
 ## Tech stack
-- **Frontend**: Next.js (App Router) → deployed on Vercel
-- **Backend**: Go (`chi` router, handler/service/repository pattern) → deployed on Render
-- **Database + Auth + Storage**: Supabase (Postgres + Auth + Storage)
+- **Frontend**: Next.js (App Router) → EC2 + Nginx + systemd (served at `vgomne.ddns.net`)
+- **Backend**: Go (`chi` router, handler/service/repository pattern) → EC2 + systemd
+- **Database**: AWS RDS PostgreSQL (`church-db`, db.t4g.micro, us-east-1)
+- **Auth**: Supabase Auth — Google OAuth + JWKS-verified JWT (**still in use**, not migrated)
+- **File Storage**: AWS S3 (`church-uploads-prod-058264284549-us-east-1-an`, us-east-1)
+- **Reverse proxy**: Nginx on EC2 — routes `/api/*` → Go on port 8080, everything else → Next.js on port 3000
+- **CI/CD**: GitHub Actions — cross-compiles Go binary for Linux, builds Next.js, SCPs artifacts to EC2, SSHs in and restarts systemd services
+
+## Infrastructure overview
+All services run on a single EC2 instance (us-east-1, Northern Virginia) with a static Elastic IP.
+Nginx sits in front of both apps and handles SSL termination (Let's Encrypt via Certbot).
+Both Go and Next.js are registered as systemd services — they auto-start on boot and self-restart on crash.
+RDS and EC2 talk privately over port 5432 via auto-created security groups (`rds-ec2-1` on RDS, `ec2-rds-1` on EC2).
+S3 bucket is fully private (no public access); access is controlled by IAM policies.
+All secrets live in systemd service environment files — no `.env` file on disk.
+
+```
+Internet → Nginx (EC2, port 443/80)
+              ├── /api/*  → Go backend  (port 8080, systemd: church-backend)
+              └── /*      → Next.js     (port 3000, systemd: church-frontend)
+                                │
+                    ┌───────────┴────────────┐
+                    AWS RDS PostgreSQL      AWS S3
+                    (private, port 5432)    (private, IAM-controlled)
+
+Auth layer: Supabase Auth (Google OAuth) → JWT → verified locally via JWKS
+```
 
 ## Monorepo layout
 ```
@@ -43,12 +67,12 @@ cd backend && go run ./cmd/server
 
 | If the user asks about...                                 | Read this file first                    |
 |-----------------------------------------------------------|-----------------------------------------|
-| Database tables, columns, types, migrations, RLS          | `docs/agents/database.md`              |
+| Database tables, columns, types, migrations               | `docs/agents/database.md` ⚠️ partially stale — still references Supabase; RDS uses plain Postgres, no RLS, no `auth.users` table |
 | Go backend: routes, handlers, services, repositories      | `docs/agents/backend.md`               |
 | Next.js frontend: pages, components, lib, styling         | `docs/agents/frontend.md`              |
-| Google login, Supabase Auth, JWT, admin whitelist         | `docs/agents/auth.md`                  |
+| Google login, Supabase Auth, JWT, admin whitelist         | `docs/agents/auth.md` — auth itself unchanged (Supabase JWT still used) |
 | Discord webhooks, channel mapping, webhook payload format | `docs/agents/discord.md`               |
-| Hosting, deployment, environment variables, CI/CD         | `docs/agents/deployment.md`            |
+| Hosting, deployment, env vars, EC2, Nginx, CI/CD         | `docs/agents/deployment.md` ⚠️ stale — still documents Vercel/Render; actual setup is EC2+Nginx+GitHub Actions |
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |
