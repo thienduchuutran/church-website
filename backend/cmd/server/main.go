@@ -103,6 +103,7 @@ func main() {
 
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Get("/auth/me", handler.Me)
 				r.Post("/posts", postHandler.Create)
 				r.Patch("/posts/{id}", postHandler.Update)
 				r.Delete("/posts/{id}", postHandler.Delete)
