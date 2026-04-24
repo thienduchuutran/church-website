@@ -99,9 +99,8 @@ ExecStart=/home/ubuntu/church-website/backend/server
 Restart=always
 RestartSec=5
 Environment=PORT=8080
-Environment=DATABASE_URL=postgresql://...
+Environment=DATABASE_URL=postgresql://postgres:<password>@<rds-endpoint>:5432/postgres
 Environment=SUPABASE_URL=https://your-project-id.supabase.co
-Environment=SUPABASE_JWT_SECRET=...
 Environment=DISCORD_WEBHOOK_EVENTS=https://...
 Environment=DISCORD_WEBHOOK_ANNOUNCEMENTS=https://...
 Environment=DISCORD_WEBHOOK_BIBLE_STUDIES=https://...
@@ -219,9 +218,8 @@ sudo systemctl status church-backend
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | | ✅ |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | | ✅ |
 | `NEXT_PUBLIC_API_URL` | ✅ | | ✅ |
-| `DATABASE_URL` | | ✅ | |
-| `SUPABASE_URL` | | ✅ | |
-| `SUPABASE_JWT_SECRET` | | ✅ | |
+| `DATABASE_URL` | | ✅ | | RDS endpoint — private, only reachable from EC2 |
+| `SUPABASE_URL` | | ✅ | | Used only for JWKS key fetch (auth), not DB |
 | `DISCORD_WEBHOOK_*` (all 5) | | ✅ | |
 | `FRONTEND_ORIGIN` | | ✅ | |
 | `PORT` | ✅ (3000) | ✅ (8080) | |

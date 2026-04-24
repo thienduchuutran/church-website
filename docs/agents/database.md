@@ -40,13 +40,11 @@ create table posts (
   body          text,
   event_date    timestamptz,
   external_link text,
-  admin_email   text references admins(email) on delete set null,
+  admin_id      uuid,          -- JWT sub claim from Supabase Auth; no FK (auth.users lives in Supabase)
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
 ```
-> Note: `admin_email` references `admins(email)` directly — there is no separate users table.
-> Supabase had `admin_id` referencing `auth.users(id)`; we replaced it with an email FK to `admins`.
 
 **Type usage guide:**
 | type | title | body | event_date | external_link |
@@ -106,12 +104,52 @@ create table page_content (
 
 ---
 
+### `calendar_events`
+One row per calendar entry on a specific date.
+```sql
+create type calendar_event_type as enum (
+  'birthday', 'bible_study', 'general', 'announcement', 'prayer'
+);
+
+create table calendar_events (
+  id           uuid primary key default gen_random_uuid(),
+  date         date not null,
+  title        text not null,
+  event_type   calendar_event_type not null default 'general',
+  icon         text not null default 'star',   -- one of 10 curated Phosphor icon keys
+  color        text not null default 'slate',  -- one of 8 editorial palette keys
+  notes        text,
+  admin_id     uuid,
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now()
+);
+```
+
+---
+
+### `calendar_month_notes`
+One sidebar note per month — displayed in the 30% right panel of the calendar.
+```sql
+create table calendar_month_notes (
+  id         uuid primary key default gen_random_uuid(),
+  year       int not null,
+  month      int not null check (month between 1 and 12),
+  content    text not null default '',
+  admin_id   uuid,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique (year, month)
+);
+```
+
+---
+
 ## Relationships
 ```
-admins      ──< posts         (one admin creates many posts, FK on email)
 posts       ──< post_images   (one post has many images)
 posts       ──< reactions     (one post has many reactions)
 ```
+`admin_id` on posts and calendar_events stores the Supabase Auth user UUID (JWT sub claim). No FK because `auth.users` lives in Supabase, not RDS.
 
 ---
 
@@ -123,6 +161,9 @@ create index on posts(event_date) where event_date is not null;
 create index on post_images(post_id);
 create index on reactions(post_id);
 create index on page_content(page_slug);
+create index on calendar_events(date);
+create index on calendar_events(date, event_type);
+create index on calendar_month_notes(year, month);
 ```
 
 ---
