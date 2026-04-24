@@ -1,0 +1,61 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  deploy:
+    name: Build and Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.22'
+
+      - name: Build Go binary
+        working-directory: ./backend
+        run: |
+          GOOS=linux GOARCH=amd64 go build -o church-backend ./cmd/main.go
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Next.js
+        working-directory: ./frontend
+        run: |
+          npm ci
+          npm run build
+
+      - name: Copy files to EC2
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          source: "backend/church-backend,frontend/.next,frontend/public,frontend/package.json,frontend/package-lock.json"
+          target: "/home/ubuntu/church-website"
+
+      - name: Restart services on EC2
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            sudo systemctl restart church-backend
+            cd /home/ubuntu/church-website/frontend
+            npm ci --omit=dev
+            sudo systemctl restart church-frontend
+
+            sleep 3
+            systemctl is-active --quiet church-backend && echo "Backend running" || echo "Backend failed"
+            systemctl is-active --quiet church-frontend && echo "Frontend running" || echo "Frontend failed"
