@@ -1,19 +1,16 @@
 # docs/agents/database.md — Database Reference
 
 ## Engine
-Postgres (managed by Supabase). Access via `pgx` in Go backend using the service role key.
-The frontend never writes to the database directly — all mutations go through the Go backend.
-The frontend may read public data directly from Supabase using the anon public key.
+AWS RDS PostgreSQL (`church-db`, db.t4g.micro, us-east-1).
+The Go backend connects via `pgx` using a single database user.
+The frontend never touches the database directly — all reads and writes go through the Go backend.
+
+RDS and EC2 communicate privately over port 5432 via auto-created security groups
+(`rds-ec2-1` on the RDS instance, `ec2-rds-1` on the EC2 instance). RDS is not publicly accessible.
 
 ---
 
 ## Tables
-
-### `auth.users`
-Built-in Supabase table. Auto-populated on Google login. Never create or modify manually.
-Key field: `id` (uuid), `email` (text).
-
----
 
 ### `admins`
 Whitelist of people allowed to access the admin panel.
@@ -25,7 +22,7 @@ create table admins (
   created_at   timestamptz default now()
 );
 ```
-> To add the first admin: Supabase dashboard → Table Editor → admins → Insert row → paste email.
+> To add the first admin: connect via psql and `INSERT INTO admins (email) VALUES ('you@example.com');`
 
 ---
 
@@ -40,14 +37,17 @@ create table posts (
   id            uuid primary key default gen_random_uuid(),
   type          post_type not null,
   title         text not null,
-  body          text,                         -- optional description
-  event_date    timestamptz,                  -- only for type = 'event'
-  external_link text,                         -- Spotify, Google Slides, Drive links
-  admin_id      uuid references auth.users(id) on delete set null,
+  body          text,
+  event_date    timestamptz,
+  external_link text,
+  admin_email   text references admins(email) on delete set null,
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
 ```
+> Note: `admin_email` references `admins(email)` directly — there is no separate users table.
+> Supabase had `admin_id` referencing `auth.users(id)`; we replaced it with an email FK to `admins`.
+
 **Type usage guide:**
 | type | title | body | event_date | external_link |
 |------|-------|------|------------|---------------|
@@ -60,55 +60,55 @@ create table posts (
 ---
 
 ### `post_images`
-Images attached to any post. A gallery_album typically has many; an event may have one hero image.
+Images attached to any post.
 ```sql
 create table post_images (
   id            uuid primary key default gen_random_uuid(),
   post_id       uuid not null references posts(id) on delete cascade,
-  storage_url   text not null,       -- Supabase Storage public URL
-  display_order int default 0,       -- 0 = first image shown
+  storage_key   text not null,       -- S3 object key, e.g. "{post_id}/{filename}"
+  display_order int default 0,
   created_at    timestamptz default now()
 );
 ```
+> `storage_key` is the S3 object key, not a full URL. The Go backend constructs the presigned URL on demand.
+> Bucket: `church-uploads-prod-058264284549-us-east-1-an` (us-east-1, private, IAM-controlled).
 
 ---
 
 ### `reactions`
-One row per reaction. The unique constraint on (post_id, fingerprint) enforces one reaction per viewer per post.
+One row per reaction. The unique constraint enforces one reaction per viewer per post.
 ```sql
 create table reactions (
   id          uuid primary key default gen_random_uuid(),
   post_id     uuid not null references posts(id) on delete cascade,
   emoji       text not null check (emoji in ('👍', '❤️', '🙏', '😂')),
-  fingerprint text not null,         -- browser fingerprint, not a login
+  fingerprint text not null,
   created_at  timestamptz default now(),
   unique (post_id, fingerprint)
 );
 ```
-> When a viewer changes their reaction, the backend does an upsert: update `emoji` where (post_id, fingerprint) matches.
+> Fingerprint abuse (spam reactions) is rate-limited in the Go service layer, not at the DB level.
 
 ---
 
 ### `page_content`
-Editable text sections for static pages (about, connect). Each row is one key-value pair scoped to a page slug.
+Editable text sections for static pages (about, connect).
 ```sql
 create table page_content (
   id          uuid primary key default gen_random_uuid(),
-  page_slug   text not null,        -- 'about' or 'connect'
-  section_key text not null,        -- e.g. 'hero_title', 'mission_body'
+  page_slug   text not null,
+  section_key text not null,
   content     text not null default '',
   updated_at  timestamptz default now(),
   unique (page_slug, section_key)
 );
 ```
-> Admins edit these via `/admin/pages/:slug`. The frontend reads them via `GET /api/v1/pages/:slug`.
 
 ---
 
 ## Relationships
 ```
-auth.users  ──< admins        (one Google user whitelisted as one admin row)
-admins      ──< posts         (one admin creates many posts)
+admins      ──< posts         (one admin creates many posts, FK on email)
 posts       ──< post_images   (one post has many images)
 posts       ──< reactions     (one post has many reactions)
 ```
@@ -127,26 +127,49 @@ create index on page_content(page_slug);
 
 ---
 
-## Row Level Security
-- `admins` — no public access (backend service role only)
-- `posts` — public SELECT, no public INSERT/UPDATE/DELETE
-- `post_images` — public SELECT, no public INSERT/UPDATE/DELETE
-- `reactions` — public SELECT, INSERT, UPDATE, DELETE (fingerprint abuse handled in Go service layer)
-- `page_content` — public SELECT, no public INSERT/UPDATE/DELETE (admin writes via backend service role)
-
-All writes to `posts` and `post_images` go through the Go backend, which uses the service role key that bypasses RLS entirely.
+## Access control (current state)
+RLS is **not yet enabled**. The Go backend connects as a single DB user with full access.
+Authorization is enforced at the application layer by the `RequireAdmin` middleware in Go.
+See `docs/agents/database.md` → "RLS proposal" section for a plan to add DB-level enforcement.
 
 ---
 
-## Storage bucket
-Bucket name: `church-media` (public bucket).
-Path convention: `{post_id}/{filename}` — groups all images for a post together.
-Admins upload directly from the frontend to Supabase Storage using the authenticated session token.
-The resulting public URL is then sent to the Go backend and saved in `post_images.storage_url`.
+## S3 file storage
+- **Bucket**: `church-uploads-prod-058264284549-us-east-1-an`
+- **Region**: us-east-1 (same as EC2 and RDS — no cross-region latency)
+- **Access**: fully private. No public URLs. Access via IAM role attached to EC2.
+- **Path convention**: `{post_id}/{filename}` — groups all images for a post together.
+- **Go layer**: `backend/internal/storage/s3.go` — `UploadFile`, `DeleteFile`, `PresignedURL`.
+- Admin uploads go through the Go backend (`POST /api/v1/posts/:id/images`), not directly to S3 from the browser.
 
 ---
 
 ## Migration files
-All schema changes go in `supabase/migrations/` as YYYYMMDDHHMMSS_description.sql (the CLI generates these if you use supabase migration new description).
-Never modify the database schema directly via the Supabase dashboard UI without also adding a migration file.
-Format: `YYYYMMDDHHMMSS_description.sql`, `YYYYMMDDHHMMSS_description.sql`, etc.
+Schema changes go in `supabase/migrations/` as `YYYYMMDDHHMMSS_description.sql`.
+
+> **Note:** The original Supabase migration files are incompatible with plain RDS Postgres —
+> they used `auth.jwt()`, the `authenticated` role, and Supabase-specific RLS syntax.
+> The current RDS schema was created manually with clean plain-Postgres SQL.
+> New migrations should use standard PostgreSQL only (no Supabase extensions).
+
+To apply a migration manually:
+```bash
+psql "$DATABASE_URL" -f supabase/migrations/YYYYMMDDHHMMSS_description.sql
+```
+
+---
+
+## Connecting to RDS manually (for debugging)
+```bash
+# From EC2 (psql installed via apt)
+psql "$DATABASE_URL"
+
+# Or with explicit params
+psql -h <rds-endpoint> -U <db-user> -d <db-name>
+```
+RDS is only reachable from inside the EC2 security group — you cannot connect directly from your laptop.
+To connect from your laptop: SSH tunnel through EC2.
+```bash
+ssh -i <key.pem> -L 5432:<rds-endpoint>:5432 ubuntu@<elastic-ip> -N &
+psql -h localhost -U <db-user> -d <db-name>
+```

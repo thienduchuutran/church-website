@@ -67,12 +67,12 @@ cd backend && go run ./cmd/server
 
 | If the user asks about...                                 | Read this file first                    |
 |-----------------------------------------------------------|-----------------------------------------|
-| Database tables, columns, types, migrations               | `docs/agents/database.md` ⚠️ partially stale — still references Supabase; RDS uses plain Postgres, no RLS, no `auth.users` table |
+| Database tables, columns, types, migrations, S3 storage   | `docs/agents/database.md`              |
 | Go backend: routes, handlers, services, repositories      | `docs/agents/backend.md`               |
 | Next.js frontend: pages, components, lib, styling         | `docs/agents/frontend.md`              |
-| Google login, Supabase Auth, JWT, admin whitelist         | `docs/agents/auth.md` — auth itself unchanged (Supabase JWT still used) |
+| Google login, Supabase Auth, JWT, admin whitelist         | `docs/agents/auth.md`                  |
 | Discord webhooks, channel mapping, webhook payload format | `docs/agents/discord.md`               |
-| Hosting, deployment, env vars, EC2, Nginx, CI/CD         | `docs/agents/deployment.md` ⚠️ stale — still documents Vercel/Render; actual setup is EC2+Nginx+GitHub Actions |
+| Hosting, deployment, EC2, Nginx, systemd, CI/CD          | `docs/agents/deployment.md`            |
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |

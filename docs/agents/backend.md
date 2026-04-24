@@ -21,7 +21,7 @@ HTTP Request
      ↓
   repository/    ← raw pgx SQL queries, no logic, just data in/out
      ↓
-  Postgres (Supabase)
+  AWS RDS PostgreSQL
 ```
 
 **Rule:** A handler must never import `repository`. A repository must never import `service`. Dependencies only flow downward.
@@ -166,18 +166,24 @@ Never leak internal error messages or stack traces to the client. Log them serve
 
 ---
 
-## Environment variables (`.env`)
+## Environment variables
+
+All secrets live in the systemd service file on EC2 — there is no `.env` file on the server.
+For local development, create `backend/.env` (never commit it).
+
 ```
 PORT=8080
-DATABASE_URL=postgresql://...           # Supabase Postgres connection string (service role)
-SUPABASE_URL=https://your-project-id.supabase.co  # used for Supabase JWKS
-SUPABASE_JWT_SECRET=...                 # From Supabase dashboard → Settings → API → JWT Secret (used only for non-ES tokens / legacy support)
+DATABASE_URL=postgresql://...           # RDS connection string
+SUPABASE_URL=https://your-project-id.supabase.co  # used for JWKS endpoint (auth still via Supabase)
+SUPABASE_JWT_SECRET=...                 # Supabase JWT secret (fallback for HS256; ES256 uses JWKS)
 DISCORD_WEBHOOK_EVENTS=https://...
 DISCORD_WEBHOOK_ANNOUNCEMENTS=https://...
 DISCORD_WEBHOOK_BIBLE_STUDIES=https://...
 DISCORD_WEBHOOK_PLAYLISTS=https://...
 DISCORD_WEBHOOK_GALLERY=https://...
-FRONTEND_ORIGIN=http://localhost:3000   # or https://your-domain.vercel.app in prod
+FRONTEND_ORIGIN=https://vgomne.ddns.net
+AWS_REGION=us-east-1
+S3_BUCKET=church-uploads-prod-058264284549-us-east-1-an
 ```
 
 ---
@@ -196,8 +202,9 @@ This is required because old flow using `[]byte(SUPABASE_JWT_SECRET)` only worke
 
 ## Key packages
 ```
-github.com/go-chi/chi/v5       ← router
-github.com/jackc/pgx/v5        ← Postgres driver
+github.com/go-chi/chi/v5        ← router
+github.com/jackc/pgx/v5         ← Postgres driver
 github.com/jackc/pgx/v5/pgxpool ← connection pooling
-github.com/joho/godotenv       ← load .env file
+github.com/aws/aws-sdk-go-v2    ← S3 uploads via EC2 IAM role
+github.com/joho/godotenv        ← load .env for local dev only
 ```
