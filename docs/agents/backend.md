@@ -54,8 +54,10 @@ backend/
 │   │   └── logger.go           ← Request logging
 │   ├── model/
 │   │   └── types.go            ← Post, Admin, Reaction, PostImage structs
-│   └── discord/
-│       └── webhook.go          ← SendToDiscord(channelType, message)
+│   ├── discord/
+│   │   └── webhook.go          ← SendToDiscord(channelType, message)
+│   └── storage/
+│       └── s3.go               ← S3Client: UploadFile, DeleteFile, PresignedURL (uses EC2 IAM role)
 ├── pkg/database/
 │   └── postgres.go             ← pgx connection pool, returns *pgxpool.Pool
 ├── .env
@@ -88,6 +90,7 @@ All routes are prefixed `/api/v1/`.
 | PATCH | `/api/v1/posts/:id` | Edit a post |
 | DELETE | `/api/v1/posts/:id` | Delete a post |
 | PUT | `/api/v1/pages/:slug` | Upsert sections for a static page |
+| POST | `/api/v1/posts/:id/images` | Upload an image to S3 and attach it to a post. Returns `{ key }`. |
 
 ---
 

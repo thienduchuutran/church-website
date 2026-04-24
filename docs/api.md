@@ -183,6 +183,26 @@ Delete a post and its images.
 
 ---
 
+### `POST /api/v1/posts/:id/images`
+Upload an image file and attach it to a post. The file is stored in S3; only the S3 key is saved in the database. Use `GET /api/v1/posts/:id` to retrieve presigned download URLs.
+
+**Request** — `multipart/form-data`  
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `image` | file | Yes | Image file. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max 10 MB. |
+
+**Response `201`**
+```json
+{ "key": "images/posts/<post-id>/1714000000000.jpg" }
+```
+Store this key if needed. To display the image, fetch the post — the backend generates a fresh presigned URL on each read.
+
+**Response `400`** — missing file or unsupported content type  
+**Response `401` / `403`** — unauthenticated or not an admin  
+**Response `500`** — S3 or database failure
+
+---
+
 ## Models
 
 ### Post
@@ -207,10 +227,11 @@ Delete a post and its images.
 {
   "id": "uuid",
   "post_id": "uuid",
-  "storage_url": "https://...",
+  "storage_key": "images/posts/<post-id>/1714000000000.jpg",
   "display_order": 0
 }
 ```
+`storage_key` is the S3 object key, not a URL. The backend generates a presigned URL on each read — never store the URL on the frontend.
 
 ### ReactionCount
 ```json

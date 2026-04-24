@@ -28,25 +28,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   async function checkAdmin(email: string) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('admins')
       .select('id')
       .eq('email', email)
       .single()
-    // #region agent log
-    fetch('http://127.0.0.1:7417/ingest/723dd05e-74b5-434b-b846-6c25c0f838bc', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Debug-Session-Id': 'c2745d' },
-      body: JSON.stringify({
-        sessionId: 'c2745d',
-        location: 'auth.tsx:checkAdmin',
-        message: 'admins lookup',
-        hypothesisId: 'H1-RLS',
-        data: { hasRow: !!data, errCode: error?.code ?? null },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => { })
-    // #endregion
     setIsAdmin(!!data)
     setLoading(false)
   }
@@ -82,7 +68,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin,
       loading,
       signIn: async () => {
-        await supabase.auth.signInWithOAuth({ provider: 'google' })
+        await supabase.auth.signInWithOAuth({
+          provider: 'google',
+          options: { redirectTo: window.location.origin },
+        })
       },
       signOut: async () => {
         await supabase.auth.signOut()
