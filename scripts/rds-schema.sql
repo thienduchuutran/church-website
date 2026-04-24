@@ -47,10 +47,12 @@ create table post_images (
   created_at    timestamptz default now()
 );
 
--- One reaction per browser fingerprint per post (upsert enforced in Go layer).
+-- No FK on post_id — posts are read from Supabase by the frontend directly,
+-- so RDS has no posts table to reference. Referential integrity is handled
+-- at the application layer (the post must exist for the frontend to render it).
 create table reactions (
   id          uuid primary key default gen_random_uuid(),
-  post_id     uuid not null references posts(id) on delete cascade,
+  post_id     uuid not null,
   emoji       text not null check (emoji in ('👍', '❤️', '🙏', '😂')),
   fingerprint text not null,
   created_at  timestamptz default now(),
