@@ -17,6 +17,7 @@ import (
 	appMiddleware "github.com/thienduchuutran/church-website/backend/internal/middleware"
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
 	"github.com/thienduchuutran/church-website/backend/internal/service"
+	"github.com/thienduchuutran/church-website/backend/internal/storage"
 	"github.com/thienduchuutran/church-website/backend/pkg/database"
 )
 
@@ -59,6 +60,7 @@ func main() {
 	var postHandler *handler.PostHandler
 	var reactionHandler *handler.ReactionHandler
 	var pageHandler *handler.PageHandler
+	var galleryHandler *handler.GalleryHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
@@ -73,6 +75,18 @@ func main() {
 		pageRepo := repository.NewPageRepository(dbPool)
 		pageSvc := service.NewPageService(pageRepo)
 		pageHandler = handler.NewPageHandler(pageSvc)
+
+		s3Bucket := os.Getenv("S3_BUCKET")
+		s3Region := os.Getenv("S3_REGION")
+		if s3Bucket != "" && s3Region != "" {
+			s3Client, err := storage.NewS3Client(s3Bucket, s3Region)
+			if err != nil {
+				log.Fatalf("failed to init S3 client: %v", err)
+			}
+			galleryRepo := repository.NewGalleryRepository(dbPool)
+			gallerySvc := service.NewGalleryService(s3Client, galleryRepo)
+			galleryHandler = handler.NewGalleryHandler(gallerySvc)
+		}
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
@@ -104,6 +118,13 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Put("/pages/{slug}", pageHandler.Update)
+			})
+		}
+
+		if galleryHandler != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Post("/posts/{id}/images", galleryHandler.UploadImage)
 			})
 		}
 	})
