@@ -57,7 +57,7 @@ jobs:
           script: |
             sudo systemctl restart church-backend
             cd /home/ubuntu/church-website/frontend
-            npm ci --omit=dev
+            npm ci --omit=dev --legacy-peer-deps
             sudo systemctl restart church-frontend
 
             sleep 3
