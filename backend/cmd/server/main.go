@@ -61,6 +61,7 @@ func main() {
 	var reactionHandler *handler.ReactionHandler
 	var pageHandler *handler.PageHandler
 	var galleryHandler *handler.GalleryHandler
+	var calendarHandler *handler.CalendarHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
@@ -87,6 +88,10 @@ func main() {
 			gallerySvc := service.NewGalleryService(s3Client, galleryRepo)
 			galleryHandler = handler.NewGalleryHandler(gallerySvc)
 		}
+
+		calendarRepo := repository.NewCalendarRepository(dbPool)
+		calendarSvc := service.NewCalendarService(calendarRepo)
+		calendarHandler = handler.NewCalendarHandler(calendarSvc)
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
@@ -125,6 +130,19 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Post("/posts/{id}/images", galleryHandler.UploadImage)
+			})
+		}
+
+		// Calendar routes — public read, admin-only write.
+		if calendarHandler != nil {
+			r.Get("/calendar", calendarHandler.GetMonth)
+
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Post("/calendar/events", calendarHandler.CreateEvent)
+				r.Patch("/calendar/events/{id}", calendarHandler.UpdateEvent)
+				r.Delete("/calendar/events/{id}", calendarHandler.DeleteEvent)
+				r.Put("/calendar/months/{year}/{month}/note", calendarHandler.UpsertMonthNote)
 			})
 		}
 	})
