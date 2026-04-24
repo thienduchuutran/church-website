@@ -117,6 +117,120 @@ type CreateImageRequest struct {
 	DisplayOrder int    `json:"display_order"`
 }
 
+// --- Calendar types ---
+
+type CalendarEventType string
+
+const (
+	CalendarEventTypeBirthday     CalendarEventType = "birthday"
+	CalendarEventTypeBibleStudy   CalendarEventType = "bible_study"
+	CalendarEventTypeGeneral      CalendarEventType = "general"
+	CalendarEventTypeAnnouncement CalendarEventType = "announcement"
+	CalendarEventTypePrayer       CalendarEventType = "prayer"
+)
+
+// AllowedCalendarIcons is the curated Phosphor icon key set admins may choose from.
+var AllowedCalendarIcons = map[string]bool{
+	"cake": true, "book-open": true, "bell": true, "heart": true, "star": true,
+	"users": true, "music-notes": true, "cross": true, "flame": true, "sparkle": true,
+}
+
+// AllowedCalendarColors is the editorial palette admins may choose from.
+var AllowedCalendarColors = map[string]bool{
+	"slate": true, "red": true, "amber": true, "emerald": true,
+	"sky": true, "violet": true, "rose": true, "stone": true,
+}
+
+type CalendarEvent struct {
+	ID        string            `json:"id"`
+	Date      string            `json:"date"` // YYYY-MM-DD
+	Title     string            `json:"title"`
+	EventType CalendarEventType `json:"event_type"`
+	Icon      string            `json:"icon"`
+	Color     string            `json:"color"`
+	Notes     *string           `json:"notes"`
+	AdminID   *string           `json:"admin_id"`
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
+}
+
+type CalendarMonthNote struct {
+	ID        string    `json:"id"`
+	Year      int       `json:"year"`
+	Month     int       `json:"month"`
+	Content   string    `json:"content"`
+	AdminID   *string   `json:"admin_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+type CalendarMonthResponse struct {
+	Events    []CalendarEvent    `json:"events"`
+	MonthNote *CalendarMonthNote `json:"month_note"`
+}
+
+type CreateCalendarEventRequest struct {
+	Date      string            `json:"date"`
+	Title     string            `json:"title"`
+	EventType CalendarEventType `json:"event_type"`
+	Icon      string            `json:"icon"`
+	Color     string            `json:"color"`
+	Notes     *string           `json:"notes"`
+}
+
+func (r *CreateCalendarEventRequest) Validate() error {
+	if r.Date == "" {
+		return errors.New("date is required")
+	}
+	if r.Title == "" {
+		return errors.New("title is required")
+	}
+	switch r.EventType {
+	case CalendarEventTypeBirthday, CalendarEventTypeBibleStudy,
+		CalendarEventTypeGeneral, CalendarEventTypeAnnouncement, CalendarEventTypePrayer:
+	default:
+		return fmt.Errorf("invalid event_type: %s", r.EventType)
+	}
+	if !AllowedCalendarIcons[r.Icon] {
+		return fmt.Errorf("invalid icon: %s", r.Icon)
+	}
+	if !AllowedCalendarColors[r.Color] {
+		return fmt.Errorf("invalid color: %s", r.Color)
+	}
+	return nil
+}
+
+type UpdateCalendarEventRequest struct {
+	Date      *string            `json:"date"`
+	Title     *string            `json:"title"`
+	EventType *CalendarEventType `json:"event_type"`
+	Icon      *string            `json:"icon"`
+	Color     *string            `json:"color"`
+	Notes     *string            `json:"notes"`
+}
+
+func (r *UpdateCalendarEventRequest) Validate() error {
+	if r.EventType != nil {
+		switch *r.EventType {
+		case CalendarEventTypeBirthday, CalendarEventTypeBibleStudy,
+			CalendarEventTypeGeneral, CalendarEventTypeAnnouncement, CalendarEventTypePrayer:
+		default:
+			return fmt.Errorf("invalid event_type: %s", *r.EventType)
+		}
+	}
+	if r.Icon != nil && !AllowedCalendarIcons[*r.Icon] {
+		return fmt.Errorf("invalid icon: %s", *r.Icon)
+	}
+	if r.Color != nil && !AllowedCalendarColors[*r.Color] {
+		return fmt.Errorf("invalid color: %s", *r.Color)
+	}
+	return nil
+}
+
+type UpsertMonthNoteRequest struct {
+	Content string `json:"content"`
+}
+
 // --- Page content types ---
 
 // PageContent represents a single editable section on a static page (about, connect).
