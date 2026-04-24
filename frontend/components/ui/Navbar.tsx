@@ -19,6 +19,7 @@ const navItems: NavItem[] = [
       { href: '/announcements', label: 'Announcements' },
     ],
   },
+  { kind: 'link', href: '/calendar', label: 'Calendar' },
   { kind: 'link', href: '/gallery', label: 'Gallery' },
   { kind: 'link', href: '/resources', label: 'Resources' },
   { kind: 'link', href: '/about', label: 'About' },

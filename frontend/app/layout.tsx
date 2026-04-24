@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import { Geist, Geist_Mono, Playfair_Display } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth'
 import Navbar from '@/components/ui/Navbar'
@@ -15,6 +15,12 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 })
 
+const playfair = Playfair_Display({
+  variable: '--font-serif',
+  subsets: ['latin'],
+  weight: ['400', '700'],
+})
+
 export const metadata: Metadata = {
   title: 'Our Church',
   description: 'Welcome to our church community — events, announcements, and more.',
@@ -28,7 +34,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <AuthProvider>
