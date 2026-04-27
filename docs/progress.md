@@ -3,6 +3,27 @@
 ## Project Context
 church-website: a Next.js frontend + Go backend + Supabase data/auth/storage app for church management.
 
+## 2026-04-27 - `$impeccable document` (DESIGN.md + DESIGN.json)
+
+1. Added repo-root **`DESIGN.md`** (Stitch-style YAML frontmatter + six body sections: Overview, Colors, Typography, Elevation, Components, Do's and Don'ts) extracted from **`frontend/app/globals.css`**, home hero in **`app/page.tsx`**, **`PostCard`**, **`Navbar`**, aligned with **PRODUCT.md** guardrails.
+2. Added **`DESIGN.json`** sidecar (`schemaVersion` 2): tonal hints, shadow/motion/breakpoint extensions, three self-contained **`ds-*`** CSS snippets for panel preview, narrative mirror of rules and do/don't lists.
+3. Ran **`load-context.mjs`** so future impeccable runs see **`hasDesign: true`**.
+
+## 2026-04-27 - `$impeccable craft home` (PRODUCT palette + hero)
+
+1. **`globals.css`:** Replaced navy-first tokens with **PRODUCT** values: cream **`#faf7f2`**, ink **`#1c1a18`**, **terracotta** primary **`#c4663c`**, **sage** accent **`#4a7a5c`**, warm **`#eae5de`** borders, warm off-white **`#fffefb`** surfaces; dark mode uses **warm charcoal** (no blue primary). Page fade uses **cubic-bezier(0.22, 1, 0.36, 1)** (ease-out style).
+2. **`app/page.tsx`:** Hero is **`#1C1210`** with **radial terracotta glow**, **bottom gold–terracotta rule** at 40% opacity, **no photo**; eyebrow, Playfair **`h1`**, body line, and **two CTAs** (terracotta fill + ghost outline). Error alert **no drop shadow**; **`rounded-[14px]`** on alert.
+3. **`Navbar`:** Header **`bg-background/95`**, backdrop blur removed (PRODUCT / impeccable glass ban).
+4. **`PostCard` / `PostFeed`:** Warm badges, **14px** radius, **shadow only on hover**; titles **Playfair 600**.
+5. **`layout.tsx`:** Metadata title/description aligned with ministry name.
+
+## 2026-04-27 - Home layout (`arrange` / layout rhythm)
+
+1. **Hero:** fluid vertical padding via **`clamp`**, inner **`max-w-[min(100%,40rem)]`** so type does not spray edge-to-edge on wide screens; slightly looser **margin** above the description.
+2. **Below hero:** **asymmetric vertical rhythm** (tighter **pt** on `sm`, roomier on **`lg`**) instead of a single **`py-12`**; **error alert** gets **more bottom margin** when present.
+3. **Sections:** **title row → feed** uses **`mb-4`** (tight grouping); **announcements vs events** separated by **`mt-16 sm:mt-20 lg:mt-24`** instead of uniform **`space-y-12`**.
+4. **Section headers:** **`items-baseline`**, **`gap-x-6 gap-y-3`**, **`h2` with `flex-1`**; **“View all”** uses **`self-end` on small screens** when the row wraps so the control stays visually anchored.
+
 ## 2026-04-27 - Home typography (`typeset` / PRODUCT scale)
 
 1. **Playfair_Display** in `layout.tsx` now loads weight **600** for section-level serif headings.

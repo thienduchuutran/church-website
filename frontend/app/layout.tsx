@@ -22,8 +22,9 @@ const playfair = Playfair_Display({
 })
 
 export const metadata: Metadata = {
-  title: 'Our Church',
-  description: 'Welcome to our church community — events, announcements, and more.',
+  title: 'Vietnamese Gospel Outreach Ministry New England',
+  description:
+    'Community hub for our congregation in Saugus, MA: announcements, events, calendar, and resources.',
 }
 
 export default function RootLayout({
@@ -50,7 +51,7 @@ export default function RootLayout({
           </main>
           <footer className="border-t border-border py-8">
             <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted sm:px-6 lg:px-8">
-              © {new Date().getFullYear()} Our Church. All rights reserved.
+              © {new Date().getFullYear()} VGOMNE. All rights reserved.
             </div>
           </footer>
         </AuthProvider>

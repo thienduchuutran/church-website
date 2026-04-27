@@ -6,11 +6,11 @@ import AdminControls from '@/components/features/admin/AdminControls'
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
   event: {
     label: 'Event',
-    className: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300',
+    className: 'bg-accent/15 text-accent dark:bg-accent/25 dark:text-accent-light',
   },
   announcement: {
     label: 'Announcement',
-    className: 'bg-green-100 text-green-700 dark:bg-green-950/40 dark:text-green-300',
+    className: 'bg-primary/12 text-primary dark:bg-primary/20 dark:text-[#e8a090]',
   },
   bible_study: {
     label: 'Bible Study',
@@ -43,14 +43,14 @@ export default function PostCard({
 }) {
   const badge = TYPE_BADGE[post.type] ?? {
     label: post.type,
-    className: 'bg-gray-100 text-gray-700',
+    className: 'bg-muted/15 text-muted',
   }
 
   const images = (post.post_images ?? []).sort((a, b) => a.display_order - b.display_order)
   const heroImage = images[0]
 
   return (
-    <article className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm transition-shadow hover:shadow-md">
+    <article className="overflow-hidden rounded-[14px] border border-border bg-surface transition-shadow duration-200 hover:shadow-[0_8px_28px_rgba(28,20,16,0.09)]">
       <div className="flex flex-wrap items-center gap-3 px-5 pt-5 pb-2">
         <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge.className}`}>
           {badge.label}
@@ -70,7 +70,7 @@ export default function PostCard({
       </div>
 
       <div className="px-5 pb-4">
-        <h3 className="mb-1 text-lg font-bold text-foreground">{post.title}</h3>
+        <h3 className="mb-1 font-serif text-lg font-semibold leading-snug text-foreground">{post.title}</h3>
         {post.body && (
           <p className="whitespace-pre-line text-sm leading-relaxed text-muted">{post.body}</p>
         )}

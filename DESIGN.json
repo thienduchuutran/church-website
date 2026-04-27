@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-04-27T00:00:00.000Z",
+  "title": "Design System: Vietnamese Gospel Outreach Ministry New England",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Ember Terracotta",
+        "canonical": "#c4663c",
+        "tonalRamp": [
+          "#3d241c",
+          "#5c3224",
+          "#7a402c",
+          "#9a4f35",
+          "#c4663c",
+          "#d4845c",
+          "#e8b09e",
+          "#f5dfd8"
+        ]
+      },
+      "background": {
+        "role": "neutral",
+        "displayName": "Cream Field",
+        "canonical": "#faf7f2",
+        "tonalRamp": [
+          "#2a2825",
+          "#45423c",
+          "#5e5a52",
+          "#7a756c",
+          "#9a9488",
+          "#bcb5a8",
+          "#ddd6c9",
+          "#faf7f2"
+        ]
+      },
+      "hero-bg": {
+        "role": "hero",
+        "displayName": "Coffee-Shell Dark",
+        "canonical": "#1C1210",
+        "tonalRamp": [
+          "#0a0808",
+          "#1C1210",
+          "#2a2420",
+          "#3a322d",
+          "#4d443e",
+          "#615751",
+          "#756b65",
+          "#8a807a"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero and page titles; Playfair 700, fluid clamp size."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Geist sans; minimum 16px on marketing blocks; 1.75 line-height."
+      }
+    },
+    "shadows": [
+      {
+        "name": "card-hover-lift",
+        "value": "0 8px 28px rgba(28, 20, 16, 0.09)",
+        "purpose": "PostCard hover only; flat at rest per PRODUCT."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-page-entry",
+        "value": "cubic-bezier(0.22, 1, 0.36, 1)",
+        "purpose": "PageTransition fade; disabled when prefers-reduced-motion."
+      },
+      {
+        "name": "duration-page-fade",
+        "value": "1.15s",
+        "purpose": "Opacity + translateY entry animation length."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "md", "value": "768px" },
+      { "name": "lg", "value": "1024px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary button (on dark hero)",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Terracotta fill, warm paper label; used for primary hero CTA.",
+      "html": "<a href=\"#\" class=\"ds-btn-hero-primary\">Latest announcements</a>",
+      "css": ".ds-btn-hero-primary { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border-radius: 8px; background: #c4663c; color: #fffefb; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; padding: 10px 20px; text-decoration: none; transition: filter 0.2s ease; } .ds-btn-hero-primary:hover { filter: brightness(1.1); } .ds-btn-hero-primary:focus-visible { outline: 2px solid #f5f0eb; outline-offset: 2px; }"
+    },
+    {
+      "name": "Ghost button (on dark hero)",
+      "kind": "button",
+      "refersTo": "button-ghost-on-dark",
+      "description": "Outline cream, transparent fill; secondary hero CTA.",
+      "html": "<a href=\"#\" class=\"ds-btn-hero-ghost\">Upcoming events</a>",
+      "css": ".ds-btn-hero-ghost { display: inline-flex; min-height: 44px; align-items: center; justify-content: center; border-radius: 8px; border: 1px solid rgba(245, 240, 235, 0.85); background: transparent; color: #f5f0eb; font-family: system-ui, sans-serif; font-size: 14px; font-weight: 600; padding: 10px 20px; text-decoration: none; transition: background-color 0.2s ease; } .ds-btn-hero-ghost:hover { background: rgba(245, 240, 235, 0.1); } .ds-btn-hero-ghost:focus-visible { outline: 2px solid #f5f0eb; outline-offset: 2px; }"
+    },
+    {
+      "name": "Post card",
+      "kind": "card",
+      "refersTo": "card-article",
+      "description": "Warm surface, 14px radius, border, shadow only on hover.",
+      "html": "<article class=\"ds-card\"><div class=\"ds-card-inner\"><span class=\"ds-badge\">Announcement</span><h3 class=\"ds-card-title\">Title</h3><p class=\"ds-card-body\">Body preview.</p></div></article>",
+      "css": ".ds-card { max-width: 760px; border-radius: 14px; border: 1px solid #eae5de; background: #fffefb; color: #1c1a18; overflow: hidden; transition: box-shadow 0.2s ease; } .ds-card:hover { box-shadow: 0 8px 28px rgba(28, 20, 16, 0.09); } .ds-card-inner { padding: 20px; } .ds-badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 9999px; background: rgba(196, 102, 60, 0.12); color: #c4663c; } .ds-card-title { font-family: Georgia, 'Playfair Display', serif; font-size: 18px; font-weight: 600; margin: 8px 0 4px; } .ds-card-body { font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.75; color: #6b6560; margin: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Hearth After Hours",
+    "overview": "This system is built for members glancing at phones and laptops at home after work, or catching up on Sunday between services: warm cream fields, terracotta as the single confident accent for action, and sage only where a second voice is needed (events, admin hints). Darkness lives in the hero band only (#1C1210), like a quiet coffee shop interior, not a full-site dark theme. Typography does the identity work: Playfair carries headlines and card titles; Geist carries UI, body, and labels.",
+    "keyCharacteristics": [
+      "Warm cream (#faf7f2) page field; ink (#1c1a18) body copy; terracotta (#c4663c) for all primary interactive emphasis.",
+      "Hero is type-only (no photography): radial terracotta glow + thin terracotta-to-gold rule at the foot of the hero.",
+      "Flat cards at rest; one soft shadow recipe on card hover only.",
+      "System prefers-color-scheme: dark uses warm charcoal surfaces, never blue-gray chrome."
+    ],
+    "rules": [
+      {
+        "name": "The One Ember Rule",
+        "body": "Terracotta is the only hue that may signal click here or primary navigation emphasis. If a control reads as interactive, it must not be navy, gray, or cold blue.",
+        "section": "colors"
+      },
+      {
+        "name": "The Gold Is Silent Rule",
+        "body": "#c49a3c may ornament lines and marks; it does not run buttons, links, or chips.",
+        "section": "colors"
+      },
+      {
+        "name": "The Serif Owns Headlines Rule",
+        "body": "Any element that is a page title, section title, or card title uses Playfair. UI chrome and buttons stay Geist, and UI sans does not use weight 700 for body-scale copy.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-Until-You-Lean Rule",
+        "body": "If an element is not receiving pointer hover as part of its affordance, it does not cast a shadow. Elevation is feedback, not decoration.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep page background cream (#faf7f2) and body text warm ink (#1c1a18).",
+      "Do use Playfair for every headline-level title and Geist for nav, forms, and buttons.",
+      "Do reserve gold for decorative lines and marks, not CTAs.",
+      "Do separate major home sections with vertical space, not alternating background colors.",
+      "Do honor reduced motion by disabling the page-entry fade when the user prefers reduced motion."
+    ],
+    "donts": [
+      "Don't use navy blue anywhere; it is the retired palette (PRODUCT Hard Avoids).",
+      "Don't use pure #000000 or #ffffff as full-page backgrounds; tint neutrals toward warmth.",
+      "Don't use cool gray borders; borders stay warm bisque (#eae5de).",
+      "Don't put blue on any interactive element; failure condition per PRODUCT.",
+      "Don't add section background color changes just to separate blocks; use space.",
+      "Don't use gradients except the hero radial glow and hero bottom rule (PRODUCT).",
+      "Don't use glassmorphism (decorative blur panels) as the default chrome; the nav is opaque warm field.",
+      "Don't use Inter, Roboto, or Space Grotesk (PRODUCT).",
+      "Don't ship layouts that look like a generic church template, AI-generated nonprofit site, or SaaS hero strip (PRODUCT Anti-Generic Directive).",
+      "Don't use decorative blobs, gradient meshes, or floating shapes behind content (PRODUCT)."
+    ]
+  }
+}

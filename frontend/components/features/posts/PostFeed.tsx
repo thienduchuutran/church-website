@@ -10,8 +10,8 @@ export default function PostFeed({
 }) {
   if (posts.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-border bg-surface/50 p-12 text-center">
-        <p className="text-lg text-muted">{emptyMessage}</p>
+      <div className="rounded-[14px] border border-dashed border-border bg-surface/50 p-12 text-center">
+        <p className="font-sans text-lg leading-relaxed text-muted">{emptyMessage}</p>
       </div>
     )
   }
