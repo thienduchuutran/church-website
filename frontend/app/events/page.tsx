@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { supabase } from '@/lib/supabase'
+import { apiGetCached } from '@/lib/api'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
 import AdminFeedActions from '@/components/features/admin/AdminFeedActions'
@@ -11,11 +11,12 @@ export const metadata: Metadata = {
 export const revalidate = 60
 
 export default async function EventsPage() {
-  const { data } = await supabase
-    .from('posts')
-    .select('*, post_images(*)')
-    .eq('type', 'event')
-    .order('created_at', { ascending: false })
+  let posts: Post[] = []
+  try {
+    posts = (await apiGetCached('/api/v1/posts?type=event', 60)) ?? []
+  } catch {
+    posts = []
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
@@ -23,7 +24,7 @@ export default async function EventsPage() {
         <h1 className="text-3xl font-bold text-foreground">Events</h1>
         <AdminFeedActions section="event" />
       </div>
-      <PostFeed posts={(data as Post[]) ?? []} emptyMessage="No events have been posted yet." />
+      <PostFeed posts={posts} emptyMessage="No events have been posted yet." />
     </div>
   )
 }

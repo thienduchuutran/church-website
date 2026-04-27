@@ -26,26 +26,34 @@ func (r *GalleryRepository) InsertPostImage(ctx context.Context, img *model.Post
 	).Scan(&img.ID)
 }
 
-// GetImagesByPostID returns all images for a given post, ordered by display_order.
-func (r *GalleryRepository) GetImagesByPostID(ctx context.Context, postID string) ([]model.PostImage, error) {
+// GetImagesByPostIDs batch-loads images for a set of post ids and groups them by post_id.
+// One query covers both the list endpoint (many posts) and the get endpoint
+// (one post called with a length-1 slice), so we do not keep a separate
+// single-post variant — that path was removed when this function landed.
+// Returns an empty map (not nil) when no ids are supplied so callers can skip a nil-check.
+func (r *GalleryRepository) GetImagesByPostIDs(ctx context.Context, postIDs []string) (map[string][]model.PostImage, error) {
+	out := make(map[string][]model.PostImage)
+	if len(postIDs) == 0 {
+		return out, nil
+	}
+
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, post_id, storage_key, display_order
-		FROM post_images WHERE post_id = $1
-		ORDER BY display_order`,
-		postID,
+		FROM post_images WHERE post_id = ANY($1)
+		ORDER BY post_id, display_order`,
+		postIDs,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var images []model.PostImage
 	for rows.Next() {
 		var img model.PostImage
 		if err := rows.Scan(&img.ID, &img.PostID, &img.StorageKey, &img.DisplayOrder); err != nil {
 			return nil, err
 		}
-		images = append(images, img)
+		out[img.PostID] = append(out[img.PostID], img)
 	}
-	return images, rows.Err()
+	return out, rows.Err()
 }

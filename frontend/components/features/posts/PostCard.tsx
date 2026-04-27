@@ -46,7 +46,7 @@ export default function PostCard({
     className: 'bg-muted/15 text-muted',
   }
 
-  const images = (post.post_images ?? []).sort((a, b) => a.display_order - b.display_order)
+  const images = (post.images ?? []).sort((a, b) => a.display_order - b.display_order)
   const heroImage = images[0]
 
   return (

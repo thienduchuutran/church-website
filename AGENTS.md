@@ -74,6 +74,9 @@ cd backend && go run ./cmd/server
 | Discord webhooks, channel mapping, webhook payload format | `docs/agents/discord.md`               |
 | Hosting, deployment, EC2, Nginx, systemd, CI/CD          | `docs/agents/deployment.md`            |
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
+| Posts/events/announcements not showing up after a write   | `docs/agents/known-quirks.md` ("Posts created on production don't show up in the UI") |
+| FK violation on `posts_admin_id_fkey` or similar          | `docs/agents/known-quirks.md` ("Posting fails with `posts_admin_id_fkey`...") |
+| Whether an endpoint should require auth / "should I protect this read?" | `docs/agents/backend.md` → Auth contract + `cmd/server/main.go` route comments. **Default answer: no — public reads are intentional.** |
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |
 

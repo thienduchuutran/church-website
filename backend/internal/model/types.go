@@ -38,6 +38,10 @@ type PostImage struct {
 	PostID       string `json:"post_id"`
 	StorageKey   string `json:"storage_key"`
 	DisplayOrder int    `json:"display_order"`
+	// StorageURL is a short-lived presigned S3 URL the frontend uses to fetch the image.
+	// It is generated on each list/get request and is omitted when no presigner is configured
+	// (e.g. the backend started without S3 credentials, in which case images cannot render).
+	StorageURL string `json:"storage_url,omitempty"`
 }
 
 type Reaction struct {

@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { apiGetCached } from '@/lib/api'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
 
@@ -10,34 +10,41 @@ const HERO_RULE =
   'linear-gradient(90deg, transparent, #C4663C, #C49A3C, transparent)'
 
 export default async function HomePage() {
-  const [{ data: announcements, error: announcementsError }, { data: events, error: eventsError }] =
-    await Promise.all([
-      supabase
-        .from('posts')
-        .select('*, post_images(*)')
-        .eq('type', 'announcement')
-        .order('created_at', { ascending: false })
-        .limit(3),
-      supabase
-        .from('posts')
-        .select('*, post_images(*)')
-        .eq('type', 'event')
-        .gte('event_date', new Date().toISOString())
-        .order('event_date', { ascending: true })
-        .limit(2),
-    ])
+  // Both feeds come from the Go backend (RDS) — Supabase is auth-only.
+  // Each call's failure is captured independently so a single dead feed doesn't
+  // hide the other one. We sort/slice client-side instead of pushing date filters
+  // to the server, which keeps the API surface small and the route easy to cache.
+  const [announcementsResult, eventsResult] = await Promise.allSettled([
+    apiGetCached('/api/v1/posts?type=announcement&limit=3', 60),
+    apiGetCached('/api/v1/posts?type=event&limit=20', 60),
+  ])
+
+  const announcementsError = announcementsResult.status === 'rejected'
+  const eventsError = eventsResult.status === 'rejected'
+
+  const announcementPosts: Post[] =
+    announcementsResult.status === 'fulfilled'
+      ? ((announcementsResult.value as Post[]) ?? [])
+      : []
+
+  const allEvents: Post[] =
+    eventsResult.status === 'fulfilled' ? ((eventsResult.value as Post[]) ?? []) : []
+
+  // Show only events that haven't happened yet, soonest first, capped at 2.
+  const nowIso = new Date().toISOString()
+  const eventPosts = allEvents
+    .filter((p) => p.event_date && p.event_date >= nowIso)
+    .sort((a, b) => (a.event_date ?? '').localeCompare(b.event_date ?? ''))
+    .slice(0, 2)
 
   const loadErrorMessage =
-    announcementsError?.message && eventsError?.message
+    announcementsError && eventsError
       ? 'Announcements and events could not be loaded.'
-      : announcementsError?.message
+      : announcementsError
         ? 'Announcements could not be loaded.'
-        : eventsError?.message
+        : eventsError
           ? 'Events could not be loaded.'
           : null
-
-  const announcementPosts = (announcements as Post[]) ?? []
-  const eventPosts = (events as Post[]) ?? []
 
   return (
     <div>

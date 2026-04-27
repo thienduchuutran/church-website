@@ -47,9 +47,11 @@ create table post_images (
   created_at    timestamptz default now()
 );
 
--- No FK on post_id — posts are read from Supabase by the frontend directly,
--- so RDS has no posts table to reference. Referential integrity is handled
--- at the application layer (the post must exist for the frontend to render it).
+-- post_id has no FK on purpose: reactions are written by anonymous visitors
+-- via a separate handler that never touches the posts table, and dropping a
+-- post should not cascade-delete its reactions (we'd lose history). The post
+-- must exist for the frontend to render it, so referential integrity is
+-- enforced at the application layer when reactions are read.
 create table reactions (
   id          uuid primary key default gen_random_uuid(),
   post_id     uuid not null,

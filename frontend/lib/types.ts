@@ -15,12 +15,17 @@ export interface Post {
   admin_id: string | null
   created_at: string
   updated_at: string
-  post_images?: PostImage[]
+  // Backend fills `images` from a join on post_images and presigns each storage_url
+  // on the fly. The field is omitted (not empty array) when the post has no images.
+  images?: PostImage[]
 }
 
 export interface PostImage {
   id: string
   post_id: string
+  storage_key: string
+  // Short-lived presigned S3 URL (≈1h). Always use this to render the image —
+  // never store it long-term, since it expires.
   storage_url: string
   display_order: number
 }

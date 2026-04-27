@@ -66,31 +66,32 @@ frontend/
 
 ## Data fetching
 
-**Public reads — simple list/detail data (posts, images):** May fetch directly from Supabase using the anon key when there is no business logic involved and no per-user context is required.
+**Supabase is auth-only.** All application data — posts, images, page content, calendar, reactions — lives in AWS RDS and is reached through the Go backend. The frontend must **never** call `supabase.from(...)` for app data; doing so reads from the wrong database (the legacy Supabase Postgres) and creates a split-brain where writes and reads disagree. See `docs/agents/known-quirks.md` → "Posts created on production don't show up in the UI" for the original outage this caused.
+
+**Public reads:** Use `apiGet(path)` for client-side fetches that must be fresh (e.g. reactions, the admin dashboard) and `apiGetCached(path, revalidate)` for server-rendered routes that should be cached for `revalidate` seconds.
 
 ```ts
-// lib/supabase.ts
-import { createClient } from '@supabase/supabase-js'
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
-```
+// Server component — cached for 60s by Next.js
+import { apiGetCached } from '@/lib/api'
+const posts = await apiGetCached('/api/v1/posts?type=announcement', 60)
 
-**Public reads that require per-user context (e.g. reactions by fingerprint):** Must go through the Go backend via `lib/api.ts → apiGet(...)`. Never query Supabase directly for fingerprint-scoped or business-logic-bearing reads — doing so bypasses the service layer and couples the UI to the DB schema.
+// Client component — always hits the network
+import { apiGet } from '@/lib/api'
+const summary = await apiGet(`/api/v1/reactions/${postId}?fingerprint=${fp}`)
+```
 
 **Admin writes (create/edit/delete):** Always go through the Go backend via `lib/api.ts`. The frontend attaches the Supabase JWT to the Authorization header.
 
 ```ts
 // lib/api.ts
-export async function apiPost(path: string, body: unknown, session: { access_token: string }) {
+export async function apiPost(path: string, body: unknown, accessToken: string) {
   const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`
+      Authorization: `Bearer ${accessToken}`,
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify(body),
   })
   if (!res.ok) throw new Error(await res.text())
   return res.json()
@@ -103,14 +104,14 @@ export async function apiPost(path: string, body: unknown, session: { access_tok
 
 | Page | Route | Data source |
 |------|-------|-------------|
-| Homepage | `/` | Supabase — latest 3 announcements + next 2 events; **PRODUCT** hero (`#1C1210`, radial glow, bottom gradient rule, dual CTAs); Playfair + terracotta eyebrow/italic phrase; section `h2` Playfair 600; layout rhythm in `app/page.tsx`. Site tokens in `app/globals.css` (terracotta primary, sage accent, warm borders). |
-| Events | `/events` | Supabase — all posts where type = 'event', newest first |
-| Announcements | `/announcements` | Supabase — all posts where type = 'announcement' |
-| Gallery | `/gallery` | Supabase — all gallery_album posts + their images |
-| Resources | `/resources` | Supabase — bible_study + playlist posts |
+| Homepage | `/` | Go backend — `apiGetCached('/api/v1/posts?type=announcement&limit=3', 60)` + `apiGetCached('/api/v1/posts?type=event&limit=20', 60)`; events filtered/sorted client-side to the next 2 upcoming. **PRODUCT** hero (`#1C1210`, radial glow, bottom gradient rule, dual CTAs); Playfair + terracotta eyebrow/italic phrase; section `h2` Playfair 600. |
+| Events | `/events` | Go backend — `apiGetCached('/api/v1/posts?type=event', 60)` |
+| Announcements | `/announcements` | Go backend — `apiGetCached('/api/v1/posts?type=announcement', 60)` |
+| Gallery | `/gallery` | Go backend — `GET /api/v1/posts?type=gallery_album` (response includes presigned `images[*].storage_url`) |
+| Resources | `/resources` | Go backend — `GET /api/v1/posts?type=bible_study` and `?type=playlist` |
 | About | `/about` | Go backend — `GET /api/v1/pages/about` (falls back to hardcoded defaults) |
 | Connect | `/connect` | Go backend — `GET /api/v1/pages/connect` (falls back to hardcoded defaults) |
-| Admin dashboard | `/admin` | Supabase — all posts (requires Google login) |
+| Admin dashboard | `/admin` | Go backend — `apiGet('/api/v1/posts?limit=100')` (client component, requires Google login) |
 | Admin editor | `/admin/[section]` | Go backend (POST/PATCH) |
 | Page editor | `/admin/pages/[slug]` | Go backend — `GET` + `PUT /api/v1/pages/:slug` (admin only) |
 

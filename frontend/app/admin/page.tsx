@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
-import { supabase } from '@/lib/supabase'
+import { apiGet } from '@/lib/api'
 import type { Post } from '@/lib/types'
 import PostCard from '@/components/features/posts/PostCard'
 
@@ -20,17 +20,20 @@ export default function AdminPage() {
   const [posts, setPosts] = useState<Post[]>([])
   const [filter, setFilter] = useState<string | null>(null)
 
+  // The admin dashboard reads through the Go API (RDS) so it always sees the
+  // same source-of-truth as the public feeds. We pull a wide window (limit=100)
+  // so refreshing after a delete or edit still reflects the full table; the
+  // backend caps at 100 server-side anyway.
   useEffect(() => {
     if (!isAdmin) return
 
-    let query = supabase
-      .from('posts')
-      .select('*, post_images(*)')
-      .order('created_at', { ascending: false })
+    const path = filter
+      ? `/api/v1/posts?type=${encodeURIComponent(filter)}&limit=100`
+      : '/api/v1/posts?limit=100'
 
-    if (filter) query = query.eq('type', filter)
-
-    query.then(({ data }) => setPosts((data as Post[]) ?? []))
+    apiGet(path)
+      .then((data) => setPosts((data as Post[]) ?? []))
+      .catch(() => setPosts([]))
   }, [isAdmin, filter])
 
   if (loading) {

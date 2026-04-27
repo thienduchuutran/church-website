@@ -66,7 +66,36 @@ func main() {
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
 		postRepo := repository.NewPostRepository(dbPool)
-		postSvc := service.NewPostService(postRepo)
+
+		// The gallery repo is needed in two places: by GalleryService for uploads
+		// and by PostService to hydrate posts with their images on read. We build
+		// it once here and share it. The S3 client is also shared — when S3 isn't
+		// configured both pointers stay nil and both services degrade gracefully.
+		galleryRepo := repository.NewGalleryRepository(dbPool)
+
+		var s3Client *storage.S3Client
+		s3Bucket := os.Getenv("S3_BUCKET")
+		s3Region := os.Getenv("S3_REGION")
+		if s3Bucket != "" && s3Region != "" {
+			c, err := storage.NewS3Client(s3Bucket, s3Region)
+			if err != nil {
+				log.Fatalf("failed to init S3 client: %v", err)
+			}
+			s3Client = c
+			gallerySvc := service.NewGalleryService(s3Client, galleryRepo)
+			galleryHandler = handler.NewGalleryHandler(gallerySvc)
+		}
+
+		// PostService takes a presigner so it can attach short-lived `storage_url`
+		// values to each PostImage on the way out. The presigner is wrapped in a
+		// real interface variable rather than the concrete pointer — passing a
+		// typed nil *S3Client directly would create a non-nil interface holding a
+		// nil pointer, defeating the service's nil check.
+		var presigner service.URLPresigner
+		if s3Client != nil {
+			presigner = s3Client
+		}
+		postSvc := service.NewPostService(postRepo, galleryRepo, presigner)
 		postHandler = handler.NewPostHandler(postSvc)
 
 		reactionRepo := repository.NewReactionRepository(dbPool)
@@ -77,18 +106,6 @@ func main() {
 		pageSvc := service.NewPageService(pageRepo)
 		pageHandler = handler.NewPageHandler(pageSvc)
 
-		s3Bucket := os.Getenv("S3_BUCKET")
-		s3Region := os.Getenv("S3_REGION")
-		if s3Bucket != "" && s3Region != "" {
-			s3Client, err := storage.NewS3Client(s3Bucket, s3Region)
-			if err != nil {
-				log.Fatalf("failed to init S3 client: %v", err)
-			}
-			galleryRepo := repository.NewGalleryRepository(dbPool)
-			gallerySvc := service.NewGalleryService(s3Client, galleryRepo)
-			galleryHandler = handler.NewGalleryHandler(gallerySvc)
-		}
-
 		calendarRepo := repository.NewCalendarRepository(dbPool)
 		calendarSvc := service.NewCalendarService(calendarRepo)
 		calendarHandler = handler.NewCalendarHandler(calendarSvc)
@@ -97,6 +114,13 @@ func main() {
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", healthHandler.ServeHTTP)
 
+		// Posts:
+		//   PUBLIC (no auth, intentional): GET /posts, GET /posts/{id}
+		//     Anonymous visitors must be able to browse the church's events,
+		//     announcements, bible studies, playlists, and gallery without an
+		//     account. Do NOT move these into the RequireAdmin group below — if
+		//     you do, every public page on the site goes blank for non-admins.
+		//   ADMIN-ONLY: POST/PATCH/DELETE /posts, GET /auth/me
 		if postHandler != nil {
 			r.Get("/posts", postHandler.List)
 			r.Get("/posts/{id}", postHandler.Get)
@@ -110,14 +134,20 @@ func main() {
 			})
 		}
 
-		// Reaction routes are public — no auth middleware.
+		// Reactions: PUBLIC (no auth, intentional).
+		// Visitors react with an emoji using a browser-generated fingerprint —
+		// no login required. Auth would defeat the feature. Do not protect.
 		if reactionHandler != nil {
 			r.Get("/reactions/{post_id}", reactionHandler.GetCounts)
 			r.Post("/reactions", reactionHandler.Upsert)
 			r.Delete("/reactions/{post_id}", reactionHandler.Delete)
 		}
 
-		// Page content routes — public read, admin-only write.
+		// Pages:
+		//   PUBLIC (no auth, intentional): GET /pages/{slug}
+		//     Used by /about and /connect for everyone, including signed-out
+		//     visitors. Do not protect.
+		//   ADMIN-ONLY: PUT /pages/{slug}
 		if pageHandler != nil {
 			r.Get("/pages/{slug}", pageHandler.Get)
 
@@ -127,6 +157,10 @@ func main() {
 			})
 		}
 
+		// Gallery uploads:
+		//   ADMIN-ONLY: POST /posts/{id}/images (uploading to S3 mutates state).
+		//   The public reads its images via GET /posts → presigned storage_url,
+		//   so there is no public route under this handler.
 		if galleryHandler != nil {
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
@@ -134,7 +168,10 @@ func main() {
 			})
 		}
 
-		// Calendar routes — public read, admin-only write.
+		// Calendar:
+		//   PUBLIC (no auth, intentional): GET /calendar
+		//     Anyone can view the church calendar (birthdays, bible studies, etc.).
+		//   ADMIN-ONLY: every mutation below.
 		if calendarHandler != nil {
 			r.Get("/calendar", calendarHandler.GetMonth)
 

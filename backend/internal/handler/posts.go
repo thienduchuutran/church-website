@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -38,7 +39,9 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, post)
 }
 
-// List handles GET /api/v1/posts?type=event&limit=50&offset=0.
+// List handles GET /api/v1/posts?type=event&limit=20&offset=0.
+// Defaults match docs/api.md: limit=20, offset=0. The hard cap of 100 stops a
+// caller from accidentally pulling the entire table in one request.
 func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
@@ -48,8 +51,22 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 		postType = &pt
 	}
 
-	limit := 50
+	limit := 20
+	if v := q.Get("limit"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed > 0 {
+			limit = parsed
+		}
+	}
+	if limit > 100 {
+		limit = 100
+	}
+
 	offset := 0
+	if v := q.Get("offset"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil && parsed >= 0 {
+			offset = parsed
+		}
+	}
 
 	posts, err := h.svc.List(r.Context(), postType, limit, offset)
 	if err != nil {

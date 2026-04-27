@@ -7,7 +7,13 @@ Errors always return `{ "error": "human-readable message" }`.
 
 ---
 
-## Public endpoints (no auth required)
+## Auth contract — read before adding or moving any route
+
+Every public endpoint below is **intentionally** unauthenticated. Anonymous visitors must be able to browse posts, react, read static pages, and view the calendar without signing in — that is the whole point of a public church website. **Never** wrap any of these `GET`s (or the `/reactions` writes) in `RequireAdmin`; doing so makes the entire site invisible to non-admins. Only mutations on `/posts`, `/pages/:slug`, `/calendar/...`, and image uploads require a JWT.
+
+---
+
+## Public endpoints (no auth required — do not protect)
 
 ### `GET /api/v1/health`
 Liveness check.
@@ -26,10 +32,10 @@ List posts. Supports optional filtering.
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `type` | string | — | Filter by post type: `event`, `announcement`, `bible_study`, `playlist`, `gallery_album` |
-| `limit` | int | 20 | Max results |
+| `limit` | int | 20 | Max results. Server caps at 100. |
 | `offset` | int | 0 | Pagination offset |
 
-**Response `200`** — array of Post objects (see [Models](#models))
+**Response `200`** — array of Post objects (see [Models](#models)). Each post's `images` field is populated when the post has uploaded images, with a fresh presigned `storage_url` on every request.
 
 ---
 
@@ -221,6 +227,7 @@ Store this key if needed. To display the image, fetch the post — the backend g
   "reactions": []
 }
 ```
+`admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose — see `scripts/rds-schema.sql` and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.
 
 ### PostImage
 ```json
@@ -228,10 +235,11 @@ Store this key if needed. To display the image, fetch the post — the backend g
   "id": "uuid",
   "post_id": "uuid",
   "storage_key": "images/posts/<post-id>/1714000000000.jpg",
+  "storage_url": "https://<bucket>.s3.<region>.amazonaws.com/images/posts/<post-id>/1714000000000.jpg?X-Amz-...",
   "display_order": 0
 }
 ```
-`storage_key` is the S3 object key, not a URL. The backend generates a presigned URL on each read — never store the URL on the frontend.
+`storage_key` is the canonical S3 object key. `storage_url` is a freshly-presigned download URL (≈1 hour TTL) regenerated on every list/get response. Always render images from `storage_url`; never store it long-term — it expires. `storage_url` is omitted when the backend was started without S3 credentials.
 
 ### ReactionCount
 ```json

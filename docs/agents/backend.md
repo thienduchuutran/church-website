@@ -71,26 +71,39 @@ backend/
 
 All routes are prefixed `/api/v1/`.
 
-### Public (no auth)
+### Auth contract (read this before touching `cmd/server/main.go`)
+
+Every endpoint below is split into a **public** group (no middleware) and an **admin** group (`RequireAdmin`). The split is **deliberate, not historical** — the church website's whole purpose is letting anonymous, signed-out visitors browse posts, react with emojis, view static pages, and read the calendar. **Never** move a `GET` route on `/posts`, `/posts/{id}`, `/pages/{slug}`, `/calendar`, or any `/reactions/...` path into the `RequireAdmin` group. Doing so blanks the entire site for everyone except the small admin whitelist and breaks the product. The route comments in `cmd/server/main.go` repeat this — keep them in sync if you reorganise the file.
+
+If you find yourself wanting to add auth to a public read path, it's almost certainly the wrong fix. The only thing that should ever require a token is a *write* (POST/PATCH/PUT/DELETE) — and even then, public reactions write without one because they're rate-limited per fingerprint, not per user.
+
+### Public (no auth — intentional, do not protect)
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?limit=20`, `?offset=0` |
+| GET | `/api/v1/health` | Liveness check |
+| GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?limit=20` (cap 100), `?offset=0`. Each item includes presigned `images[*].storage_url`. |
 | GET | `/api/v1/posts/:id` | Single post with images and reaction counts |
 | GET | `/api/v1/reactions/:post_id` | Returns `ReactionSummary` — per-emoji counts + caller's reaction. Optional `?fingerprint=<fp>` query param; when omitted `my_reaction` is null. |
 | POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value } }` for a static page |
+| GET | `/api/v1/calendar` | Returns events + month note for a given month |
 
 > Full request/response shapes and model definitions live in `docs/api.md`.
 
 ### Admin only (JWT required)
 | Method | Path | Description |
 |--------|------|-------------|
+| GET | `/api/v1/auth/me` | Returns the authenticated admin's identity (sub + email) |
 | POST | `/api/v1/posts` | Create a new post |
 | PATCH | `/api/v1/posts/:id` | Edit a post |
 | DELETE | `/api/v1/posts/:id` | Delete a post |
 | PUT | `/api/v1/pages/:slug` | Upsert sections for a static page |
 | POST | `/api/v1/posts/:id/images` | Upload an image to S3 and attach it to a post. Returns `{ key }`. |
+| POST | `/api/v1/calendar/events` | Create a calendar event |
+| PATCH | `/api/v1/calendar/events/:id` | Edit a calendar event |
+| DELETE | `/api/v1/calendar/events/:id` | Delete a calendar event |
+| PUT | `/api/v1/calendar/months/:year/:month/note` | Upsert the month's sidebar note |
 
 ---
 
@@ -124,8 +137,9 @@ type Post struct {
 type PostImage struct {
     ID           string `json:"id"`
     PostID       string `json:"post_id"`
-    StorageURL   string `json:"storage_url"`
+    StorageKey   string `json:"storage_key"`             // canonical S3 object key
     DisplayOrder int    `json:"display_order"`
+    StorageURL   string `json:"storage_url,omitempty"`   // freshly presigned (~1h) on every list/get
 }
 
 type Reaction struct {

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { supabase } from '@/lib/supabase'
+import { apiGetCached } from '@/lib/api'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
 import AdminFeedActions from '@/components/features/admin/AdminFeedActions'
@@ -11,11 +11,15 @@ export const metadata: Metadata = {
 export const revalidate = 60
 
 export default async function AnnouncementsPage() {
-  const { data } = await supabase
-    .from('posts')
-    .select('*, post_images(*)')
-    .eq('type', 'announcement')
-    .order('created_at', { ascending: false })
+  // Fetched through the Go backend (RDS) — Supabase is auth-only. The cache window
+  // matches the route's `revalidate = 60` so a freshly-posted announcement appears
+  // within ~1 min for everyone.
+  let posts: Post[] = []
+  try {
+    posts = (await apiGetCached('/api/v1/posts?type=announcement', 60)) ?? []
+  } catch {
+    posts = []
+  }
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
@@ -24,7 +28,7 @@ export default async function AnnouncementsPage() {
         <AdminFeedActions section="announcement" />
       </div>
       <PostFeed
-        posts={(data as Post[]) ?? []}
+        posts={posts}
         emptyMessage="No announcements have been posted yet."
       />
     </div>
