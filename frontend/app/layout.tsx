@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 const playfair = Playfair_Display({
   variable: '--font-serif',
   subsets: ['latin'],
-  weight: ['400', '700'],
+  weight: ['400', '600', '700'],
 })
 
 export const metadata: Metadata = {
@@ -37,9 +37,17 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
+        <a
+          href="#main-content"
+          className="sr-only z-[200] rounded-md bg-primary px-4 py-3 text-sm font-medium text-surface outline-none ring-2 ring-primary ring-offset-2 ring-offset-background focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+        >
+          Skip to main content
+        </a>
         <AuthProvider>
           <Navbar />
-          <main className="flex-1"><PageTransition>{children}</PageTransition></main>
+          <main id="main-content" tabIndex={-1} className="flex-1 scroll-mt-20">
+            <PageTransition>{children}</PageTransition>
+          </main>
           <footer className="border-t border-border py-8">
             <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted sm:px-6 lg:px-8">
               © {new Date().getFullYear()} Our Church. All rights reserved.

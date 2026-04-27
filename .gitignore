@@ -22,3 +22,10 @@ backend/tmp/
 Thumbs.db
 
 .ssh
+
+
+.agents/
+.cursor/
+.claude/
+skills-lock.json
+PORTFOLIO_AUDIT.md

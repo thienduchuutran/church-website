@@ -101,7 +101,7 @@ export async function apiPost(path: string, body: unknown, session: { access_tok
 
 | Page | Route | Data source |
 |------|-------|-------------|
-| Homepage | `/` | Supabase — latest 3 announcements + next 2 events |
+| Homepage | `/` | Supabase — latest 3 announcements + next 2 events; hero uses Playfair display + terracotta eyebrow/italic phrase; section `h2` uses Playfair 600 (`app/page.tsx`) |
 | Events | `/events` | Supabase — all posts where type = 'event', newest first |
 | Announcements | `/announcements` | Supabase — all posts where type = 'announcement' |
 | Gallery | `/gallery` | Supabase — all gallery_album posts + their images |

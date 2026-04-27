@@ -47,6 +47,24 @@ body {
   font-family: var(--font-sans, Arial, Helvetica, sans-serif);
 }
 
+/* Keyboard focus: visible rings on interactive elements without removing browser fallback. */
+:where(a, button, input, textarea, select, summary):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-page-fade-in {
+    animation: none !important;
+  }
+}
+
+/* Skip-link target: show where focus landed (not covered by :focus-visible on main). */
+#main-content:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
 @keyframes page-fade-in {
   from {
     opacity: 0;

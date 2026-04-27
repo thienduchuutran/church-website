@@ -60,7 +60,8 @@ export default function PostCard({
         </time>
         {post.type === 'event' && post.event_date && (
           <time className="text-xs font-medium text-accent" dateTime={post.event_date}>
-            📅 {formatDate(post.event_date)}
+            <span aria-hidden>📅 </span>
+            {formatDate(post.event_date)}
           </time>
         )}
         <div className="ml-auto">
