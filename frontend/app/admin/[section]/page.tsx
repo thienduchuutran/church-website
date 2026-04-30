@@ -3,7 +3,7 @@
 import { use } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
-import AdminPostForm from '@/components/features/admin/AdminPostForm'
+import CreatePostForm from '@/components/features/admin/CreatePostForm'
 
 export default function AdminSectionPage({
   params,
@@ -32,7 +32,7 @@ export default function AdminSectionPage({
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
       <h1 className="mb-8 text-3xl font-bold capitalize text-foreground">New {label}</h1>
-      <AdminPostForm section={section} />
+      <CreatePostForm section={section} />
     </div>
   )
 }

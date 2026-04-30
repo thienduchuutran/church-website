@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { apiGetCached } from '@/lib/api'
+import { listPostsCached } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
 
@@ -15,20 +15,18 @@ export default async function HomePage() {
   // hide the other one. We sort/slice client-side instead of pushing date filters
   // to the server, which keeps the API surface small and the route easy to cache.
   const [announcementsResult, eventsResult] = await Promise.allSettled([
-    apiGetCached('/api/v1/posts?type=announcement&limit=3', 60),
-    apiGetCached('/api/v1/posts?type=event&limit=20', 60),
+    listPostsCached({ type: 'announcement', limit: 3 }, 60),
+    listPostsCached({ type: 'event', limit: 20 }, 60),
   ])
 
   const announcementsError = announcementsResult.status === 'rejected'
   const eventsError = eventsResult.status === 'rejected'
 
   const announcementPosts: Post[] =
-    announcementsResult.status === 'fulfilled'
-      ? ((announcementsResult.value as Post[]) ?? [])
-      : []
+    announcementsResult.status === 'fulfilled' ? announcementsResult.value : []
 
   const allEvents: Post[] =
-    eventsResult.status === 'fulfilled' ? ((eventsResult.value as Post[]) ?? []) : []
+    eventsResult.status === 'fulfilled' ? eventsResult.value : []
 
   // Show only events that haven't happened yet, soonest first, capped at 2.
   const nowIso = new Date().toISOString()

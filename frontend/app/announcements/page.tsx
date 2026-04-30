@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { apiGetCached } from '@/lib/api'
+import { listPostsCached } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
 import AdminFeedActions from '@/components/features/admin/AdminFeedActions'
@@ -16,7 +16,7 @@ export default async function AnnouncementsPage() {
   // within ~1 min for everyone.
   let posts: Post[] = []
   try {
-    posts = (await apiGetCached('/api/v1/posts?type=announcement', 60)) ?? []
+    posts = await listPostsCached({ type: 'announcement' }, 60)
   } catch {
     posts = []
   }
