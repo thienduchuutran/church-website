@@ -1,3 +1,4 @@
+import { datetimeLocalToIso, isoToDatetimeLocal } from './date'
 import type { Post, PostType } from './types'
 import type { PostPayload } from './posts'
 
@@ -39,14 +40,6 @@ export const POST_TYPE_ROUTES: Record<string, string> = {
   gallery_album: '/gallery',
 }
 
-// datetime-local inputs read/write `YYYY-MM-DDTHH:mm` in the user's local
-// timezone, while posts store event_date as a UTC ISO string.
-function isoToDatetimeLocal(iso: string): string {
-  const d = new Date(iso)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
-}
-
 export function postToFormState(post: Post): PostFormState {
   return {
     title: post.title,
@@ -61,7 +54,7 @@ export function toPostPayload(section: string, state: PostFormState): PostPayloa
     type: section as PostType,
     title: state.title,
     body: state.body || null,
-    event_date: state.eventDate ? new Date(state.eventDate).toISOString() : null,
+    event_date: state.eventDate ? datetimeLocalToIso(state.eventDate) : null,
     external_link: state.externalLink || null,
   }
 }
