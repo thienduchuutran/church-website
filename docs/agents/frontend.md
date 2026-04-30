@@ -43,11 +43,20 @@ frontend/
 │       │   ├── AlbumGrid.tsx           ← Grid of albums
 │       │   └── RecentMoments.tsx       ← Flat photo grid
 │       └── admin/
-│           ├── AdminPostForm.tsx        ← Create/edit post form
-│           └── AdminNav.tsx
+│           ├── AdminControls.tsx        ← Per-post pencil/trash buttons
+│           ├── AdminFeedActions.tsx
+│           ├── AdminNav.tsx
+│           ├── CreatePostForm.tsx       ← Wraps PostFormFields, POSTs new posts
+│           ├── EditPostForm.tsx         ← Wraps PostFormFields, PATCHes existing posts
+│           ├── EditPostModal.tsx        ← Modal chrome + portal hosting EditPostForm
+│           └── PostFormFields.tsx       ← Presentational inputs shared by Create/Edit
 ├── lib/
-│   ├── supabase.ts                     ← Supabase client (auth + direct public reads)
-│   └── api.ts                          ← Fetch wrapper for Go backend calls
+│   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
+│   ├── auth.tsx                        ← Supabase auth context + useAuth hook
+│   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
+│   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
+│   ├── posts.ts                        ← Post API service (list/get/create/update/delete)
+│   └── supabase.ts                     ← Supabase client (auth + direct public reads)
 ├── public/
 ├── .env.local
 └── next.config.ts
@@ -68,35 +77,46 @@ frontend/
 
 **Supabase is auth-only.** All application data — posts, images, page content, calendar, reactions — lives in AWS RDS and is reached through the Go backend. The frontend must **never** call `supabase.from(...)` for app data; doing so reads from the wrong database (the legacy Supabase Postgres) and creates a split-brain where writes and reads disagree. See `docs/agents/known-quirks.md` → "Posts created on production don't show up in the UI" for the original outage this caused.
 
-**Public reads:** Use `apiGet(path)` for client-side fetches that must be fresh (e.g. reactions, the admin dashboard) and `apiGetCached(path, revalidate)` for server-rendered routes that should be cached for `revalidate` seconds.
+### Two layers
+
+- **`lib/api.ts`** — generic transport wrappers. Knows about `NEXT_PUBLIC_API_URL`, JSON encoding, Bearer-token headers, and `ApiError`. It does **not** know about any specific resource. Functions: `apiGet`, `apiGetCached`, `apiPost`, `apiPatch`, `apiPut`, `apiDelete`, `apiPostAnon`, `apiDeleteAnon`.
+- **Resource services** (e.g. `lib/posts.ts`) — typed, resource-specific functions built on top of `lib/api.ts`. Components import these, **not** the generic wrappers, when working with a known resource. This way `/api/v1/posts` is referenced in exactly one file: when the URL or response shape changes you fix it once.
+
+### `lib/posts.ts`
+
+| Function | HTTP | When to use |
+|---|---|---|
+| `listPosts({ type?, limit? })` | `GET /posts` | Client components that must be fresh (admin dashboard) |
+| `listPostsCached({ type?, limit? }, revalidate)` | `GET /posts` | Server-rendered public pages (homepage, events, announcements) |
+| `getPost(id)` | `GET /posts/{id}` | Pre-filling the edit modal |
+| `createPost(payload, token)` | `POST /posts` | `CreatePostForm` |
+| `updatePost(id, payload, token)` | `PATCH /posts/{id}` | `EditPostForm` |
+| `deletePost(id, token)` | `DELETE /posts/{id}` | `AdminControls` |
 
 ```ts
-// Server component — cached for 60s by Next.js
-import { apiGetCached } from '@/lib/api'
-const posts = await apiGetCached('/api/v1/posts?type=announcement', 60)
+// Server component — cached for 60s
+import { listPostsCached } from '@/lib/posts'
+const posts = await listPostsCached({ type: 'announcement' }, 60)
 
 // Client component — always hits the network
-import { apiGet } from '@/lib/api'
+import { listPosts } from '@/lib/posts'
+const posts = await listPosts({ type: filter ?? undefined, limit: 100 })
+
+// Admin write
+import { createPost } from '@/lib/posts'
+await createPost(payload, session.access_token)
+```
+
+### When to use raw `lib/api.ts`
+
+For resources that don't yet have a service module (reactions, pages, gallery uploads), call the generic wrappers directly:
+
+```ts
+import { apiGet, apiPostAnon } from '@/lib/api'
 const summary = await apiGet(`/api/v1/reactions/${postId}?fingerprint=${fp}`)
 ```
 
-**Admin writes (create/edit/delete):** Always go through the Go backend via `lib/api.ts`. The frontend attaches the Supabase JWT to the Authorization header.
-
-```ts
-// lib/api.ts
-export async function apiPost(path: string, body: unknown, accessToken: string) {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${accessToken}`,
-    },
-    body: JSON.stringify(body),
-  })
-  if (!res.ok) throw new Error(await res.text())
-  return res.json()
-}
-```
+When a resource grows beyond two or three call sites, extract a `lib/<resource>.ts` service the same way `lib/posts.ts` works.
 
 ---
 

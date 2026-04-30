@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
-import { apiGet } from '@/lib/api'
+import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostCard from '@/components/features/posts/PostCard'
 
@@ -26,13 +26,8 @@ export default function AdminPage() {
   // backend caps at 100 server-side anyway.
   useEffect(() => {
     if (!isAdmin) return
-
-    const path = filter
-      ? `/api/v1/posts?type=${encodeURIComponent(filter)}&limit=100`
-      : '/api/v1/posts?limit=100'
-
-    apiGet(path)
-      .then((data) => setPosts((data as Post[]) ?? []))
+    listPosts({ type: filter ?? undefined, limit: 100 })
+      .then(setPosts)
       .catch(() => setPosts([]))
   }, [isAdmin, filter])
 

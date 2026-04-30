@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { apiGetCached } from '@/lib/api'
+import { listPostsCached } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
 import AdminFeedActions from '@/components/features/admin/AdminFeedActions'
@@ -13,7 +13,7 @@ export const revalidate = 60
 export default async function EventsPage() {
   let posts: Post[] = []
   try {
-    posts = (await apiGetCached('/api/v1/posts?type=event', 60)) ?? []
+    posts = await listPostsCached({ type: 'event' }, 60)
   } catch {
     posts = []
   }

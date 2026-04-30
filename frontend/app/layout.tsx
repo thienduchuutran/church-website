@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono, Playfair_Display } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth'
+import { EditModalProvider } from '@/lib/edit-modal'
 import Navbar from '@/components/ui/Navbar'
 import PageTransition from '@/components/ui/PageTransition'
 
@@ -45,15 +46,17 @@ export default function RootLayout({
           Skip to main content
         </a>
         <AuthProvider>
-          <Navbar />
-          <main id="main-content" tabIndex={-1} className="flex-1 scroll-mt-20">
-            <PageTransition>{children}</PageTransition>
-          </main>
-          <footer className="border-t border-border py-8">
-            <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted sm:px-6 lg:px-8">
-              © {new Date().getFullYear()} VGOMNE. All rights reserved.
-            </div>
-          </footer>
+          <EditModalProvider>
+            <Navbar />
+            <main id="main-content" tabIndex={-1} className="flex-1 scroll-mt-20">
+              <PageTransition>{children}</PageTransition>
+            </main>
+            <footer className="border-t border-border py-8">
+              <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted sm:px-6 lg:px-8">
+                © {new Date().getFullYear()} VGOMNE. All rights reserved.
+              </div>
+            </footer>
+          </EditModalProvider>
         </AuthProvider>
       </body>
     </html>
