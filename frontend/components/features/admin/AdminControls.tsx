@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
 import { useEditModal } from '@/lib/edit-modal'
-import { apiDelete } from '@/lib/api'
+import { deletePost } from '@/lib/posts'
 
 export default function AdminControls({ postId }: { postId: string }) {
   const { isAdmin, session } = useAuth()
@@ -18,7 +18,7 @@ export default function AdminControls({ postId }: { postId: string }) {
     if (!session || !confirm('Are you sure you want to delete this post?')) return
     setDeleting(true)
     try {
-      await apiDelete(`/api/v1/posts/${postId}`, session.access_token)
+      await deletePost(postId, session.access_token)
       router.refresh()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete post')

@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { apiGet } from '@/lib/api'
+import { getPost } from '@/lib/posts'
 import type { Post } from '@/lib/types'
-import AdminPostForm from './AdminPostForm'
+import EditPostForm from './EditPostForm'
 
 export default function EditPostModal({
   id,
@@ -25,8 +25,8 @@ export default function EditPostModal({
   }, [])
 
   useEffect(() => {
-    apiGet(`/api/v1/posts/${id}`)
-      .then((data) => setPost(data as Post))
+    getPost(id)
+      .then(setPost)
       .finally(() => setFetching(false))
   }, [id])
 
@@ -78,7 +78,7 @@ export default function EditPostModal({
         ) : !post ? (
           <p className="text-muted">Post not found.</p>
         ) : (
-          <AdminPostForm section={post.type} post={post} />
+          <EditPostForm post={post} onSuccess={onClose} onCancel={onClose} />
         )}
       </div>
     </div>,
