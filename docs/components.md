@@ -187,9 +187,10 @@ Renders the modal chrome around `EditPostForm`. Fetches the post by id, then han
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `id` | `string` | required | Post id — fetched via `getPost(id)` |
-| `onClose` | `() => void` | required | Called by backdrop click, X button, Escape key, and the form's Cancel/Success callbacks |
+| `onClose` | `() => void` | required | Called by backdrop click, X button, Escape key, and the form's Cancel/Success callbacks — fired *after* the exit animation completes |
 
 **Client component:** yes
+**Visual system:** Apple-style sheet — blurred + saturated backdrop (`backdrop-blur-xl backdrop-saturate-150`), `rounded-3xl`, layered soft shadow with a hairline `ring-1 ring-black/5`. Entry animates `scale(0.94) translateY(20px) → 1` over 480ms with `cubic-bezier(0.32, 0.72, 0, 1)` (iOS "snappy" decel curve); exit is faster (240ms) with an accel curve, per Apple HIG. Animation classes (`apple-backdrop-in/out`, `apple-sheet-in/out`) live in `globals.css` and collapse to no-op under `prefers-reduced-motion`. Internal `closing` state delays the parent's `onClose` by `EXIT_MS` so the exit animation has time to play.
 **Note:** This component is not used directly. `EditModalProvider` mounts it when `editingId` is set.
 
 ---
