@@ -3,10 +3,12 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
+import { useEditModal } from '@/lib/edit-modal'
 import { apiDelete } from '@/lib/api'
 
 export default function AdminControls({ postId }: { postId: string }) {
   const { isAdmin, session } = useAuth()
+  const { openEdit } = useEditModal()
   const router = useRouter()
   const [deleting, setDeleting] = useState(false)
 
@@ -31,6 +33,7 @@ export default function AdminControls({ postId }: { postId: string }) {
         type="button"
         className="rounded p-1 text-muted transition-colors hover:bg-primary/10 hover:text-primary"
         title="Edit post"
+        onClick={() => openEdit(postId)}
       >
         <svg
           className="h-4 w-4"
