@@ -129,16 +129,83 @@ Flat photo grid showing the most recent images across all albums.
 
 ### Admin (`components/features/admin/`)
 
-#### `AdminPostForm`
-Create/edit form for posts. Submits via `apiPost` / `apiPatch` with the admin's JWT.
+The post create/edit experience is split across four components plus a context provider, so each piece has a single responsibility:
+
+- `PostFormFields` — presentational. Renders the inputs.
+- `CreatePostForm` — owns state, calls `createPost`, redirects to the section route on success.
+- `EditPostForm` — owns state initialized from a `Post`, calls `updatePost`, hands control back to its parent via `onSuccess` / `onCancel`.
+- `EditPostModal` — modal chrome (backdrop, X button, Escape/click-out close) hosting `EditPostForm`. Rendered through a portal.
+- `EditModalProvider` (in `lib/edit-modal.tsx`) — owns `editingId` state at the root layout; exposes `useEditModal()`.
+
+#### `PostFormFields`
+Pure presentational. Renders Title plus the conditional Body / Event Date / External Link inputs that apply to the given post type.
 
 **Props**
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `section` | `PostType` | required | Determines which fields are shown |
-| `existingPost` | `Post \| null` | `null` | When set, form is in edit mode |
+| `section` | `string` (PostType) | required | Drives which inputs render — looked up via `POST_TYPE_FIELDS` in `lib/post-types.ts` |
+| `state` | `PostFormState` | required | Controlled values for all inputs |
+| `onChange` | `(next: PostFormState) => void` | required | Called with the next state on every keystroke |
+
+**Client component:** yes (controlled inputs)
+**No state, no API calls, no router** — safe to reuse from any caller.
+
+---
+
+#### `CreatePostForm`
+Wraps `PostFormFields` with a `<form>`, error display, and submit/cancel buttons. Submits to `createPost` (in `lib/posts.ts`) and redirects to the section's public route on success.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `section` | `string` (PostType) | required | Determines payload `type`, button label, and post-success redirect |
 
 **Client component:** yes
+**Data flow:** form state → `toPostPayload(section, state)` → `createPost(payload, token)` → `router.push(POST_TYPE_ROUTES[section])`.
+
+---
+
+#### `EditPostForm`
+Same shell as `CreatePostForm` but initializes state from an existing `Post` and submits via `updatePost`. It does **not** redirect — the parent decides via callbacks.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `post` | `Post` | required | Pre-fills all fields; `post.id` and `post.type` drive the PATCH path |
+| `onSuccess` | `() => void` | required | Called after a successful save (modal closes, dashboard refetches) |
+| `onCancel` | `() => void` | required | Called by the Cancel button |
+
+**Client component:** yes
+**Data flow:** `postToFormState(post)` → form state → `toPostPayload(post.type, state)` → `updatePost(post.id, payload, token)` → `router.refresh()` → `onSuccess()`.
+
+---
+
+#### `EditPostModal`
+Renders the modal chrome around `EditPostForm`. Fetches the post by id, then hands the result to the form. Uses `createPortal(..., document.body)` because `PageTransition` applies a CSS transform that creates a containing block and would otherwise clip `position: fixed`.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `id` | `string` | required | Post id — fetched via `getPost(id)` |
+| `onClose` | `() => void` | required | Called by backdrop click, X button, Escape key, and the form's Cancel/Success callbacks |
+
+**Client component:** yes
+**Note:** This component is not used directly. `EditModalProvider` mounts it when `editingId` is set.
+
+---
+
+#### `AdminControls`
+Per-post pencil + trash buttons rendered inside `PostCard`. Visible only to admins (`useAuth().isAdmin`).
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `postId` | `string` | required | Forwarded to `openEdit` and `deletePost` |
+
+**Client component:** yes
+**Data flow:**
+- Edit click → `useEditModal().openEdit(postId)` → provider mounts `EditPostModal` with the id.
+- Delete click → `confirm(...)` → `deletePost(postId, token)` → `router.refresh()`.
 
 ---
 
