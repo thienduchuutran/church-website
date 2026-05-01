@@ -6,7 +6,7 @@ import { getPost } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import EditPostForm from './EditPostForm'
 
-const EXIT_MS = 240
+const EXIT_MS = 280
 
 export default function EditPostModal({
   id,
@@ -56,7 +56,7 @@ export default function EditPostModal({
 
   return createPortal(
     <div
-      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-[0px] backdrop-saturate-150 ${closing ? 'apple-backdrop-out' : 'apple-backdrop-in'
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[10px] backdrop-saturate-150 ${closing ? 'apple-backdrop-out' : 'apple-backdrop-in'
         }`}
       onClick={handleClose}
     >

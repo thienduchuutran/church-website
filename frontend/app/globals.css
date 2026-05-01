@@ -121,14 +121,14 @@ body {
 }
 
 .apple-backdrop-in {
-  animation: apple-backdrop-in 280ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: apple-backdrop-in 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .apple-backdrop-out {
-  animation: apple-backdrop-out 220ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: apple-backdrop-out 320ms cubic-bezier(0.4, 0, 1, 1) both;
 }
 .apple-sheet-in {
-  animation: apple-sheet-in 480ms cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation: apple-sheet-in 560ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .apple-sheet-out {
-  animation: apple-sheet-out 240ms cubic-bezier(0.4, 0, 1, 1) both;
+  animation: apple-sheet-out 280ms cubic-bezier(0.4, 0, 1, 1) both;
 }
