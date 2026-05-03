@@ -83,24 +83,13 @@ export default function CalendarShell({
     <>
       <div className={`transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
 
-        {/* Navigation — outside the print area feel, but still captured */}
-        <div className="flex items-center justify-between mb-5">
-          <button
-            onClick={prevMonth}
-            className="text-sm font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
-          >
-            ← <span className="hidden sm:inline">{prevMonthName}</span>
-          </button>
-
-          {/* Large month title */}
-          <div className="text-center">
-            <p className="text-[10px] font-bold tracking-[0.3em] uppercase text-gray-400 mb-1">
-              Church Calendar
-            </p>
+        {/* Compact horizontal title row */}
+        <div className="flex items-end justify-between mb-2 gap-4">
+          <div className="flex items-baseline gap-3 min-w-0">
             <h1
-              className="font-bold leading-none"
+              className="font-bold leading-none truncate"
               style={{
-                fontSize: 'clamp(2.5rem, 7vw, 4.5rem)',
+                fontSize: '3rem',
                 color: theme.title,
                 fontFamily: 'Georgia, "Times New Roman", serif',
                 letterSpacing: '-0.01em',
@@ -108,15 +97,27 @@ export default function CalendarShell({
             >
               {monthName}
             </h1>
-            <p className="text-base font-light text-gray-400 mt-1 tracking-wide">{year}</p>
+            <span className="text-xl font-light text-gray-400 tracking-wide">{year}</span>
+            <span className="text-[9px] font-bold tracking-[0.25em] uppercase text-gray-400 ml-2 hidden md:inline">
+              Church Calendar
+            </span>
           </div>
 
-          <button
-            onClick={nextMonth}
-            className="text-sm font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
-          >
-            <span className="hidden sm:inline">{nextMonthName}</span> →
-          </button>
+          <div className="flex items-center gap-3 shrink-0">
+            <button
+              onClick={prevMonth}
+              className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
+            >
+              ← <span className="hidden sm:inline">{prevMonthName}</span>
+            </button>
+            <span className="text-gray-200">|</span>
+            <button
+              onClick={nextMonth}
+              className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
+            >
+              <span className="hidden sm:inline">{nextMonthName}</span> →
+            </button>
+          </div>
         </div>
 
         {/* Calendar grid */}
@@ -129,86 +130,86 @@ export default function CalendarShell({
           theme={theme}
         />
 
-        {/* Info strip below grid */}
+        {/* Info strip below grid — compact 3 columns */}
         {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin) && (
           <div
-            className="mt-0 grid grid-cols-1 sm:grid-cols-3 gap-6 px-4 py-4 border-x-2 border-b-2 border-gray-900"
+            className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-x-2 border-b-2 border-gray-900"
             style={{ backgroundColor: '#fafafa' }}
           >
             {/* Birthdays */}
-            <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: theme.title }}>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: theme.title }}>
                 Birthdays
               </p>
               {birthdays.length > 0 ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                   {birthdays.map(e => {
                     const day = parseInt(e.date.split('-')[2], 10)
                     const colors = COLOR_MAP[e.color] ?? COLOR_MAP.rose
                     return (
-                      <div key={e.id} className="flex items-center gap-1.5 text-xs">
-                        <CalendarIcon iconKey="cake" size={11} color={colors.dot} />
+                      <div key={e.id} className="flex items-center gap-1 text-[11px] leading-tight">
+                        <CalendarIcon iconKey="cake" size={10} color={colors.dot} />
                         <span className="font-semibold" style={{ color: colors.text }}>{e.title}</span>
-                        <span className="text-gray-400">— {monthName.slice(0, 3)} {day}</span>
+                        <span className="text-gray-400">{day}</span>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-gray-400 italic">No birthdays this month.</p>
+                <p className="text-[11px] text-gray-400 italic">None this month.</p>
               )}
             </div>
 
             {/* Bible Study */}
-            <div>
-              <p className="text-[10px] font-bold tracking-widest uppercase mb-2" style={{ color: theme.title }}>
+            <div className="min-w-0">
+              <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: theme.title }}>
                 Bible Study
               </p>
               {bibleStudyDays.length > 0 ? (
-                <div className="flex flex-col gap-1">
+                <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                   {bibleStudyDays.map(e => {
                     const day = parseInt(e.date.split('-')[2], 10)
                     const colors = COLOR_MAP[e.color] ?? COLOR_MAP.sky
                     return (
-                      <div key={e.id} className="flex items-center gap-1.5 text-xs">
+                      <div key={e.id} className="flex items-center gap-1 text-[11px] leading-tight">
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
                         <span className="font-semibold text-gray-700">{e.title}</span>
-                        <span className="text-gray-400">— {monthName.slice(0, 3)} {day}</span>
+                        <span className="text-gray-400">{day}</span>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <p className="text-xs text-gray-400 italic">No sessions this month.</p>
+                <p className="text-[11px] text-gray-400 italic">None this month.</p>
               )}
             </div>
 
             {/* Month note */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-bold tracking-widest uppercase" style={{ color: theme.title }}>
+            <div className="min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: theme.title }}>
                   Notes
                 </p>
                 {isAdmin && (
                   <button
                     onClick={() => { setEditingNote(true); setModalOpen(true) }}
-                    className="text-[10px] text-gray-400 hover:text-gray-700 underline underline-offset-2 transition-colors"
+                    className="text-[9px] text-gray-400 hover:text-gray-700 underline underline-offset-2 transition-colors"
                   >
                     {monthNote ? 'Edit' : 'Add note'}
                   </button>
                 )}
               </div>
               {monthNote?.content ? (
-                <p className="text-xs text-gray-600 leading-relaxed whitespace-pre-wrap">{monthNote.content}</p>
+                <p className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap line-clamp-3">{monthNote.content}</p>
               ) : (
-                <p className="text-xs text-gray-400 italic">No note this month.</p>
+                <p className="text-[11px] text-gray-400 italic">No note this month.</p>
               )}
             </div>
           </div>
         )}
 
-        {/* Legend */}
-        <div className="mt-4 flex flex-wrap gap-x-5 gap-y-1.5">
+        {/* Legend — inline, compact */}
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {[
             { color: 'rose',    label: 'Birthday' },
             { color: 'sky',     label: 'Bible Study' },
@@ -218,9 +219,9 @@ export default function CalendarShell({
           ].map(({ color, label }) => {
             const c = COLOR_MAP[color]
             return (
-              <div key={color} className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: c.dot }} />
-                <span className="text-[10px] text-gray-500 uppercase tracking-wide font-medium">{label}</span>
+              <div key={color} className="flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.dot }} />
+                <span className="text-[9px] text-gray-500 uppercase tracking-wide font-medium">{label}</span>
               </div>
             )
           })}

@@ -60,7 +60,7 @@ export default function CalendarGrid({
           <div
             key={d}
             className={[
-              'py-2.5 text-center text-xs font-bold',
+              'py-2.5 text-center text-sm font-bold',
               i < 6 ? 'border-r border-gray-900' : '',
             ].join(' ')}
             style={{ backgroundColor: theme.header, color: theme.headerText }}
@@ -78,7 +78,7 @@ export default function CalendarGrid({
               <div
                 key={`empty-${idx}`}
                 className={[
-                  'border-t border-gray-900 min-h-[110px] bg-gray-50',
+                  'border-t border-gray-900 min-h-[115px] bg-gray-50',
                   (idx % 7) < 6 ? 'border-r border-gray-900' : '',
                 ].join(' ')}
               />
@@ -94,7 +94,7 @@ export default function CalendarGrid({
               key={day}
               onClick={() => isAdmin && onDayClick?.(dateStr)}
               className={[
-                'border-t border-gray-900 min-h-[110px] px-1.5 py-1.5 flex flex-col gap-1 bg-white',
+                'border-t border-gray-900 min-h-[115px] px-1.5 py-1.5 flex flex-col gap-1 bg-white',
                 (idx % 7) < 6 ? 'border-r border-gray-900' : '',
                 isAdmin ? 'cursor-pointer hover:bg-gray-50 transition-colors' : '',
               ].join(' ')}
