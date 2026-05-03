@@ -1,5 +1,7 @@
 'use client'
 
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X, Plus, PencilSimple } from '@phosphor-icons/react'
 import { CalendarEvent, COLOR_MAP, EVENT_TYPE_LABELS } from './types'
 import CalendarIcon from './CalendarIcon'
@@ -18,6 +20,8 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+const EXIT_MS = 280
+
 function formatDate(date: string): string {
   const [y, m, d] = date.split('-').map(Number)
   const weekday = new Date(y, m - 1, d).toLocaleDateString('en-US', { weekday: 'long' })
@@ -32,15 +36,44 @@ export default function DayEventsModal({
   onAddNew,
   onClose,
 }: DayEventsModalProps) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+  const [mounted, setMounted] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-      {/* Sheet */}
-      <div className="relative z-10 w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+  useEffect(() => {
+    setMounted(true)
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+    }
+  }, [])
+
+  const handleClose = useCallback(() => {
+    if (closing) return
+    setClosing(true)
+    closeTimer.current = setTimeout(onClose, EXIT_MS)
+  }, [closing, onClose])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleClose])
+
+  if (!mounted) return null
+
+  return createPortal(
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[10px] backdrop-saturate-150 ${closing ? 'apple-backdrop-out' : 'apple-backdrop-in'}`}
+      onClick={handleClose}
+    >
+      <div
+        className={`relative w-full sm:max-w-md bg-surface rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45),0_10px_30px_-10px_rgba(0,0,0,0.25)] ring-1 ring-black/5 overflow-hidden flex flex-col max-h-[90dvh] will-change-transform ${closing ? 'apple-sheet-out' : 'apple-sheet-in'}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
@@ -53,7 +86,7 @@ export default function DayEventsModal({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-full hover:bg-border/40 transition-colors text-muted"
           >
             <X size={18} weight="bold" />
@@ -70,7 +103,6 @@ export default function DayEventsModal({
                 className="flex items-start gap-3 px-3 py-3 rounded-xl border border-border hover:border-foreground/20 transition-colors"
                 style={{ backgroundColor: colors.bg }}
               >
-                {/* Icon */}
                 <div
                   className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
                   style={{ backgroundColor: '#ffffff' }}
@@ -78,7 +110,6 @@ export default function DayEventsModal({
                   <CalendarIcon iconKey={e.icon} size={16} color={colors.dot} />
                 </div>
 
-                {/* Content */}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold leading-tight" style={{ color: colors.text }}>
                     {e.title}
@@ -93,7 +124,6 @@ export default function DayEventsModal({
                   )}
                 </div>
 
-                {/* Edit button — admin only */}
                 {isAdmin && (
                   <button
                     onClick={() => onEdit(e)}
@@ -111,7 +141,7 @@ export default function DayEventsModal({
         {/* Footer */}
         <div className="px-6 pb-6 pt-3 border-t border-border flex items-center justify-end gap-2">
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="px-4 py-2 rounded-lg text-sm text-muted hover:text-foreground border border-border hover:border-foreground/30 transition-colors"
           >
             Close
@@ -127,6 +157,7 @@ export default function DayEventsModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

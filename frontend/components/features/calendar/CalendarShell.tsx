@@ -39,6 +39,8 @@ export default function CalendarShell({
 
   // Day-events list popup (shown when a day with events is clicked)
   const [dayListDate, setDayListDate] = useState<string | null>(null)
+  // When EventModal was opened from the list, remember the date so Cancel can return there
+  const [returnToListDate, setReturnToListDate] = useState<string | null>(null)
 
   const theme = MONTH_THEMES[month]
   const monthName = MONTH_NAMES[month - 1]
@@ -83,6 +85,7 @@ export default function CalendarShell({
   }
 
   function handleEditFromList(ev: CalendarEvent) {
+    setReturnToListDate(ev.date)
     setDayListDate(null)
     setSelectedDate(ev.date)
     setEditingEvent(ev)
@@ -92,6 +95,7 @@ export default function CalendarShell({
 
   function handleAddFromList() {
     if (!dayListDate) return
+    setReturnToListDate(dayListDate)
     setSelectedDate(dayListDate)
     setDayListDate(null)
     setEditingEvent(null)
@@ -99,8 +103,19 @@ export default function CalendarShell({
     setModalOpen(true)
   }
 
-  function handleEventSaved() {
+  function handleEventModalClose() {
     setModalOpen(false)
+    if (returnToListDate) {
+      // Reopen the day-events list we came from
+      setDayListDate(returnToListDate)
+      setReturnToListDate(null)
+    }
+  }
+
+  function handleEventSaved() {
+    // Modal plays its own exit animation, so we don't unmount it here —
+    // just clear return-to-list state and refresh the month data.
+    setReturnToListDate(null)
     fetchMonth(year, month)
   }
 
@@ -266,7 +281,7 @@ export default function CalendarShell({
           month={month}
           accessToken={accessToken}
           onSaved={handleEventSaved}
-          onClose={() => setModalOpen(false)}
+          onClose={handleEventModalClose}
         />
       )}
 

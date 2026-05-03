@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from '@phosphor-icons/react'
 import { apiDelete, apiPatch, apiPost, apiPut } from '@/lib/api'
 import {
@@ -31,6 +32,8 @@ const ICON_KEYS = Object.keys(ICON_LABELS)
 const COLOR_KEYS = Object.keys(COLOR_MAP)
 const EVENT_TYPES = Object.keys(EVENT_TYPE_LABELS) as CalendarEventType[]
 
+const EXIT_MS = 280
+
 export default function EventModal({
   mode,
   date,
@@ -52,11 +55,38 @@ export default function EventModal({
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // Portal + animation state — mirrors EditPostModal's pattern.
+  const [mounted, setMounted] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
-    ;(firstInputRef.current as HTMLElement)?.focus()
+    setMounted(true)
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+    }
   }, [])
+
+  useEffect(() => {
+    if (mounted) (firstInputRef.current as HTMLElement)?.focus()
+  }, [mounted])
+
+  // Run the exit animation, then unmount via the parent's onClose.
+  const handleClose = useCallback(() => {
+    if (closing) return
+    setClosing(true)
+    closeTimer.current = setTimeout(onClose, EXIT_MS)
+  }, [closing, onClose])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleClose])
 
   // Sync icon/color with event type selection for smart defaults
   function handleTypeChange(t: CalendarEventType) {
@@ -85,9 +115,9 @@ export default function EventModal({
         await apiPatch(`/api/v1/calendar/events/${event.id}`, { title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
       }
       onSaved()
+      handleClose()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
-    } finally {
       setSaving(false)
     }
   }
@@ -98,6 +128,7 @@ export default function EventModal({
     try {
       await apiDelete(`/api/v1/calendar/events/${event.id}`, accessToken)
       onSaved()
+      handleClose()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Delete failed')
       setSaving(false)
@@ -108,16 +139,19 @@ export default function EventModal({
     ? true
     : title.trim().length > 0
 
-  return (
-    // Backdrop
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+  if (!mounted) return null
 
-      {/* Sheet */}
-      <div className="relative z-10 w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+  return createPortal(
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[10px] backdrop-saturate-150 ${closing ? 'apple-backdrop-out' : 'apple-backdrop-in'}`}
+      onClick={handleClose}
+    >
+      <div
+        className={`relative w-full sm:max-w-md bg-surface rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45),0_10px_30px_-10px_rgba(0,0,0,0.25)] ring-1 ring-black/5 overflow-hidden flex flex-col max-h-[90dvh] will-change-transform ${closing ? 'apple-sheet-out' : 'apple-sheet-in'}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
@@ -132,7 +166,7 @@ export default function EventModal({
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-full hover:bg-border/40 transition-colors text-muted"
           >
             <X size={18} weight="bold" />
@@ -293,7 +327,7 @@ export default function EventModal({
 
           <div className="flex gap-2 ml-auto">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 rounded-lg text-sm text-muted hover:text-foreground border border-border hover:border-foreground/30 transition-colors"
             >
               Cancel
@@ -308,6 +342,7 @@ export default function EventModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
