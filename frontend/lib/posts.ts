@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiGetCached, apiPatch, apiPost } from './api'
+import { apiDelete, apiGet, apiPatch, apiPost } from './api'
 import type { Post, PostType } from './types'
 
 const POSTS_BASE = '/api/v1/posts'
@@ -24,19 +24,8 @@ function buildListPath({ type, limit }: ListOptions = {}): string {
   return qs ? `${POSTS_BASE}?${qs}` : POSTS_BASE
 }
 
-// Fresh fetch — for client components that must always see the latest
-// (admin dashboard, edit-modal pre-fill).
 export async function listPosts(opts: ListOptions = {}): Promise<Post[]> {
   return ((await apiGet(buildListPath(opts))) as Post[]) ?? []
-}
-
-// Server-cached fetch — for server-rendered public pages where stale-by-
-// `revalidate`-seconds is acceptable.
-export async function listPostsCached(
-  opts: ListOptions,
-  revalidate: number,
-): Promise<Post[]> {
-  return ((await apiGetCached(buildListPath(opts), revalidate)) as Post[]) ?? []
 }
 
 export async function getPost(id: string): Promise<Post> {

@@ -26,17 +26,6 @@ export async function apiGet(path: string) {
   return handleResponse(await fetch(`${API_URL}${path}`, { cache: 'no-store' }))
 }
 
-// apiGetCached is for server-rendered pages that want Next.js to cache the
-// response between requests and only refetch every `revalidate` seconds.
-// Use this on public read paths (announcements, events, home) where stale-by-
-// a-minute is fine. Keep `apiGet` for anything that must be fresh per request,
-// like reactions or admin views.
-export async function apiGetCached(path: string, revalidate: number) {
-  return handleResponse(
-    await fetch(`${API_URL}${path}`, { next: { revalidate } }),
-  )
-}
-
 export async function apiPost(path: string, body: unknown, accessToken: string) {
   return handleResponse(
     await fetch(`${API_URL}${path}`, {

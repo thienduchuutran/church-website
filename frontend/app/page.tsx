@@ -1,9 +1,7 @@
 import Link from 'next/link'
-import { listPostsCached } from '@/lib/posts'
+import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
-
-export const revalidate = 60
 
 /** Hero decorative strip: terracotta to warm gold, PRODUCT-allowed gradient use */
 const HERO_RULE =
@@ -15,8 +13,8 @@ export default async function HomePage() {
   // hide the other one. We sort/slice client-side instead of pushing date filters
   // to the server, which keeps the API surface small and the route easy to cache.
   const [announcementsResult, eventsResult] = await Promise.allSettled([
-    listPostsCached({ type: 'announcement', limit: 3 }, 60),
-    listPostsCached({ type: 'event', limit: 20 }, 60),
+    listPosts({ type: 'announcement', limit: 3 }),
+    listPosts({ type: 'event', limit: 20 }),
   ])
 
   const announcementsError = announcementsResult.status === 'rejected'

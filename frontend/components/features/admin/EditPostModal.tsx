@@ -11,9 +11,11 @@ const EXIT_MS = 280
 export default function EditPostModal({
   id,
   onClose,
+  onSaved,
 }: {
   id: string
   onClose: () => void
+  onSaved?: () => void
 }) {
   const [post, setPost] = useState<Post | null>(null)
   const [fetching, setFetching] = useState(true)
@@ -94,7 +96,12 @@ export default function EditPostModal({
         ) : !post ? (
           <p className="text-muted">Post not found.</p>
         ) : (
-          <EditPostForm post={post} onSuccess={handleClose} onCancel={handleClose} />
+          <EditPostForm
+            post={post}
+            onSaved={onSaved}
+            onSuccess={handleClose}
+            onCancel={handleClose}
+          />
         )}
       </div>
     </div>,

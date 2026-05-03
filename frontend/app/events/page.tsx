@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { listPostsCached } from '@/lib/posts'
+import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
 import AdminFeedActions from '@/components/features/admin/AdminFeedActions'
@@ -8,12 +8,10 @@ export const metadata: Metadata = {
   title: 'Events — Our Church',
 }
 
-export const revalidate = 60
-
 export default async function EventsPage() {
   let posts: Post[] = []
   try {
-    posts = await listPostsCached({ type: 'event' }, 60)
+    posts = await listPosts({ type: 'event' })
   } catch {
     posts = []
   }

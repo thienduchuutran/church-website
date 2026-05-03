@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
+import { useEditModal } from '@/lib/edit-modal'
 import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostCard from '@/components/features/posts/PostCard'
@@ -17,19 +18,21 @@ const POST_TYPES = [
 
 export default function AdminPage() {
   const { session, isAdmin, loading, signIn } = useAuth()
+  const { savedAt } = useEditModal()
   const [posts, setPosts] = useState<Post[]>([])
   const [filter, setFilter] = useState<string | null>(null)
 
   // The admin dashboard reads through the Go API (RDS) so it always sees the
   // same source-of-truth as the public feeds. We pull a wide window (limit=100)
   // so refreshing after a delete or edit still reflects the full table; the
-  // backend caps at 100 server-side anyway.
+  // backend caps at 100 server-side anyway. `savedAt` ticks after each modal
+  // save so this effect refetches without a full page reload.
   useEffect(() => {
     if (!isAdmin) return
     listPosts({ type: filter ?? undefined, limit: 100 })
       .then(setPosts)
       .catch(() => setPosts([]))
-  }, [isAdmin, filter])
+  }, [isAdmin, filter, savedAt])
 
   if (loading) {
     return (

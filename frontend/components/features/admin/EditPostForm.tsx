@@ -14,10 +14,12 @@ import PostFormFields from './PostFormFields'
 
 export default function EditPostForm({
   post,
+  onSaved,
   onSuccess,
   onCancel,
 }: {
   post: Post
+  onSaved?: () => void
   onSuccess: () => void
   onCancel: () => void
 }) {
@@ -35,6 +37,7 @@ export default function EditPostForm({
     try {
       await updatePost(post.id, toPostPayload(post.type, state), session.access_token)
       router.refresh()
+      onSaved?.()
       onSuccess()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
