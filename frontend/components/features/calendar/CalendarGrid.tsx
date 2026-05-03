@@ -6,13 +6,14 @@ import CalendarIcon from './CalendarIcon'
 
 interface CalendarGridProps {
   year: number
-  month: number // 1-indexed
+  month: number
   events: CalendarEvent[]
-  onDayClick?: (date: string) => void // YYYY-MM-DD, only when admin
+  onDayClick?: (date: string) => void
   isAdmin?: boolean
+  theme: { title: string; header: string; headerText: string }
 }
 
-const DAY_HEADERS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
+const DAY_HEADERS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
 export default function CalendarGrid({
   year,
@@ -20,6 +21,7 @@ export default function CalendarGrid({
   events,
   onDayClick,
   isAdmin = false,
+  theme,
 }: CalendarGridProps) {
   const { firstDayOfWeek, daysInMonth } = useMemo(() => {
     const firstDay = new Date(year, month - 1, 1)
@@ -27,7 +29,6 @@ export default function CalendarGrid({
     return { firstDayOfWeek: firstDay.getDay(), daysInMonth: lastDay.getDate() }
   }, [year, month])
 
-  // Group events by day number for O(1) lookup in render
   const eventsByDay = useMemo(() => {
     const map: Record<number, CalendarEvent[]> = {}
     for (const e of events) {
@@ -42,7 +43,6 @@ export default function CalendarGrid({
   const isCurrentMonth = today.getFullYear() === year && today.getMonth() + 1 === month
   const todayDay = isCurrentMonth ? today.getDate() : -1
 
-  // Build a flat array of cells: null = empty leading day
   const cells: (number | null)[] = [
     ...Array(firstDayOfWeek).fill(null),
     ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
@@ -53,21 +53,22 @@ export default function CalendarGrid({
   }
 
   return (
-    <div className="w-full">
+    <div className="w-full border-2 border-gray-900 overflow-hidden">
       {/* Day-of-week headers */}
-      <div className="grid grid-cols-7 mb-2">
-        {DAY_HEADERS.map((d) => (
+      <div className="grid grid-cols-7">
+        {DAY_HEADERS.map((d, i) => (
           <div
             key={d}
-            className="py-2 text-center text-[10px] font-semibold tracking-widest uppercase text-muted"
+            className={[
+              'py-2.5 text-center text-xs font-bold',
+              i < 6 ? 'border-r border-gray-900' : '',
+            ].join(' ')}
+            style={{ backgroundColor: theme.header, color: theme.headerText }}
           >
             {d}
           </div>
         ))}
       </div>
-
-      {/* Thin rule under headers */}
-      <div className="border-t border-border mb-0" />
 
       {/* Calendar cells */}
       <div className="grid grid-cols-7">
@@ -76,7 +77,10 @@ export default function CalendarGrid({
             return (
               <div
                 key={`empty-${idx}`}
-                className="border-b border-border min-h-[100px] px-1 py-1"
+                className={[
+                  'border-t border-gray-900 min-h-[110px] bg-gray-50',
+                  (idx % 7) < 6 ? 'border-r border-gray-900' : '',
+                ].join(' ')}
               />
             )
           }
@@ -90,21 +94,18 @@ export default function CalendarGrid({
               key={day}
               onClick={() => isAdmin && onDayClick?.(dateStr)}
               className={[
-                'border-b border-border min-h-[100px] px-2 py-2 flex flex-col gap-1',
-                'transition-colors duration-100',
-                isAdmin ? 'cursor-pointer hover:bg-accent/5' : '',
-                // right border for all but last column
-                (idx % 7) < 6 ? 'border-r border-border/40' : '',
+                'border-t border-gray-900 min-h-[110px] px-1.5 py-1.5 flex flex-col gap-1 bg-white',
+                (idx % 7) < 6 ? 'border-r border-gray-900' : '',
+                isAdmin ? 'cursor-pointer hover:bg-gray-50 transition-colors' : '',
               ].join(' ')}
             >
-              {/* Date number */}
+              {/* Date number — top right */}
               <span
                 className={[
-                  'text-sm font-medium leading-none mb-1 self-start',
-                  isToday
-                    ? 'bg-foreground text-background rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold'
-                    : 'text-muted',
+                  'text-xs font-semibold self-end leading-none mb-0.5',
+                  isToday ? 'rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-white' : 'text-gray-600',
                 ].join(' ')}
+                style={isToday ? { backgroundColor: theme.header } : {}}
               >
                 {day}
               </span>
@@ -115,29 +116,22 @@ export default function CalendarGrid({
                 return (
                   <div
                     key={e.id}
-                    className="flex items-center gap-1 min-w-0"
+                    className="flex items-center gap-1 min-w-0 rounded px-1.5 py-0.5 text-[11px] font-semibold leading-tight"
                     title={e.notes ?? e.title}
+                    style={{
+                      backgroundColor: colors.bg,
+                      borderLeft: `2.5px solid ${colors.dot}`,
+                      color: colors.text,
+                    }}
                   >
-                    <span
-                      className="shrink-0 w-1.5 h-1.5 rounded-full"
-                      style={{ backgroundColor: colors.dot }}
-                    />
-                    <CalendarIcon iconKey={e.icon} size={11} color={colors.text} />
-                    <span
-                      className="text-[11px] font-medium leading-tight truncate"
-                      style={{ color: colors.text }}
-                    >
-                      {e.title}
-                    </span>
+                    <CalendarIcon iconKey={e.icon} size={10} color={colors.dot} />
+                    <span className="truncate">{e.title}</span>
                   </div>
                 )
               })}
 
-              {/* Admin hint when no events */}
               {isAdmin && dayEvents.length === 0 && (
-                <span className="text-[10px] text-border mt-auto hidden group-hover:block">
-                  + add
-                </span>
+                <span className="text-[9px] text-gray-300 mt-auto">+</span>
               )}
             </div>
           )

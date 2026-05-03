@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { DownloadSimple } from '@phosphor-icons/react'
 
 interface ExportButtonProps {
@@ -14,17 +14,11 @@ export default function ExportButton({ targetRef }: ExportButtonProps) {
     if (!targetRef.current) return
     setExporting(true)
     try {
-      // Dynamically import so html2canvas is not in the main bundle
-      const { default: html2canvas } = await import('html2canvas')
-      const canvas = await html2canvas(targetRef.current, {
-        backgroundColor: getComputedStyle(document.documentElement)
-          .getPropertyValue('--background')
-          .trim() || '#faf8f5',
-        scale: 2,       // retina-quality export
-        useCORS: true,
-        logging: false,
+      const { toPng } = await import('html-to-image')
+      const url = await toPng(targetRef.current, {
+        pixelRatio: 2,
+        cacheBust: true,
       })
-      const url = canvas.toDataURL('image/png')
       const link = document.createElement('a')
       const now = new Date()
       const monthName = now.toLocaleString('default', { month: 'long' }).toLowerCase()

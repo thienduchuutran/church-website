@@ -28,6 +28,21 @@ export interface CalendarMonthResponse {
   month_note: CalendarMonthNote | null
 }
 
+export const MONTH_THEMES: Record<number, { title: string; header: string; headerText: string }> = {
+  1:  { title: '#1e3a8a', header: '#1e40af', headerText: '#ffffff' }, // January  — navy
+  2:  { title: '#9d174d', header: '#be185d', headerText: '#ffffff' }, // February — pink
+  3:  { title: '#14532d', header: '#15803d', headerText: '#ffffff' }, // March    — forest green
+  4:  { title: '#78350f', header: '#b45309', headerText: '#ffffff' }, // April    — amber
+  5:  { title: '#1e3a8a', header: '#1d4ed8', headerText: '#ffffff' }, // May      — blue
+  6:  { title: '#7c2d12', header: '#c2410c', headerText: '#ffffff' }, // June     — orange
+  7:  { title: '#7f1d1d', header: '#991b1b', headerText: '#ffffff' }, // July     — red
+  8:  { title: '#78350f', header: '#a16207', headerText: '#ffffff' }, // August   — amber
+  9:  { title: '#14532d', header: '#15803d', headerText: '#ffffff' }, // September — green
+  10: { title: '#7c2d12', header: '#92400e', headerText: '#ffffff' }, // October  — brown
+  11: { title: '#4c1d95', header: '#5b21b6', headerText: '#ffffff' }, // November — purple
+  12: { title: '#7f1d1d', header: '#991b1b', headerText: '#ffffff' }, // December — red
+}
+
 // Maps color keys to CSS hex values — used with inline styles to avoid
 // Tailwind purging dynamically-constructed class names.
 export const COLOR_MAP: Record<string, { dot: string; text: string; bg: string }> = {
