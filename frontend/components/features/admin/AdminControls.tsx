@@ -8,23 +8,49 @@ import { deletePost } from '@/lib/posts'
 
 export default function AdminControls({ postId }: { postId: string }) {
   const { isAdmin, session } = useAuth()
-  const { openEdit } = useEditModal()
+  const { openEdit, notifyChanged } = useEditModal()
   const router = useRouter()
+  const [confirming, setConfirming] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
   if (!isAdmin) return null
 
   async function handleDelete() {
-    if (!session || !confirm('Are you sure you want to delete this post?')) return
+    if (!session) return
     setDeleting(true)
     try {
       await deletePost(postId, session.access_token)
       router.refresh()
+      notifyChanged()
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Failed to delete post')
-    } finally {
       setDeleting(false)
+      setConfirming(false)
     }
+  }
+
+  if (confirming) {
+    return (
+      <div className="animate-confirm-in flex items-center gap-2">
+        <span className="text-xs font-medium text-red-600">Delete post?</span>
+        <button
+          type="button"
+          onClick={() => setConfirming(false)}
+          disabled={deleting}
+          className="text-xs text-muted transition-colors hover:text-foreground disabled:opacity-40"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleDelete}
+          disabled={deleting}
+          className="rounded-full bg-red-500 px-2.5 py-0.5 text-xs font-semibold text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+        >
+          {deleting ? 'Deleting…' : 'Delete'}
+        </button>
+      </div>
+    )
   }
 
   return (
@@ -51,9 +77,8 @@ export default function AdminControls({ postId }: { postId: string }) {
       </button>
       <button
         type="button"
-        onClick={handleDelete}
-        disabled={deleting}
-        className="rounded p-1 text-muted transition-colors hover:bg-red-100 hover:text-red-600 disabled:opacity-50"
+        onClick={() => setConfirming(true)}
+        className="rounded p-1 text-muted transition-colors hover:bg-red-100 hover:text-red-600"
         title="Delete post"
       >
         <svg

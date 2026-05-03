@@ -1,18 +1,19 @@
 'use client'
 
-import { createContext, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useMemo, useState } from 'react'
 import EditPostModal from '@/components/features/admin/EditPostModal'
 
 interface EditModalState {
   openEdit: (postId: string) => void
-  // Bumped after a successful save. Client-rendered pages (e.g. /admin) that
-  // fetch posts in a useEffect can include this in their dependency array to
-  // refetch immediately, since router.refresh() only re-runs server components.
+  notifyChanged: () => void
+  // Bumped after any post mutation (save or delete). Client-rendered pages
+  // (e.g. /admin) include this in their useEffect deps to refetch immediately.
   savedAt: number
 }
 
 const EditModalContext = createContext<EditModalState>({
   openEdit: () => {},
+  notifyChanged: () => {},
   savedAt: 0,
 })
 
@@ -22,9 +23,11 @@ export function EditModalProvider({ children }: { children: React.ReactNode }) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [savedAt, setSavedAt] = useState(0)
 
+  const notifyChanged = useCallback(() => setSavedAt(Date.now()), [])
+
   const value = useMemo(
-    () => ({ openEdit: (id: string) => setEditingId(id), savedAt }),
-    [savedAt],
+    () => ({ openEdit: (id: string) => setEditingId(id), notifyChanged, savedAt }),
+    [notifyChanged, savedAt],
   )
 
   return (
@@ -34,7 +37,7 @@ export function EditModalProvider({ children }: { children: React.ReactNode }) {
         <EditPostModal
           id={editingId}
           onClose={() => setEditingId(null)}
-          onSaved={() => setSavedAt(Date.now())}
+          onSaved={notifyChanged}
         />
       )}
     </EditModalContext.Provider>
