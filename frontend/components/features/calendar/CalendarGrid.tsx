@@ -89,14 +89,16 @@ export default function CalendarGrid({
           const isToday = day === todayDay
           const dateStr = formatDate(day)
 
+          const isClickable = isAdmin || dayEvents.length > 0
+
           return (
             <div
               key={day}
-              onClick={() => isAdmin && onDayClick?.(dateStr)}
+              onClick={() => isClickable && onDayClick?.(dateStr)}
               className={[
                 'border-t border-gray-900 min-h-[115px] px-1.5 py-1.5 flex flex-col gap-1 bg-white',
                 (idx % 7) < 6 ? 'border-r border-gray-900' : '',
-                isAdmin ? 'cursor-pointer hover:bg-gray-50 transition-colors' : '',
+                isClickable ? 'cursor-pointer hover:bg-gray-50 transition-colors' : '',
               ].join(' ')}
             >
               {/* Date number — top right */}

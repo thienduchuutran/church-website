@@ -6,6 +6,7 @@ import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, MONTH_THEMES, 
 import CalendarGrid from './CalendarGrid'
 import CalendarIcon from './CalendarIcon'
 import EventModal from './EventModal'
+import DayEventsModal from './DayEventsModal'
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -36,6 +37,9 @@ export default function CalendarShell({
   const [editingEvent, setEditingEvent] = useState<CalendarEvent | null>(null)
   const [editingNote, setEditingNote] = useState(false)
 
+  // Day-events list popup (shown when a day with events is clicked)
+  const [dayListDate, setDayListDate] = useState<string | null>(null)
+
   const theme = MONTH_THEMES[month]
   const monthName = MONTH_NAMES[month - 1]
   const prevMonthName = MONTH_NAMES[month === 1 ? 11 : month - 2]
@@ -65,7 +69,31 @@ export default function CalendarShell({
   }
 
   function handleDayClick(date: string) {
-    setSelectedDate(date)
+    const eventsOnDay = events.filter(e => e.date === date)
+    if (eventsOnDay.length > 0) {
+      // Day has events → show the list popup (works for everyone)
+      setDayListDate(date)
+    } else if (isAdmin) {
+      // Empty day + admin → straight to create modal
+      setSelectedDate(date)
+      setEditingEvent(null)
+      setEditingNote(false)
+      setModalOpen(true)
+    }
+  }
+
+  function handleEditFromList(ev: CalendarEvent) {
+    setDayListDate(null)
+    setSelectedDate(ev.date)
+    setEditingEvent(ev)
+    setEditingNote(false)
+    setModalOpen(true)
+  }
+
+  function handleAddFromList() {
+    if (!dayListDate) return
+    setSelectedDate(dayListDate)
+    setDayListDate(null)
     setEditingEvent(null)
     setEditingNote(false)
     setModalOpen(true)
@@ -239,6 +267,17 @@ export default function CalendarShell({
           accessToken={accessToken}
           onSaved={handleEventSaved}
           onClose={() => setModalOpen(false)}
+        />
+      )}
+
+      {dayListDate && (
+        <DayEventsModal
+          date={dayListDate}
+          events={events.filter(e => e.date === dayListDate)}
+          isAdmin={isAdmin}
+          onEdit={handleEditFromList}
+          onAddNew={handleAddFromList}
+          onClose={() => setDayListDate(null)}
         />
       )}
     </>
