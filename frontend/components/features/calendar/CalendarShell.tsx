@@ -152,6 +152,13 @@ export default function CalendarShell({
     setModalOpen(true)
   }
 
+  function handleEditFromStrip(ev: CalendarEvent) {
+    setSelectedDate(ev.date)
+    setEditingEvent(ev)
+    setEditingNote(false)
+    setModalOpen(true)
+  }
+
   function handleEventModalClose() {
     setModalOpen(false)
     if (returnToListDate) {
@@ -308,12 +315,16 @@ export default function CalendarShell({
                 Birthdays
               </p>
               {birthdays.length > 0 ? (
-                <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                <div className="flex flex-col gap-y-0.5">
                   {birthdays.map(e => {
                     const day = parseInt(e.date.split('-')[2], 10)
                     const colors = COLOR_MAP[e.color] ?? COLOR_MAP.rose
                     return (
-                      <div key={e.id} className="flex items-center gap-1 text-[11px] leading-tight">
+                      <div
+                        key={e.id}
+                        onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
+                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                      >
                         <CalendarIcon iconKey="cake" size={10} color={colors.dot} />
                         <span className="font-semibold" style={{ color: colors.text }}>{e.title}</span>
                         <span className="text-gray-400">{day}</span>
@@ -332,12 +343,16 @@ export default function CalendarShell({
                 Bible Study
               </p>
               {bibleStudyDays.length > 0 ? (
-                <div className="flex flex-wrap gap-x-2 gap-y-0.5">
+                <div className="flex flex-col gap-y-0.5">
                   {bibleStudyDays.map(e => {
                     const day = parseInt(e.date.split('-')[2], 10)
                     const colors = COLOR_MAP[e.color] ?? COLOR_MAP.sky
                     return (
-                      <div key={e.id} className="flex items-center gap-1 text-[11px] leading-tight">
+                      <div
+                        key={e.id}
+                        onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
+                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                      >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
                         <span className="font-semibold text-gray-700">{e.title}</span>
                         <span className="text-gray-400">{day}</span>
