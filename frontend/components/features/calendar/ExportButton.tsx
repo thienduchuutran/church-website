@@ -3,11 +3,18 @@
 import { useState } from 'react'
 import { DownloadSimple } from '@phosphor-icons/react'
 
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+]
+
 interface ExportButtonProps {
   targetRef: React.RefObject<HTMLDivElement | null>
+  year: number
+  month: number
 }
 
-export default function ExportButton({ targetRef }: ExportButtonProps) {
+export default function ExportButton({ targetRef, year, month }: ExportButtonProps) {
   const [exporting, setExporting] = useState(false)
 
   async function handleExport() {
@@ -20,9 +27,7 @@ export default function ExportButton({ targetRef }: ExportButtonProps) {
         cacheBust: true,
       })
       const link = document.createElement('a')
-      const now = new Date()
-      const monthName = now.toLocaleString('default', { month: 'long' }).toLowerCase()
-      link.download = `church-calendar-${monthName}-${now.getFullYear()}.png`
+      link.download = `calendar-${MONTH_NAMES[month - 1]}-${year}.png`
       link.href = url
       link.click()
     } finally {

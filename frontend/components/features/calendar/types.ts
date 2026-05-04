@@ -28,19 +28,28 @@ export interface CalendarMonthResponse {
   month_note: CalendarMonthNote | null
 }
 
+// All months draw from the site design system: terracotta, sage, gold rotate
+// as the header color so each month has subtle personality without breaking
+// brand consistency. Header text uses the dark base on gold (low contrast
+// with white) and white on terracotta/sage.
+const TERRACOTTA = '#C4663C'
+const SAGE       = '#4A7A5C'
+const GOLD       = '#C49A3C'
+const DARK_BASE  = '#1C1210'
+
 export const MONTH_THEMES: Record<number, { title: string; header: string; headerText: string }> = {
-  1:  { title: '#1e3a8a', header: '#1e40af', headerText: '#ffffff' }, // January  — navy
-  2:  { title: '#9d174d', header: '#be185d', headerText: '#ffffff' }, // February — pink
-  3:  { title: '#14532d', header: '#15803d', headerText: '#ffffff' }, // March    — forest green
-  4:  { title: '#78350f', header: '#b45309', headerText: '#ffffff' }, // April    — amber
-  5:  { title: '#1e3a8a', header: '#1d4ed8', headerText: '#ffffff' }, // May      — blue
-  6:  { title: '#7c2d12', header: '#c2410c', headerText: '#ffffff' }, // June     — orange
-  7:  { title: '#7f1d1d', header: '#991b1b', headerText: '#ffffff' }, // July     — red
-  8:  { title: '#78350f', header: '#a16207', headerText: '#ffffff' }, // August   — amber
-  9:  { title: '#14532d', header: '#15803d', headerText: '#ffffff' }, // September — green
-  10: { title: '#7c2d12', header: '#92400e', headerText: '#ffffff' }, // October  — brown
-  11: { title: '#4c1d95', header: '#5b21b6', headerText: '#ffffff' }, // November — purple
-  12: { title: '#7f1d1d', header: '#991b1b', headerText: '#ffffff' }, // December — red
+  1:  { title: TERRACOTTA, header: TERRACOTTA, headerText: '#ffffff' },
+  2:  { title: SAGE,       header: SAGE,       headerText: '#ffffff' },
+  3:  { title: GOLD,       header: GOLD,       headerText: DARK_BASE },
+  4:  { title: TERRACOTTA, header: TERRACOTTA, headerText: '#ffffff' },
+  5:  { title: SAGE,       header: SAGE,       headerText: '#ffffff' },
+  6:  { title: GOLD,       header: GOLD,       headerText: DARK_BASE },
+  7:  { title: TERRACOTTA, header: TERRACOTTA, headerText: '#ffffff' },
+  8:  { title: SAGE,       header: SAGE,       headerText: '#ffffff' },
+  9:  { title: GOLD,       header: GOLD,       headerText: DARK_BASE },
+  10: { title: TERRACOTTA, header: TERRACOTTA, headerText: '#ffffff' },
+  11: { title: SAGE,       header: SAGE,       headerText: '#ffffff' },
+  12: { title: GOLD,       header: GOLD,       headerText: DARK_BASE },
 }
 
 // Maps color keys to CSS hex values — used with inline styles to avoid

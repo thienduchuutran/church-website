@@ -14,23 +14,26 @@ const MONTH_NAMES = [
 ]
 
 interface CalendarShellProps {
-  initialYear: number
-  initialMonth: number
+  year: number
+  month: number
+  setYear: (y: number) => void
+  setMonth: (m: number) => void
   isAdmin: boolean
   accessToken: string | null
 }
 
 export default function CalendarShell({
-  initialYear,
-  initialMonth,
+  year,
+  month,
+  setYear,
+  setMonth,
   isAdmin,
   accessToken,
 }: CalendarShellProps) {
-  const [year, setYear] = useState(initialYear)
-  const [month, setMonth] = useState(initialMonth)
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [monthNote, setMonthNote] = useState<CalendarMonthNote | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -49,10 +52,13 @@ export default function CalendarShell({
 
   const fetchMonth = useCallback(async (y: number, m: number) => {
     setLoading(true)
+    setError(null)
     try {
       const data: CalendarMonthResponse = await apiGet(`/api/v1/calendar?year=${y}&month=${m}`)
       setEvents(data.events ?? [])
       setMonthNote(data.month_note ?? null)
+    } catch {
+      setError("Couldn't load calendar. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -61,13 +67,13 @@ export default function CalendarShell({
   useEffect(() => { fetchMonth(year, month) }, [year, month, fetchMonth])
 
   function prevMonth() {
-    if (month === 1) { setYear(y => y - 1); setMonth(12) }
-    else setMonth(m => m - 1)
+    if (month === 1) { setYear(year - 1); setMonth(12) }
+    else setMonth(month - 1)
   }
 
   function nextMonth() {
-    if (month === 12) { setYear(y => y + 1); setMonth(1) }
-    else setMonth(m => m + 1)
+    if (month === 12) { setYear(year + 1); setMonth(1) }
+    else setMonth(month + 1)
   }
 
   function handleDayClick(date: string) {
@@ -126,27 +132,9 @@ export default function CalendarShell({
     <>
       <div className={`transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
 
-        {/* Compact horizontal title row */}
-        <div className="flex items-end justify-between mb-2 gap-4">
-          <div className="flex items-baseline gap-3 min-w-0">
-            <h1
-              className="font-bold leading-none truncate"
-              style={{
-                fontSize: '3rem',
-                color: theme.title,
-                fontFamily: 'Georgia, "Times New Roman", serif',
-                letterSpacing: '-0.01em',
-              }}
-            >
-              {monthName}
-            </h1>
-            <span className="text-xl font-light text-gray-400 tracking-wide">{year}</span>
-            <span className="text-[9px] font-bold tracking-[0.25em] uppercase text-gray-400 ml-2 hidden md:inline">
-              Church Calendar
-            </span>
-          </div>
-
-          <div className="flex items-center gap-3 shrink-0">
+        {/* Title row — month centered, year right, nav left */}
+        <div className="grid grid-cols-3 items-end mb-2 gap-4">
+          <div className="flex items-center gap-3 justify-self-start">
             <button
               onClick={prevMonth}
               className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
@@ -161,7 +149,41 @@ export default function CalendarShell({
               <span className="hidden sm:inline">{nextMonthName}</span> →
             </button>
           </div>
+
+          <h1
+            className="font-bold leading-none text-center justify-self-center"
+            style={{
+              fontSize: '3rem',
+              color: theme.title,
+              fontFamily: "'Playfair Display', Georgia, serif",
+              letterSpacing: '-0.01em',
+            }}
+          >
+            {monthName}
+          </h1>
+
+          <span className="text-xl font-light text-gray-400 tracking-wide justify-self-end">
+            {year}
+          </span>
         </div>
+
+        {/* Error banner */}
+        {error && (
+          <div
+            role="alert"
+            className="mb-2 px-3 py-2 border-2 border-gray-900 flex items-center justify-between gap-3"
+            style={{ backgroundColor: '#FAF7F2' }}
+          >
+            <p className="text-xs text-gray-800">{error}</p>
+            <button
+              onClick={() => fetchMonth(year, month)}
+              className="text-xs font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity"
+              style={{ color: '#C4663C' }}
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {/* Calendar grid */}
         <CalendarGrid
@@ -259,6 +281,8 @@ export default function CalendarShell({
             { color: 'violet',  label: 'Prayer' },
             { color: 'amber',   label: 'Announcement' },
             { color: 'slate',   label: 'General' },
+            { color: 'emerald', label: 'Service' },
+            { color: 'stone',   label: 'Other' },
           ].map(({ color, label }) => {
             const c = COLOR_MAP[color]
             return (
