@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { apiGet } from '@/lib/api'
 import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, MONTH_THEMES, COLOR_MAP } from './types'
 import CalendarGrid from './CalendarGrid'
@@ -22,13 +23,13 @@ const SLIDE_DISTANCE = 48
 const slideVariants = {
   enter: (dir: number) => ({ x: dir * SLIDE_DISTANCE, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit:  (dir: number) => ({ x: -dir * SLIDE_DISTANCE, opacity: 0 }),
+  exit: (dir: number) => ({ x: -dir * SLIDE_DISTANCE, opacity: 0 }),
 }
 // Reduced-motion users get a pure crossfade — no translation.
 const reducedMotionVariants = {
-  enter:  { opacity: 0 },
+  enter: { opacity: 0 },
   center: { opacity: 1 },
-  exit:   { opacity: 0 },
+  exit: { opacity: 0 },
 }
 
 interface CalendarShellProps {
@@ -174,56 +175,47 @@ export default function CalendarShell({
     <>
       <div className={`transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
 
-        {/* Title row — month centered, year right, nav left */}
-        <div className="grid grid-cols-3 items-end mb-2 gap-4">
-          <div className="flex items-center gap-4 justify-self-start">
-            {/* Today — primary nav action, bold pill that echoes the grid border */}
-            <button
-              onClick={goToToday}
-              disabled={isOnCurrentMonth}
-              aria-label="Jump to current month"
-              className="px-4 py-1.5 rounded-full border-2 border-gray-900 text-[11px] font-bold uppercase tracking-[0.15em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
-            >
-              Today
-            </button>
+        {/* Editorial masthead: Today (left) | massive month + year (center) | icon nav (right) */}
+        <div className="flex items-center justify-between gap-6 mb-3">
 
-            {/* Prev / next — secondary, sit visually below the pill */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={prevMonth}
-                aria-label={`Go to ${prevMonthName}`}
-                className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
-              >
-                ← <span className="hidden sm:inline">{prevMonthName}</span>
-              </button>
-              <span className="text-gray-200">|</span>
-              <button
-                onClick={nextMonth}
-                aria-label={`Go to ${nextMonthName}`}
-                className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
-              >
-                <span className="hidden sm:inline">{nextMonthName}</span> →
-              </button>
-            </div>
-          </div>
+          {/* Today - bold pill, anchors the left side */}
+          <button
+            onClick={goToToday}
+            disabled={isOnCurrentMonth}
+            aria-label="Jump to current month"
+            className="shrink-0 px-5 py-2 rounded-full border-2 border-gray-900 text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
+          >
+            Today
+          </button>
 
-          <div className="relative justify-self-center">
-            <h1>
+          {/* Center - the headline. Month is the hero, year is a quiet companion. */}
+          <div className="relative flex-1 flex justify-center">
+            <h1 className="m-0">
               <button
                 type="button"
                 onClick={() => setPickerOpen((o) => !o)}
                 onMouseDown={(e) => e.stopPropagation()}
                 aria-haspopup="dialog"
                 aria-expanded={pickerOpen}
-                className="font-bold leading-none text-center cursor-pointer transition-opacity hover:opacity-75"
+                aria-label={`${monthName} ${year} - change month`}
+                className="group flex items-baseline gap-3 cursor-pointer transition-opacity hover:opacity-70 leading-[0.9]"
                 style={{
-                  fontSize: '3rem',
-                  color: theme.title,
                   fontFamily: "'Playfair Display', Georgia, serif",
-                  letterSpacing: '-0.01em',
+                  letterSpacing: '-0.025em',
                 }}
               >
-                {monthName}
+                <span
+                  className="font-bold"
+                  style={{ fontSize: '4.5rem', color: theme.title }}
+                >
+                  {monthName}
+                </span>
+                <span
+                  className="font-light text-gray-300 group-hover:text-gray-400 transition-colors"
+                  style={{ fontSize: '2rem', letterSpacing: '0.01em' }}
+                >
+                  {year}
+                </span>
               </button>
             </h1>
             {pickerOpen && (
@@ -241,9 +233,25 @@ export default function CalendarShell({
             )}
           </div>
 
-          <span className="text-xl font-light text-gray-400 tracking-wide justify-self-end">
-            {year}
-          </span>
+          {/* Nav cluster - circular icon buttons, same border family as Today */}
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={prevMonth}
+              aria-label={`Previous month — ${prevMonthName}`}
+              title={prevMonthName}
+              className="w-11 h-11 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
+            >
+              <CaretLeft size={20} weight="bold" />
+            </button>
+            <button
+              onClick={nextMonth}
+              aria-label={`Next month - ${nextMonthName}`}
+              title={nextMonthName}
+              className="w-11 h-11 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
+            >
+              <CaretRight size={20} weight="bold" />
+            </button>
+          </div>
         </div>
 
         {/* Error banner */}
@@ -369,13 +377,13 @@ export default function CalendarShell({
         {/* Legend — inline, compact */}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {[
-            { color: 'rose',    label: 'Birthday' },
-            { color: 'sky',     label: 'Bible Study' },
-            { color: 'violet',  label: 'Prayer' },
-            { color: 'amber',   label: 'Announcement' },
-            { color: 'slate',   label: 'General' },
+            { color: 'rose', label: 'Birthday' },
+            { color: 'sky', label: 'Bible Study' },
+            { color: 'violet', label: 'Prayer' },
+            { color: 'amber', label: 'Announcement' },
+            { color: 'slate', label: 'General' },
             { color: 'emerald', label: 'Service' },
-            { color: 'stone',   label: 'Other' },
+            { color: 'stone', label: 'Other' },
           ].map(({ color, label }) => {
             const c = COLOR_MAP[color]
             return (
