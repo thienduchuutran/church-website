@@ -76,6 +76,14 @@ export default function CalendarShell({
     else setMonth(month + 1)
   }
 
+  const today = new Date()
+  const isOnCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1
+  function goToToday() {
+    if (isOnCurrentMonth) return
+    setYear(today.getFullYear())
+    setMonth(today.getMonth() + 1)
+  }
+
   function handleDayClick(date: string) {
     const eventsOnDay = events.filter(e => e.date === date)
     if (eventsOnDay.length > 0) {
@@ -134,20 +142,35 @@ export default function CalendarShell({
 
         {/* Title row — month centered, year right, nav left */}
         <div className="grid grid-cols-3 items-end mb-2 gap-4">
-          <div className="flex items-center gap-3 justify-self-start">
+          <div className="flex items-center gap-4 justify-self-start">
+            {/* Today — primary nav action, bold pill that echoes the grid border */}
             <button
-              onClick={prevMonth}
-              className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
+              onClick={goToToday}
+              disabled={isOnCurrentMonth}
+              aria-label="Jump to current month"
+              className="px-4 py-1.5 rounded-full border-2 border-gray-900 text-[11px] font-bold uppercase tracking-[0.15em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
             >
-              ← <span className="hidden sm:inline">{prevMonthName}</span>
+              Today
             </button>
-            <span className="text-gray-200">|</span>
-            <button
-              onClick={nextMonth}
-              className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
-            >
-              <span className="hidden sm:inline">{nextMonthName}</span> →
-            </button>
+
+            {/* Prev / next — secondary, sit visually below the pill */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={prevMonth}
+                aria-label={`Go to ${prevMonthName}`}
+                className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
+              >
+                ← <span className="hidden sm:inline">{prevMonthName}</span>
+              </button>
+              <span className="text-gray-200">|</span>
+              <button
+                onClick={nextMonth}
+                aria-label={`Go to ${nextMonthName}`}
+                className="text-xs font-medium text-gray-400 hover:text-gray-700 transition-colors flex items-center gap-1"
+              >
+                <span className="hidden sm:inline">{nextMonthName}</span> →
+              </button>
+            </div>
           </div>
 
           <h1
