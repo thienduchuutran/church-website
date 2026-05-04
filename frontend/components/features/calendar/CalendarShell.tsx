@@ -1,6 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { apiGet } from '@/lib/api'
 import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, MONTH_THEMES, COLOR_MAP } from './types'
 import CalendarGrid from './CalendarGrid'
@@ -13,6 +14,22 @@ const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
+
+// Direction-aware slide variants. `dir` is +1 (forward in time) or -1 (back).
+// New month enters from the side it's traveling toward; old month exits the
+// opposite side. Subtle distance (48px) keeps the motion as a hint, not a flourish.
+const SLIDE_DISTANCE = 48
+const slideVariants = {
+  enter: (dir: number) => ({ x: dir * SLIDE_DISTANCE, opacity: 0 }),
+  center: { x: 0, opacity: 1 },
+  exit:  (dir: number) => ({ x: -dir * SLIDE_DISTANCE, opacity: 0 }),
+}
+// Reduced-motion users get a pure crossfade — no translation.
+const reducedMotionVariants = {
+  enter:  { opacity: 0 },
+  center: { opacity: 1 },
+  exit:   { opacity: 0 },
+}
 
 interface CalendarShellProps {
   year: number
@@ -48,6 +65,19 @@ export default function CalendarShell({
 
   // Month picker popover (anchored to the title)
   const [pickerOpen, setPickerOpen] = useState(false)
+
+  // Direction-aware slide: compare current position (year*12 + month) against
+  // the previous one. +1 = forward in time, -1 = backward, 0 = first render.
+  // Computed during render so AnimatePresence's `custom` prop sees the latest
+  // value before the exit animation captures it.
+  const reduceMotion = useReducedMotion()
+  const monthPosition = year * 12 + month
+  const prevPositionRef = useRef(monthPosition)
+  const direction =
+    monthPosition === prevPositionRef.current ? 0 : monthPosition > prevPositionRef.current ? 1 : -1
+  useEffect(() => {
+    prevPositionRef.current = monthPosition
+  }, [monthPosition])
 
   const theme = MONTH_THEMES[month]
   const monthName = MONTH_NAMES[month - 1]
@@ -234,15 +264,29 @@ export default function CalendarShell({
           </div>
         )}
 
-        {/* Calendar grid */}
-        <CalendarGrid
-          year={year}
-          month={month}
-          events={events}
-          onDayClick={handleDayClick}
-          isAdmin={isAdmin}
-          theme={theme}
-        />
+        {/* Calendar grid — direction-aware slide on month change */}
+        <div className="relative overflow-hidden">
+          <AnimatePresence mode="wait" initial={false} custom={direction}>
+            <motion.div
+              key={`${year}-${month}`}
+              custom={direction}
+              variants={reduceMotion ? reducedMotionVariants : slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+            >
+              <CalendarGrid
+                year={year}
+                month={month}
+                events={events}
+                onDayClick={handleDayClick}
+                isAdmin={isAdmin}
+                theme={theme}
+              />
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
         {/* Info strip below grid — compact 3 columns */}
         {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin) && (
