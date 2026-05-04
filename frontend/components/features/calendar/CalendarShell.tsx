@@ -7,6 +7,7 @@ import CalendarGrid from './CalendarGrid'
 import CalendarIcon from './CalendarIcon'
 import EventModal from './EventModal'
 import DayEventsModal from './DayEventsModal'
+import MonthPicker from './MonthPicker'
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -44,6 +45,9 @@ export default function CalendarShell({
   const [dayListDate, setDayListDate] = useState<string | null>(null)
   // When EventModal was opened from the list, remember the date so Cancel can return there
   const [returnToListDate, setReturnToListDate] = useState<string | null>(null)
+
+  // Month picker popover (anchored to the title)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const theme = MONTH_THEMES[month]
   const monthName = MONTH_NAMES[month - 1]
@@ -173,17 +177,39 @@ export default function CalendarShell({
             </div>
           </div>
 
-          <h1
-            className="font-bold leading-none text-center justify-self-center"
-            style={{
-              fontSize: '3rem',
-              color: theme.title,
-              fontFamily: "'Playfair Display', Georgia, serif",
-              letterSpacing: '-0.01em',
-            }}
-          >
-            {monthName}
-          </h1>
+          <div className="relative justify-self-center">
+            <h1>
+              <button
+                type="button"
+                onClick={() => setPickerOpen((o) => !o)}
+                onMouseDown={(e) => e.stopPropagation()}
+                aria-haspopup="dialog"
+                aria-expanded={pickerOpen}
+                className="font-bold leading-none text-center cursor-pointer transition-opacity hover:opacity-75"
+                style={{
+                  fontSize: '3rem',
+                  color: theme.title,
+                  fontFamily: "'Playfair Display', Georgia, serif",
+                  letterSpacing: '-0.01em',
+                }}
+              >
+                {monthName}
+              </button>
+            </h1>
+            {pickerOpen && (
+              <MonthPicker
+                year={year}
+                month={month}
+                themeColor={theme.title}
+                onSelect={(y, m) => {
+                  setYear(y)
+                  setMonth(m)
+                  setPickerOpen(false)
+                }}
+                onClose={() => setPickerOpen(false)}
+              />
+            )}
+          </div>
 
           <span className="text-xl font-light text-gray-400 tracking-wide justify-self-end">
             {year}
