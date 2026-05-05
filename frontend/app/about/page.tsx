@@ -45,36 +45,36 @@ export default async function AboutPage() {
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Hero */}
       <header className="mb-12 text-center">
-        <h1 className="mb-3 text-4xl font-bold tracking-tight text-foreground">
+        <h1 className="mb-3 font-serif text-4xl font-bold tracking-tight text-foreground">
           {s.hero_title}
         </h1>
-        <p className="text-lg text-muted">{s.hero_subtitle}</p>
+        <p className="font-sans text-lg text-muted">{s.hero_subtitle}</p>
       </header>
 
       {/* Mission */}
       <section className="mb-10 rounded-xl border border-border bg-surface/50 p-8">
-        <h2 className="mb-3 text-2xl font-semibold text-foreground">{s.mission_heading}</h2>
-        <p className="leading-relaxed text-muted">{s.mission_body}</p>
+        <h2 className="mb-3 font-serif text-2xl font-semibold text-foreground">{s.mission_heading}</h2>
+        <p className="font-sans leading-relaxed text-muted">{s.mission_body}</p>
       </section>
 
       {/* Beliefs */}
       <section className="mb-10 rounded-xl border border-border bg-surface/50 p-8">
-        <h2 className="mb-3 text-2xl font-semibold text-foreground">{s.beliefs_heading}</h2>
-        <p className="leading-relaxed text-muted">{s.beliefs_body}</p>
+        <h2 className="mb-3 font-serif text-2xl font-semibold text-foreground">{s.beliefs_heading}</h2>
+        <p className="font-sans leading-relaxed text-muted">{s.beliefs_body}</p>
       </section>
 
       {/* Story */}
       <section className="mb-10 rounded-xl border border-border bg-surface/50 p-8">
-        <h2 className="mb-3 text-2xl font-semibold text-foreground">{s.story_heading}</h2>
-        <p className="leading-relaxed text-muted">{s.story_body}</p>
+        <h2 className="mb-3 font-serif text-2xl font-semibold text-foreground">{s.story_heading}</h2>
+        <p className="font-sans leading-relaxed text-muted">{s.story_body}</p>
       </section>
 
       {/* Values */}
       <section className="rounded-xl border border-border bg-surface/50 p-8">
-        <h2 className="mb-4 text-2xl font-semibold text-foreground">{s.values_heading}</h2>
+        <h2 className="mb-4 font-serif text-2xl font-semibold text-foreground">{s.values_heading}</h2>
         <ul className="space-y-2">
           {valueItems.map((item, i) => (
-            <li key={i} className="flex items-start gap-3 text-muted">
+            <li key={i} className="flex items-start gap-3 font-sans text-muted">
               <span className="mt-2 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-primary" />
               <span>{item}</span>
             </li>

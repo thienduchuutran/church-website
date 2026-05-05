@@ -1,25 +1,32 @@
 import type { Metadata } from 'next'
-import { Geist, Geist_Mono, Playfair_Display } from 'next/font/google'
+import { Inter, Lora, DM_Sans, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth'
 import { EditModalProvider } from '@/lib/edit-modal'
 import Navbar from '@/components/ui/Navbar'
 import PageTransition from '@/components/ui/PageTransition'
 
-const geistSans = Geist({
-  variable: '--font-geist-sans',
+const inter = Inter({
+  variable: '--font-sans',
   subsets: ['latin'],
+})
+
+const lora = Lora({
+  variable: '--font-serif',
+  subsets: ['latin'],
+  weight: ['400', '600', '700'],
+  style: ['normal', 'italic'],
+})
+
+const dmSans = DM_Sans({
+  variable: '--font-display',
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
 })
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
-})
-
-const playfair = Playfair_Display({
-  variable: '--font-serif',
-  subsets: ['latin'],
-  weight: ['400', '600', '700'],
 })
 
 export const metadata: Metadata = {
@@ -36,7 +43,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} h-full antialiased`}
+      className={`${inter.variable} ${lora.variable} ${dmSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <a

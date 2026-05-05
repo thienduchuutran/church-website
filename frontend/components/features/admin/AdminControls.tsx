@@ -32,12 +32,12 @@ export default function AdminControls({ postId }: { postId: string }) {
   if (confirming) {
     return (
       <div className="animate-confirm-in flex items-center gap-2">
-        <span className="text-xs font-medium text-red-600">Delete post?</span>
+        <span className="font-display text-xs font-medium text-red-600">Delete post?</span>
         <button
           type="button"
           onClick={() => setConfirming(false)}
           disabled={deleting}
-          className="text-xs text-muted transition-colors hover:text-foreground disabled:opacity-40"
+          className="font-display text-xs text-muted transition-colors hover:text-foreground disabled:opacity-40"
         >
           Cancel
         </button>
@@ -45,7 +45,7 @@ export default function AdminControls({ postId }: { postId: string }) {
           type="button"
           onClick={handleDelete}
           disabled={deleting}
-          className="rounded-full bg-red-500 px-2.5 py-0.5 text-xs font-semibold text-white transition-colors hover:bg-red-600 disabled:opacity-50"
+          className="rounded-full bg-red-500 px-2.5 py-0.5 font-display text-xs font-semibold text-white transition-colors hover:bg-red-600 disabled:opacity-50"
         >
           {deleting ? 'Deleting…' : 'Delete'}
         </button>

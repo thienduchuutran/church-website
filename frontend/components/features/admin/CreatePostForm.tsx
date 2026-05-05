@@ -38,7 +38,7 @@ export default function CreatePostForm({ section }: { section: string }) {
     <form onSubmit={handleSubmit} className="space-y-6">
       <PostFormFields section={section} state={state} onChange={setState} />
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-700">
           {error}
         </div>
       )}
@@ -46,14 +46,14 @@ export default function CreatePostForm({ section }: { section: string }) {
         <button
           type="submit"
           disabled={saving}
-          className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-light disabled:opacity-50"
+          className="rounded-lg bg-primary px-5 py-2.5 font-display text-sm font-medium text-white transition-colors hover:bg-primary-light disabled:opacity-50"
         >
           {saving ? 'Creating...' : `Create ${POST_TYPE_LABELS[section] ?? section}`}
         </button>
         <button
           type="button"
           onClick={() => router.back()}
-          className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface"
+          className="rounded-lg border border-border px-5 py-2.5 font-display text-sm font-medium text-muted transition-colors hover:bg-surface"
         >
           Cancel
         </button>

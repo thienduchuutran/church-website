@@ -86,14 +86,14 @@ export default function EditPostModal({
           </svg>
         </button>
 
-        <h1 id="edit-post-title" className="mb-6 text-2xl font-bold text-foreground">
+        <h1 id="edit-post-title" className="mb-6 font-serif text-2xl font-bold text-foreground">
           Edit Post
         </h1>
 
         {fetching ? (
-          <p className="text-muted">Loading...</p>
+          <p className="font-sans text-muted">Loading...</p>
         ) : !post ? (
-          <p className="text-muted">Post not found.</p>
+          <p className="font-sans text-muted">Post not found.</p>
         ) : (
           <EditPostForm
             post={post}

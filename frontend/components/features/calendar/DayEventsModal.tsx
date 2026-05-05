@@ -78,7 +78,7 @@ export default function DayEventsModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
           <div>
-            <p className="text-[10px] font-semibold tracking-widest uppercase text-muted">
+            <p className="font-display text-[10px] font-semibold tracking-widest uppercase text-muted">
               {events.length} {events.length === 1 ? 'event' : 'events'}
             </p>
             <h2 className="font-serif text-xl font-bold text-foreground mt-0.5">
@@ -111,14 +111,14 @@ export default function DayEventsModal({
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold leading-tight" style={{ color: colors.text }}>
+                  <p className="font-display text-sm font-semibold leading-tight" style={{ color: colors.text }}>
                     {e.title}
                   </p>
-                  <p className="text-[11px] text-muted mt-0.5">
+                  <p className="font-display text-[11px] text-muted mt-0.5">
                     {EVENT_TYPE_LABELS[e.event_type] ?? e.event_type}
                   </p>
                   {e.notes && (
-                    <p className="text-xs text-foreground/80 mt-1.5 leading-relaxed whitespace-pre-wrap">
+                    <p className="font-sans text-xs text-foreground/80 mt-1.5 leading-relaxed whitespace-pre-wrap">
                       {e.notes}
                     </p>
                   )}
@@ -142,14 +142,14 @@ export default function DayEventsModal({
         <div className="px-6 pb-6 pt-3 border-t border-border flex items-center justify-end gap-2">
           <button
             onClick={handleClose}
-            className="px-4 py-2 rounded-lg text-sm text-muted hover:text-foreground border border-border hover:border-foreground/30 transition-colors"
+            className="px-4 py-2 rounded-lg font-display text-sm text-muted hover:text-foreground border border-border hover:border-foreground/30 transition-colors"
           >
             Close
           </button>
           {isAdmin && (
             <button
               onClick={onAddNew}
-              className="px-4 py-2 rounded-lg text-sm font-semibold bg-foreground text-background hover:opacity-80 transition-opacity flex items-center gap-1.5"
+              className="px-4 py-2 rounded-lg font-display text-sm font-semibold bg-foreground text-background hover:opacity-80 transition-opacity flex items-center gap-1.5"
             >
               <Plus size={14} weight="bold" />
               Add another

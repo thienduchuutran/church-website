@@ -130,7 +130,7 @@ export default function AdminPageEditor({
   if (authLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-muted">Loading...</p>
+        <p className="font-sans text-muted">Loading...</p>
       </div>
     )
   }
@@ -143,7 +143,7 @@ export default function AdminPageEditor({
   if (!schema) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
-        <p className="text-muted">Unknown page: <code>{slug}</code></p>
+        <p className="font-sans text-muted">Unknown page: <code>{slug}</code></p>
       </div>
     )
   }
@@ -173,24 +173,24 @@ export default function AdminPageEditor({
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
-      <h1 className="mb-8 text-3xl font-bold text-foreground">
+      <h1 className="mb-8 font-serif text-3xl font-bold text-foreground">
         Edit {schema.label} Page
       </h1>
 
       {loadingContent ? (
-        <p className="text-muted">Loading content...</p>
+        <p className="font-sans text-muted">Loading content...</p>
       ) : (
         <form onSubmit={handleSubmit} className="space-y-8">
           {schema.groups.map((group) => (
             <fieldset key={group.heading} className="space-y-4 rounded-xl border border-border p-6">
-              <legend className="px-2 text-sm font-semibold uppercase tracking-wider text-muted">
+              <legend className="px-2 font-display text-sm font-semibold uppercase tracking-wider text-muted">
                 {group.heading}
               </legend>
               {group.keys.map(({ key, label, multiline }) => (
                 <div key={key}>
                   <label
                     htmlFor={key}
-                    className="mb-1 block text-sm font-medium text-foreground"
+                    className="mb-1 block font-display text-sm font-medium text-foreground"
                   >
                     {label}
                   </label>
@@ -200,7 +200,7 @@ export default function AdminPageEditor({
                       value={sections[key] ?? ''}
                       onChange={(e) => handleChange(key, e.target.value)}
                       rows={4}
-                      className="block w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+                      className="block w-full rounded-lg border border-border bg-surface px-4 py-2.5 font-sans text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
                     />
                   ) : (
                     <input
@@ -208,7 +208,7 @@ export default function AdminPageEditor({
                       type="text"
                       value={sections[key] ?? ''}
                       onChange={(e) => handleChange(key, e.target.value)}
-                      className="block w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
+                      className="block w-full rounded-lg border border-border bg-surface px-4 py-2.5 font-sans text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none"
                     />
                   )}
                 </div>
@@ -217,13 +217,13 @@ export default function AdminPageEditor({
           ))}
 
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-700">
               {error}
             </div>
           )}
 
           {success && (
-            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+            <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 font-sans text-sm text-green-700">
               Page content saved successfully.
             </div>
           )}
@@ -232,14 +232,14 @@ export default function AdminPageEditor({
             <button
               type="submit"
               disabled={saving}
-              className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-light disabled:opacity-50"
+              className="rounded-lg bg-primary px-5 py-2.5 font-display text-sm font-medium text-white transition-colors hover:bg-primary-light disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save Changes'}
             </button>
             <button
               type="button"
               onClick={() => router.push('/admin')}
-              className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface"
+              className="rounded-lg border border-border px-5 py-2.5 font-display text-sm font-medium text-muted transition-colors hover:bg-surface"
             >
               Back to Admin
             </button>

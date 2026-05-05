@@ -37,7 +37,7 @@ export default function AdminPage() {
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-muted">Loading...</p>
+        <p className="font-sans text-muted">Loading...</p>
       </div>
     )
   }
@@ -45,12 +45,12 @@ export default function AdminPage() {
   if (!session) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-4">
-        <h1 className="text-2xl font-bold text-foreground">Admin Access</h1>
-        <p className="text-muted">Sign in with your Google account to manage content.</p>
+        <h1 className="font-serif text-2xl font-bold text-foreground">Admin Access</h1>
+        <p className="font-sans text-muted">Sign in with your Google account to manage content.</p>
         <button
           type="button"
           onClick={signIn}
-          className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-light"
+          className="rounded-lg bg-primary px-5 py-2.5 font-display text-sm font-medium text-white transition-colors hover:bg-primary-light"
         >
           Sign in with Google
         </button>
@@ -61,11 +61,11 @@ export default function AdminPage() {
   if (!isAdmin) {
     return (
       <div className="flex min-h-[40vh] flex-col items-center justify-center gap-2 px-4">
-        <h1 className="text-2xl font-bold text-foreground">Not Authorized</h1>
-        <p className="text-muted">
+        <h1 className="font-serif text-2xl font-bold text-foreground">Not Authorized</h1>
+        <p className="font-sans text-muted">
           Your account ({session.user.email}) is not in the admin whitelist.
         </p>
-        <p className="text-sm text-muted">Contact a site administrator to request access.</p>
+        <p className="font-sans text-sm text-muted">Contact a site administrator to request access.</p>
       </div>
     )
   }
@@ -73,12 +73,12 @@ export default function AdminPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
-        <span className="text-sm text-muted">{session.user.email}</span>
+        <h1 className="font-serif text-3xl font-bold text-foreground">Admin Dashboard</h1>
+        <span className="font-sans text-sm text-muted">{session.user.email}</span>
       </div>
 
       <div className="mb-8 space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+        <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">
           Edit Pages
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -89,7 +89,7 @@ export default function AdminPage() {
             <Link
               key={slug}
               href={`/admin/pages/${slug}`}
-              className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
+              className="rounded-lg border border-border bg-surface px-4 py-2 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
             >
               Edit {label} Page
             </Link>
@@ -98,7 +98,7 @@ export default function AdminPage() {
       </div>
 
       <div className="mb-8 space-y-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">
+        <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">
           Create New Post
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -106,7 +106,7 @@ export default function AdminPage() {
             <Link
               key={type}
               href={`/admin/${type}`}
-              className="rounded-lg border border-border bg-surface px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
+              className="rounded-lg border border-border bg-surface px-4 py-2 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
             >
               + {label}
             </Link>
@@ -115,12 +115,12 @@ export default function AdminPage() {
       </div>
 
       <div className="mb-6 space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-muted">All Posts</h2>
+        <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">All Posts</h2>
         <div className="flex flex-wrap gap-1">
           <button
             type="button"
             onClick={() => setFilter(null)}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+            className={`rounded-full px-3 py-1 font-display text-xs font-medium transition-colors ${
               filter === null
                 ? 'bg-primary text-white'
                 : 'bg-surface text-muted hover:bg-primary/5'
@@ -133,7 +133,7 @@ export default function AdminPage() {
               key={type}
               type="button"
               onClick={() => setFilter(type)}
-              className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+              className={`rounded-full px-3 py-1 font-display text-xs font-medium transition-colors ${
                 filter === type
                   ? 'bg-primary text-white'
                   : 'bg-surface text-muted hover:bg-primary/5'
@@ -147,7 +147,7 @@ export default function AdminPage() {
 
       {posts.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border bg-surface/50 p-12 text-center">
-          <p className="text-lg text-muted">
+          <p className="font-sans text-lg text-muted">
             {filter ? `No ${filter.replace('_', ' ')} posts yet.` : 'No posts yet.'}
           </p>
         </div>

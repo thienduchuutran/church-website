@@ -33,7 +33,7 @@ export default function ExportButton({ targetRef, year, month, isAdmin }: Export
       style: el.getAttribute('style') ?? '',
     }))
     todayCircles.forEach(el => {
-      el.className = 'text-xs font-semibold self-end leading-none mb-0.5 text-gray-600'
+      el.className = 'font-sans text-xs font-semibold self-end leading-none mb-0.5 text-gray-600'
       el.removeAttribute('style')
     })
 
@@ -62,7 +62,7 @@ export default function ExportButton({ targetRef, year, month, isAdmin }: Export
     <button
       onClick={handleExport}
       disabled={exporting}
-      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-border text-muted hover:text-foreground hover:border-foreground/40 transition-colors disabled:opacity-50"
+      className="inline-flex items-center gap-2 px-4 py-2 rounded-lg font-display text-sm font-medium border border-border text-muted hover:text-foreground hover:border-foreground/40 transition-colors disabled:opacity-50"
     >
       <DownloadSimple size={15} weight="bold" />
       {exporting ? 'Exporting…' : 'Export for Discord'}

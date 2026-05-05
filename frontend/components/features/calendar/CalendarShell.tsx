@@ -227,14 +227,14 @@ export default function CalendarShell({
             disabled={isOnCurrentMonth}
             aria-label="Jump to current month"
             data-export-hide
-            className="shrink-0 px-5 py-2 rounded-full border-2 border-gray-900 text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
+            className="shrink-0 px-5 py-2 rounded-full border-2 border-gray-900 font-display text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
           >
             Today
           </button>
 
           {/* Center - the headline. Month is the hero, year is a quiet companion. */}
           <div className="relative flex-1 flex justify-center">
-            <h1 className="m-0">
+            <h1 className="m-0 font-serif">
               <button
                 type="button"
                 onClick={() => setPickerOpen((o) => !o)}
@@ -244,7 +244,7 @@ export default function CalendarShell({
                 aria-label={`${monthName} ${year} - change month`}
                 className="group flex items-baseline gap-3 cursor-pointer transition-opacity hover:opacity-70 leading-[0.9]"
                 style={{
-                  fontFamily: "'Playfair Display', Georgia, serif",
+                  fontFamily: 'var(--font-serif)',
                   letterSpacing: '-0.025em',
                 }}
               >
@@ -289,7 +289,7 @@ export default function CalendarShell({
                     aria-haspopup="dialog"
                     aria-expanded={accentPickerOpen}
                     aria-label="Change month accent color"
-                    className="flex items-center gap-1 text-[10px] font-medium border border-dashed rounded px-2 py-0.5 transition-colors"
+                    className="flex items-center gap-1 font-display text-[10px] font-medium border border-dashed rounded px-2 py-0.5 transition-colors"
                     style={{
                       borderColor: activeAccent,
                       color: activeAccent,
@@ -315,7 +315,7 @@ export default function CalendarShell({
                 </div>
                 {accentSaved && (
                   <span
-                    className="text-[10px] transition-opacity"
+                    className="font-display text-[10px] transition-opacity"
                     style={{ color: '#4A7A5C' }}
                   >
                     Saved
@@ -353,10 +353,10 @@ export default function CalendarShell({
             className="mb-2 px-3 py-2 border-2 border-gray-900 flex items-center justify-between gap-3"
             style={{ backgroundColor: '#FAF7F2' }}
           >
-            <p className="text-xs text-gray-800">{error}</p>
+            <p className="font-sans text-xs text-gray-800">{error}</p>
             <button
               onClick={() => fetchMonth(year, month)}
-              className="text-xs font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity"
+              className="font-display text-xs font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity"
               style={{ color: '#C4663C' }}
             >
               Retry
@@ -396,7 +396,7 @@ export default function CalendarShell({
           >
             {/* Birthdays */}
             <div className="min-w-0">
-              <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
+              <p className="font-display text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                 Birthdays
               </p>
               {birthdays.length > 0 ? (
@@ -411,20 +411,20 @@ export default function CalendarShell({
                         className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                       >
                         <CalendarIcon iconKey="cake" size={10} color={colors.dot} />
-                        <span className="font-semibold" style={{ color: colors.text }}>{e.title}</span>
-                        <span className="text-gray-400">{day}</span>
+                        <span className="font-display font-semibold" style={{ color: colors.text }}>{e.title}</span>
+                        <span className="font-sans text-gray-400">{day}</span>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <p className="text-[11px] text-gray-400 italic">None this month.</p>
+                <p className="font-sans text-[11px] text-gray-400 italic">None this month.</p>
               )}
             </div>
 
             {/* Bible Study */}
             <div className="min-w-0">
-              <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
+              <p className="font-display text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                 Bible Study
               </p>
               {bibleStudyDays.length > 0 ? (
@@ -439,43 +439,43 @@ export default function CalendarShell({
                         className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
-                        <span className="font-semibold text-gray-700">{e.title}</span>
-                        <span className="text-gray-400">{day}</span>
+                        <span className="font-display font-semibold text-gray-700">{e.title}</span>
+                        <span className="font-sans text-gray-400">{day}</span>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <p className="text-[11px] text-gray-400 italic">None this month.</p>
+                <p className="font-sans text-[11px] text-gray-400 italic">None this month.</p>
               )}
             </div>
 
             {/* Month note */}
             <div className="min-w-0">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: activeAccent }}>
+                <p className="font-display text-[9px] font-bold tracking-widest uppercase" style={{ color: activeAccent }}>
                   Notes
                 </p>
                 {isAdmin && (
                   <button
                     onClick={() => { setEditingNote(true); setModalOpen(true) }}
-                    className="text-[9px] text-gray-400 hover:text-gray-700 underline underline-offset-2 transition-colors"
+                    className="font-display text-[9px] text-gray-400 hover:text-gray-700 underline underline-offset-2 transition-colors"
                   >
                     {monthNote ? 'Edit' : 'Add note'}
                   </button>
                 )}
               </div>
               {monthNote?.content ? (
-                <p className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap line-clamp-3">{monthNote.content}</p>
+                <p className="font-sans text-[11px] text-gray-600 leading-snug whitespace-pre-wrap line-clamp-3">{monthNote.content}</p>
               ) : (
-                <p className="text-[11px] text-gray-400 italic">No note this month.</p>
+                <p className="font-sans text-[11px] text-gray-400 italic">No note this month.</p>
               )}
             </div>
 
             {/* Locations — admin only, full-width row after the 3 columns, entries flow inline */}
             {isAdmin && eventsWithAddress.length > 0 && (
               <div className="sm:col-span-3 min-w-0 border-t border-gray-200 pt-2">
-                <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
+                <p className="font-display text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                   Locations
                 </p>
                 <div className="flex flex-wrap gap-x-5 gap-y-0.5">
@@ -489,9 +489,9 @@ export default function CalendarShell({
                         className="flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 cursor-pointer hover:bg-gray-100"
                       >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
-                        <span className="font-semibold text-gray-700">{day} {e.title}</span>
-                        <span className="text-gray-400">—</span>
-                        <span className="text-gray-500">{e.private_address}</span>
+                        <span className="font-display font-semibold text-gray-700">{day} {e.title}</span>
+                        <span className="font-sans text-gray-400">—</span>
+                        <span className="font-sans text-gray-500">{e.private_address}</span>
                       </div>
                     )
                   })}
@@ -516,7 +516,7 @@ export default function CalendarShell({
             return (
               <div key={color} className="flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.dot }} />
-                <span className="text-[9px] text-gray-500 uppercase tracking-wide font-medium">{label}</span>
+                <span className="font-display text-[9px] text-gray-500 uppercase tracking-wide font-medium">{label}</span>
               </div>
             )
           })}

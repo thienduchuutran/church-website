@@ -127,7 +127,7 @@ export default function ReactionBar({
                 type="button"
                 title={EMOJI_LABEL[emoji]}
                 onClick={() => handleReact(emoji)}
-                className={`flex h-9 w-9 items-center justify-center rounded-full text-xl transition-transform duration-150 hover:scale-125 active:scale-95 ${myReaction === emoji ? 'bg-primary/15' : 'hover:bg-muted/20'
+                className={`flex h-9 w-9 items-center justify-center rounded-full font-display text-xl transition-transform duration-150 hover:scale-125 active:scale-95 ${myReaction === emoji ? 'bg-primary/15' : 'hover:bg-muted/20'
                   }`}
               >
                 {emoji}
@@ -141,7 +141,7 @@ export default function ReactionBar({
           type="button"
           onClick={() => handleReact(myReaction ?? '👍')}
           disabled={pending}
-          className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 ${myReaction
+          className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 font-display text-sm font-medium transition-colors disabled:opacity-50 ${myReaction
             ? 'border-primary/40 bg-primary/10 text-primary'
             : 'border-border text-muted hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
             }`}
@@ -160,7 +160,7 @@ export default function ReactionBar({
               type="button"
               onClick={() => handleReact(emoji)}
               disabled={pending}
-              className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs transition-colors disabled:opacity-50 ${myReaction === emoji
+              className={`flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-display text-xs transition-colors disabled:opacity-50 ${myReaction === emoji
                 ? 'border-primary/40 bg-primary/10 text-primary font-medium'
                 : 'border-border text-muted hover:border-primary/20 hover:bg-primary/5'
                 }`}
@@ -173,7 +173,7 @@ export default function ReactionBar({
       )}
 
       {activeEmojis.length === 0 && (
-        <p className="mt-1 text-xs text-muted">Be the first to react</p>
+        <p className="mt-1 font-sans text-xs text-muted">Be the first to react</p>
       )}
     </div>
   )

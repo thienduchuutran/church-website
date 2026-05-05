@@ -67,13 +67,13 @@ export default async function HomePage() {
           <div className="mx-auto mt-8 flex flex-wrap items-center justify-center gap-3 sm:mt-10 sm:gap-4">
             <Link
               href="/announcements"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#C4663C] px-5 py-2.5 font-sans text-sm font-semibold text-[#fffefb] transition-[filter] duration-200 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f5f0eb]"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg bg-[#C4663C] px-5 py-2.5 font-display text-sm font-semibold text-[#fffefb] transition-[filter] duration-200 hover:brightness-110 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f5f0eb]"
             >
               Latest announcements
             </Link>
             <Link
               href="/events"
-              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#f5f0eb]/85 bg-transparent px-5 py-2.5 font-sans text-sm font-semibold text-[#f5f0eb] transition-colors duration-200 hover:bg-[#f5f0eb]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f5f0eb]"
+              className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#f5f0eb]/85 bg-transparent px-5 py-2.5 font-display text-sm font-semibold text-[#f5f0eb] transition-colors duration-200 hover:bg-[#f5f0eb]/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#f5f0eb]"
             >
               Upcoming events
             </Link>
@@ -98,7 +98,7 @@ export default async function HomePage() {
             </p>
             <Link
               href="/"
-              className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-primary/10 px-3 py-2 font-sans text-sm font-medium leading-normal text-primary hover:bg-primary/20"
+              className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-primary/10 px-3 py-2 font-display text-sm font-medium leading-normal text-primary hover:bg-primary/20"
             >
               Reload home
             </Link>
@@ -115,7 +115,7 @@ export default async function HomePage() {
             </h2>
             <Link
               href="/announcements"
-              className="inline-flex min-h-11 shrink-0 items-center justify-center self-end rounded-lg px-3 font-sans text-sm font-medium leading-normal text-primary underline-offset-4 hover:underline sm:self-auto"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center self-end rounded-lg px-3 font-display text-sm font-medium leading-normal text-primary underline-offset-4 hover:underline sm:self-auto"
             >
               View all →
             </Link>
@@ -133,7 +133,7 @@ export default async function HomePage() {
             </h2>
             <Link
               href="/events"
-              className="inline-flex min-h-11 shrink-0 items-center justify-center self-end rounded-lg px-3 font-sans text-sm font-medium leading-normal text-primary underline-offset-4 hover:underline sm:self-auto"
+              className="inline-flex min-h-11 shrink-0 items-center justify-center self-end rounded-lg px-3 font-display text-sm font-medium leading-normal text-primary underline-offset-4 hover:underline sm:self-auto"
             >
               View all →
             </Link>

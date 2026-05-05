@@ -52,14 +52,14 @@ export default function PostCard({
   return (
     <article className="overflow-hidden rounded-[14px] border border-border bg-surface transition-shadow duration-200 hover:shadow-[0_8px_28px_rgba(28,20,16,0.09)]">
       <div className="flex flex-wrap items-center gap-3 px-5 pt-5 pb-2">
-        <span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${badge.className}`}>
+        <span className={`rounded-full px-2.5 py-0.5 font-display text-xs font-semibold ${badge.className}`}>
           {badge.label}
         </span>
-        <time className="text-xs text-muted" dateTime={post.created_at}>
+        <time className="font-display text-xs text-muted" dateTime={post.created_at}>
           {formatDate(post.created_at)}
         </time>
         {post.type === 'event' && post.event_date && (
-          <time className="text-xs font-medium text-accent" dateTime={post.event_date}>
+          <time className="font-display text-xs font-medium text-accent" dateTime={post.event_date}>
             <span aria-hidden>📅 </span>
             {formatDate(post.event_date)}
           </time>
@@ -72,7 +72,7 @@ export default function PostCard({
       <div className="px-5 pb-4">
         <h3 className="mb-1 font-serif text-lg font-semibold leading-snug text-foreground">{post.title}</h3>
         {post.body && (
-          <p className="whitespace-pre-line text-sm leading-relaxed text-muted">{post.body}</p>
+          <p className="whitespace-pre-line font-sans text-sm leading-relaxed text-muted">{post.body}</p>
         )}
       </div>
 
@@ -94,7 +94,7 @@ export default function PostCard({
             href={post.external_link}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+            className="inline-flex items-center gap-1 rounded-lg bg-primary/10 px-3 py-1.5 font-display text-sm font-medium text-primary transition-colors hover:bg-primary/20"
           >
             Open link ↗
           </a>

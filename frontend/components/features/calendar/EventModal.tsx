@@ -154,7 +154,7 @@ export default function EventModal({
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
           <div>
-            <p className="text-[10px] font-semibold tracking-widest uppercase text-muted">
+            <p className="font-display text-[10px] font-semibold tracking-widest uppercase text-muted">
               {mode === 'note' ? 'Monthly Note' : mode === 'edit' ? 'Edit Event' : 'New Event'}
             </p>
             <h2 className="font-serif text-xl font-bold text-foreground mt-0.5">
@@ -176,7 +176,7 @@ export default function EventModal({
 
           {mode === 'note' ? (
             <div className="flex flex-col gap-2">
-              <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+              <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                 Sidebar note
               </label>
               <textarea
@@ -185,14 +185,14 @@ export default function EventModal({
                 onChange={(e) => setNoteContent(e.target.value)}
                 rows={6}
                 placeholder="Write a monthly note, address, theme verse…"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
               />
             </div>
           ) : (
             <>
               {/* Title */}
               <div className="flex flex-col gap-2">
-                <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                   Title
                 </label>
                 <input
@@ -201,13 +201,13 @@ export default function EventModal({
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Event or person's name"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
                 />
               </div>
 
               {/* Event type */}
               <div className="flex flex-col gap-2">
-                <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                   Type
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -216,7 +216,7 @@ export default function EventModal({
                       key={t}
                       onClick={() => handleTypeChange(t)}
                       className={[
-                        'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
+                        'px-3 py-1.5 rounded-full font-display text-xs font-medium border transition-colors',
                         eventType === t
                           ? 'bg-foreground text-background border-foreground'
                           : 'bg-background text-muted border-border hover:border-foreground/30',
@@ -230,7 +230,7 @@ export default function EventModal({
 
               {/* Icon picker */}
               <div className="flex flex-col gap-2">
-                <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                   Icon
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -259,7 +259,7 @@ export default function EventModal({
 
               {/* Color picker */}
               <div className="flex flex-col gap-2">
-                <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                   Color
                 </label>
                 <div className="flex flex-wrap gap-2">
@@ -284,7 +284,7 @@ export default function EventModal({
               {/* Location address — toggle reveals textarea, available for all event types */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+                  <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                     Location address{' '}
                     <span className="normal-case font-normal">— private, admin only</span>
                   </label>
@@ -312,14 +312,14 @@ export default function EventModal({
                     onChange={(e) => setPrivateAddress(e.target.value)}
                     rows={2}
                     placeholder="123 Street, City"
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
                   />
                 )}
               </div>
 
               {/* Notes */}
               <div className="flex flex-col gap-2">
-                <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                   Notes <span className="normal-case font-normal">(optional)</span>
                 </label>
                 <textarea
@@ -327,14 +327,14 @@ export default function EventModal({
                   onChange={(e) => setNotes(e.target.value)}
                   rows={2}
                   placeholder="Extra details shown on hover"
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
                 />
               </div>
             </>
           )}
 
           {error && (
-            <p className="text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+            <p className="font-sans text-sm text-red-500 bg-red-50 rounded-lg px-3 py-2">{error}</p>
           )}
         </div>
 
@@ -343,7 +343,7 @@ export default function EventModal({
           {mode === 'edit' && !confirmDelete && (
             <button
               onClick={() => setConfirmDelete(true)}
-              className="text-sm text-red-500 hover:text-red-600 transition-colors"
+              className="font-display text-sm text-red-500 hover:text-red-600 transition-colors"
             >
               Delete
             </button>
@@ -352,7 +352,7 @@ export default function EventModal({
             <button
               onClick={handleDelete}
               disabled={saving}
-              className="text-sm text-red-500 font-semibold hover:text-red-700 transition-colors"
+              className="font-display text-sm text-red-500 font-semibold hover:text-red-700 transition-colors"
             >
               {saving ? 'Deleting…' : 'Confirm delete'}
             </button>
@@ -362,14 +362,14 @@ export default function EventModal({
           <div className="flex gap-2 ml-auto">
             <button
               onClick={handleClose}
-              className="px-4 py-2 rounded-lg text-sm text-muted hover:text-foreground border border-border hover:border-foreground/30 transition-colors"
+              className="px-4 py-2 rounded-lg font-display text-sm text-muted hover:text-foreground border border-border hover:border-foreground/30 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
               disabled={saving || !canSave}
-              className="px-5 py-2 rounded-lg text-sm font-semibold bg-foreground text-background hover:opacity-80 transition-opacity disabled:opacity-40"
+              className="px-5 py-2 rounded-lg font-display text-sm font-semibold bg-foreground text-background hover:opacity-80 transition-opacity disabled:opacity-40"
             >
               {saving ? 'Saving…' : 'Save'}
             </button>

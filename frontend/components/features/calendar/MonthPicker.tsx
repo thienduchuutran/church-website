@@ -67,20 +67,20 @@ export default function MonthPicker({
         <button
           onClick={() => setBrowseYear((y) => y - 1)}
           aria-label="Previous year"
-          className="px-3 py-1 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+          className="px-3 py-1 font-display text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
         >
           ←
         </button>
         <span
           className="text-base font-bold tracking-wide text-gray-900"
-          style={{ fontFamily: "'Playfair Display', Georgia, serif" }}
+          style={{ fontFamily: 'var(--font-serif)' }}
         >
           {browseYear}
         </span>
         <button
           onClick={() => setBrowseYear((y) => y + 1)}
           aria-label="Next year"
-          className="px-3 py-1 text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+          className="px-3 py-1 font-display text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
         >
           →
         </button>
@@ -97,7 +97,7 @@ export default function MonthPicker({
               key={m}
               onClick={() => onSelect(browseYear, m)}
               aria-current={isSelected ? 'true' : undefined}
-              className={`relative px-3 py-3 text-[11px] font-bold uppercase tracking-[0.1em] transition-all rounded-sm ${
+              className={`relative px-3 py-3 font-display text-[11px] font-bold uppercase tracking-[0.1em] transition-all rounded-sm ${
                 isSelected
                   ? 'text-white'
                   : 'text-gray-800 hover:bg-gray-100'

@@ -49,7 +49,7 @@ export default function EditPostForm({
     <form onSubmit={handleSubmit} className="space-y-6">
       <PostFormFields section={post.type} state={state} onChange={setState} />
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-700">
           {error}
         </div>
       )}
@@ -57,14 +57,14 @@ export default function EditPostForm({
         <button
           type="submit"
           disabled={saving}
-          className="rounded-lg bg-primary px-5 py-2.5 text-sm font-medium text-white transition-colors hover:bg-primary-light disabled:opacity-50"
+          className="rounded-lg bg-primary px-5 py-2.5 font-display text-sm font-medium text-white transition-colors hover:bg-primary-light disabled:opacity-50"
         >
           {saving ? 'Saving...' : 'Save Changes'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-lg border border-border px-5 py-2.5 text-sm font-medium text-muted transition-colors hover:bg-surface"
+          className="rounded-lg border border-border px-5 py-2.5 font-display text-sm font-medium text-muted transition-colors hover:bg-surface"
         >
           Cancel
         </button>

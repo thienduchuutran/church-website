@@ -60,7 +60,7 @@ export default function CalendarGrid({
           <div
             key={d}
             className={[
-              'py-2.5 text-center text-sm font-bold',
+              'py-2.5 text-center font-display text-sm font-bold',
               i < 6 ? 'border-r border-gray-900' : '',
             ].join(' ')}
             style={{ backgroundColor: theme.header, color: theme.headerText }}
@@ -105,7 +105,7 @@ export default function CalendarGrid({
               <span
                 data-today-circle={isToday ? 'true' : undefined}
                 className={[
-                  'text-xs font-semibold self-end leading-none mb-0.5',
+                  'font-sans text-xs font-semibold self-end leading-none mb-0.5',
                   isToday ? 'rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-white' : 'text-gray-600',
                 ].join(' ')}
                 style={isToday ? { backgroundColor: theme.header } : {}}
@@ -119,7 +119,7 @@ export default function CalendarGrid({
                 return (
                   <div
                     key={e.id}
-                    className="flex items-center gap-1 min-w-0 rounded px-1.5 py-0.5 text-[11px] font-semibold leading-tight"
+                    className="flex items-center gap-1 min-w-0 rounded px-1.5 py-0.5 font-display text-[11px] font-semibold leading-tight"
                     title={e.notes ?? e.title}
                     style={{
                       backgroundColor: colors.bg,
@@ -134,7 +134,7 @@ export default function CalendarGrid({
               })}
 
               {isAdmin && dayEvents.length === 0 && (
-                <span className="text-[9px] text-gray-300 mt-auto">+</span>
+                <span className="font-sans text-[9px] text-gray-300 mt-auto">+</span>
               )}
             </div>
           )

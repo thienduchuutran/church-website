@@ -83,7 +83,7 @@ export default function AccentColorPicker({
       style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <p className="text-[11px] font-medium text-gray-500 mb-2">
+      <p className="font-display text-[11px] font-medium text-gray-500 mb-2">
         Accent for {monthLabel}
       </p>
 
@@ -110,12 +110,12 @@ export default function AccentColorPicker({
       </div>
 
       {/* Custom color input */}
-      <label className="flex items-center gap-2 mb-2 text-[11px] text-gray-600 cursor-pointer">
+      <label className="flex items-center gap-2 mb-2 font-display text-[11px] text-gray-600 cursor-pointer">
         <input
           type="color"
           value={picked}
           onChange={(e) => applyPick(e.target.value)}
-          className="w-6 h-6 rounded border border-gray-200 cursor-pointer"
+          className="w-6 h-6 rounded border border-gray-200 font-sans cursor-pointer"
           aria-label="Custom accent color"
         />
         <span>Custom</span>
@@ -123,7 +123,7 @@ export default function AccentColorPicker({
       </label>
 
       {error && (
-        <p role="alert" className="text-[10px] text-red-600 mb-2">{error}</p>
+        <p role="alert" className="font-sans text-[10px] text-red-600 mb-2">{error}</p>
       )}
 
       <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
@@ -131,7 +131,7 @@ export default function AccentColorPicker({
           type="button"
           onClick={cancelAndClose}
           disabled={saving}
-          className="flex-1 text-[11px] font-medium text-gray-500 py-1 rounded hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          className="flex-1 font-display text-[11px] font-medium text-gray-500 py-1 rounded hover:bg-gray-50 disabled:opacity-50 transition-colors"
         >
           Cancel
         </button>
@@ -139,7 +139,7 @@ export default function AccentColorPicker({
           type="button"
           onClick={handleSave}
           disabled={saving}
-          className="flex-1 text-[11px] font-semibold text-white py-1 rounded transition-opacity disabled:opacity-50"
+          className="flex-1 font-display text-[11px] font-semibold text-white py-1 rounded transition-opacity disabled:opacity-50"
           style={{ backgroundColor: picked }}
         >
           {saving ? 'Saving…' : 'Save'}

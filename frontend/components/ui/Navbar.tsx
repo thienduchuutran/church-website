@@ -93,7 +93,7 @@ export default function Navbar() {
         <div className="flex items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
           <Link
             href="/"
-            className="flex min-h-11 min-w-0 items-center gap-2 rounded-lg text-lg font-bold tracking-tight text-primary"
+            className="flex min-h-11 min-w-0 items-center gap-2 rounded-lg font-display text-lg font-bold tracking-tight text-primary"
           >
             VGOMNE
           </Link>
@@ -105,7 +105,7 @@ export default function Navbar() {
                   <li key={item.href}>
                     <Link
                       href={item.href}
-                      className={`inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${pathname === item.href
+                      className={`inline-flex min-h-11 items-center rounded-lg px-3 py-2 font-display text-sm font-medium transition-colors ${pathname === item.href
                           ? 'bg-primary/10 text-primary'
                           : 'text-muted hover:bg-primary/5 hover:text-primary'
                         }`}
@@ -138,7 +138,7 @@ export default function Navbar() {
                     aria-haspopup="true"
                     aria-expanded={isOpen}
                     aria-controls={panelId}
-                    className={`inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${isActive
+                    className={`inline-flex min-h-11 items-center gap-1 rounded-lg px-3 py-2 font-display text-sm font-medium transition-colors ${isActive
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted hover:bg-primary/5 hover:text-primary'
                       }`}
@@ -168,7 +168,7 @@ export default function Navbar() {
                       <li key={href}>
                         <Link
                           href={href}
-                          className={`block min-h-11 rounded-md px-3 py-2 text-sm font-medium leading-snug transition-colors ${pathname === href
+                          className={`block min-h-11 rounded-md px-3 py-2 font-display text-sm font-medium leading-snug transition-colors ${pathname === href
                               ? 'bg-primary/10 text-primary'
                               : 'text-muted hover:bg-primary/5 hover:text-primary'
                             }`}
@@ -186,7 +186,7 @@ export default function Navbar() {
           <div className="flex items-center gap-2">
             <Link
               href={connectHref}
-              className={`hidden min-h-11 items-center justify-center rounded-lg px-3 text-sm font-semibold transition-colors md:inline-flex ${pathname === connectHref
+              className={`hidden min-h-11 items-center justify-center rounded-lg px-3 font-display text-sm font-semibold transition-colors md:inline-flex ${pathname === connectHref
                   ? 'bg-primary text-surface'
                   : 'bg-primary/10 text-primary hover:bg-primary/20'
                 }`}
@@ -201,7 +201,7 @@ export default function Navbar() {
                     {isAdmin && (
                       <Link
                         href="/admin"
-                        className={`inline-flex min-h-11 items-center rounded-lg px-3 py-2 text-sm font-medium transition-colors ${pathname.startsWith('/admin')
+                        className={`inline-flex min-h-11 items-center rounded-lg px-3 py-2 font-display text-sm font-medium transition-colors ${pathname.startsWith('/admin')
                             ? 'bg-accent/15 text-accent'
                             : 'text-muted hover:text-accent'
                           }`}
@@ -212,7 +212,7 @@ export default function Navbar() {
                     <button
                       type="button"
                       onClick={signOut}
-                      className="inline-flex min-h-11 items-center rounded-lg px-3 py-1.5 text-sm font-medium text-muted transition-colors hover:bg-primary/5 hover:text-foreground"
+                      className="inline-flex min-h-11 items-center rounded-lg px-3 py-1.5 font-display text-sm font-medium text-muted transition-colors hover:bg-primary/5 hover:text-foreground"
                     >
                       Sign out
                     </button>
@@ -221,7 +221,7 @@ export default function Navbar() {
                   <button
                     type="button"
                     onClick={signIn}
-                    className="inline-flex min-h-11 items-center rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+                    className="inline-flex min-h-11 items-center rounded-lg bg-primary/10 px-3 py-1.5 font-display text-sm font-medium text-primary transition-colors hover:bg-primary/20"
                   >
                     Sign in
                   </button>
@@ -267,7 +267,7 @@ export default function Navbar() {
                   <Link
                     href={item.href}
                     onClick={() => setMobileOpen(false)}
-                    className={`block min-h-11 rounded-lg px-3 py-2 text-sm font-medium leading-snug transition-colors ${pathname === item.href
+                    className={`block min-h-11 rounded-lg px-3 py-2 font-display text-sm font-medium leading-snug transition-colors ${pathname === item.href
                         ? 'bg-primary/10 text-primary'
                         : 'text-muted hover:bg-primary/5 hover:text-primary'
                       }`}
@@ -282,7 +282,7 @@ export default function Navbar() {
             return (
               <li key={item.label}>
                 <span
-                  className={`block px-3 py-2 text-sm font-medium ${isActive ? 'text-primary' : 'text-muted'
+                  className={`block px-3 py-2 font-display text-sm font-medium ${isActive ? 'text-primary' : 'text-muted'
                     }`}
                 >
                   {item.label}
@@ -293,7 +293,7 @@ export default function Navbar() {
                       <Link
                         href={href}
                         onClick={() => setMobileOpen(false)}
-                        className={`block min-h-11 rounded-lg px-3 py-2 text-sm font-medium leading-snug transition-colors ${pathname === href
+                        className={`block min-h-11 rounded-lg px-3 py-2 font-display text-sm font-medium leading-snug transition-colors ${pathname === href
                             ? 'bg-primary/10 text-primary'
                             : 'text-muted hover:bg-primary/5 hover:text-primary'
                           }`}
@@ -311,7 +311,7 @@ export default function Navbar() {
             <Link
               href={connectHref}
               onClick={() => setMobileOpen(false)}
-              className={`block min-h-11 rounded-lg px-3 py-2 text-sm font-medium transition-colors ${pathname === connectHref
+              className={`block min-h-11 rounded-lg px-3 py-2 font-display text-sm font-medium transition-colors ${pathname === connectHref
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted hover:bg-primary/5 hover:text-primary'
                 }`}
@@ -328,7 +328,7 @@ export default function Navbar() {
                     <Link
                       href="/admin"
                       onClick={() => setMobileOpen(false)}
-                      className="block min-h-11 rounded-lg px-3 py-2 text-sm font-medium text-accent"
+                      className="block min-h-11 rounded-lg px-3 py-2 font-display text-sm font-medium text-accent"
                     >
                       Admin Dashboard
                     </Link>
@@ -339,7 +339,7 @@ export default function Navbar() {
                       signOut()
                       setMobileOpen(false)
                     }}
-                    className="block min-h-11 w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-muted hover:bg-primary/5"
+                    className="block min-h-11 w-full rounded-lg px-3 py-2 text-left font-display text-sm font-medium text-muted hover:bg-primary/5"
                   >
                     Sign out
                   </button>
@@ -351,7 +351,7 @@ export default function Navbar() {
                     signIn()
                     setMobileOpen(false)
                   }}
-                  className="block min-h-11 w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-primary"
+                  className="block min-h-11 w-full rounded-lg px-3 py-2 text-left font-display text-sm font-medium text-primary"
                 >
                   Sign in
                 </button>

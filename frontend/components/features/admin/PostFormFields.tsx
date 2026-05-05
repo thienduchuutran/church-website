@@ -7,7 +7,7 @@ import {
 } from '@/lib/post-types'
 
 const INPUT_CLASS =
-  'block w-full rounded-lg border border-border bg-surface px-4 py-2.5 text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none'
+  'block w-full rounded-lg border border-border bg-surface px-4 py-2.5 font-sans text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none'
 
 export default function PostFormFields({
   section,
@@ -21,7 +21,7 @@ export default function PostFormFields({
   const fields = POST_TYPE_FIELDS[section]
   if (!fields) {
     return (
-      <p className="text-muted">
+      <p className="font-sans text-muted">
         Unknown section: <code>{section}</code>
       </p>
     )
@@ -33,7 +33,7 @@ export default function PostFormFields({
   return (
     <>
       <div>
-        <label htmlFor="title" className="mb-1 block text-sm font-medium text-foreground">
+        <label htmlFor="title" className="mb-1 block font-display text-sm font-medium text-foreground">
           Title *
         </label>
         <input
@@ -49,7 +49,7 @@ export default function PostFormFields({
 
       {has('body') && (
         <div>
-          <label htmlFor="body" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="body" className="mb-1 block font-display text-sm font-medium text-foreground">
             Body
           </label>
           <textarea
@@ -65,7 +65,7 @@ export default function PostFormFields({
 
       {has('event_date') && (
         <div>
-          <label htmlFor="eventDate" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="eventDate" className="mb-1 block font-display text-sm font-medium text-foreground">
             Event Date *
           </label>
           <input
@@ -81,7 +81,7 @@ export default function PostFormFields({
 
       {has('external_link') && (
         <div>
-          <label htmlFor="externalLink" className="mb-1 block text-sm font-medium text-foreground">
+          <label htmlFor="externalLink" className="mb-1 block font-display text-sm font-medium text-foreground">
             External Link
           </label>
           <input
