@@ -111,6 +111,21 @@ create table calendar_month_settings (
   unique (year, month)
 );
 
+-- Hero background video. Only one row may have is_active = true at a time
+-- (enforced by the partial unique index below). The Go upload handler sets all
+-- other rows to is_active = false before activating the new upload.
+-- storage_key is the S3 object key; URLs are presigned at read time.
+create table hero_videos (
+  id           uuid        primary key default gen_random_uuid(),
+  storage_key  text        not null,
+  file_name    text        not null,
+  file_size    bigint,
+  content_type text,
+  uploaded_by  uuid,                          -- admin sub from JWT
+  is_active    boolean     not null default true,
+  created_at   timestamptz not null default now()
+);
+
 -- ── Indexes ──────────────────────────────────────────────────────────────────
 
 create index on posts(type);
@@ -123,3 +138,5 @@ create index on calendar_events(date);
 create index on calendar_events(date, event_type);
 create index on calendar_month_notes(year, month);
 create index on calendar_month_settings(year, month);
+create index on hero_videos(is_active);
+create unique index hero_videos_one_active on hero_videos(is_active) where is_active = true;
