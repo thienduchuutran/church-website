@@ -69,7 +69,7 @@ func main() {
 
 		// The gallery repo is needed in two places: by GalleryService for uploads
 		// and by PostService to hydrate posts with their images on read. We build
-		// it once here and share it. The S3 client is also shared — when S3 isn't
+		// it once here and share it. The S3 client is also shared - when S3 isn't
 		// configured both pointers stay nil and both services degrade gracefully.
 		galleryRepo := repository.NewGalleryRepository(dbPool)
 
@@ -88,7 +88,7 @@ func main() {
 
 		// PostService takes a presigner so it can attach short-lived `storage_url`
 		// values to each PostImage on the way out. The presigner is wrapped in a
-		// real interface variable rather than the concrete pointer — passing a
+		// real interface variable rather than the concrete pointer - passing a
 		// typed nil *S3Client directly would create a non-nil interface holding a
 		// nil pointer, defeating the service's nil check.
 		var presigner service.URLPresigner
@@ -118,7 +118,7 @@ func main() {
 		//   PUBLIC (no auth, intentional): GET /posts, GET /posts/{id}
 		//     Anonymous visitors must be able to browse the church's events,
 		//     announcements, bible studies, playlists, and gallery without an
-		//     account. Do NOT move these into the RequireAdmin group below — if
+		//     account. Do NOT move these into the RequireAdmin group below - if
 		//     you do, every public page on the site goes blank for non-admins.
 		//   ADMIN-ONLY: POST/PATCH/DELETE /posts, GET /auth/me
 		if postHandler != nil {
@@ -135,7 +135,7 @@ func main() {
 		}
 
 		// Reactions: PUBLIC (no auth, intentional).
-		// Visitors react with an emoji using a browser-generated fingerprint —
+		// Visitors react with an emoji using a browser-generated fingerprint -
 		// no login required. Auth would defeat the feature. Do not protect.
 		if reactionHandler != nil {
 			r.Get("/reactions/{post_id}", reactionHandler.GetCounts)

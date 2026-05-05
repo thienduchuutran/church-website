@@ -25,7 +25,7 @@ func NewPageHandler(svc pageService) *PageHandler {
 	return &PageHandler{svc: svc}
 }
 
-// Get handles GET /api/v1/pages/:slug — returns all sections for a page.
+// Get handles GET /api/v1/pages/:slug - returns all sections for a page.
 func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -54,7 +54,7 @@ type updatePageRequest struct {
 	Sections map[string]string `json:"sections"`
 }
 
-// Update handles PUT /api/v1/pages/:slug — upserts sections for a page (admin only).
+// Update handles PUT /api/v1/pages/:slug - upserts sections for a page (admin only).
 func (h *PageHandler) Update(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {

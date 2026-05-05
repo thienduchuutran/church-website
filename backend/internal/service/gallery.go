@@ -39,7 +39,7 @@ func NewGalleryService(store ImageStore, repo GalleryRepository) *GalleryService
 // The two-phase design (S3 first, then DB) means we could end up with a file
 // in S3 that has no DB row pointing to it if the DB insert fails. We handle
 // this by calling DeleteFile to clean up S3 before returning the error.
-// The alternative — DB first — is worse: you'd have a DB row pointing to a
+// The alternative - DB first - is worse: you'd have a DB row pointing to a
 // file that doesn't exist yet, and a failed upload would leave dangling rows.
 func (s *GalleryService) AddImageToPost(
 	ctx context.Context,
@@ -48,7 +48,7 @@ func (s *GalleryService) AddImageToPost(
 	header *multipart.FileHeader,
 ) (*model.PostImage, error) {
 	// Build the S3 key.
-	// We use only the file extension from the original filename — never the full
+	// We use only the file extension from the original filename - never the full
 	// name. User-supplied filenames can contain spaces, unicode, or path
 	// traversal sequences like "../../../etc/passwd". Using just the extension
 	// keeps the key clean and safe while preserving the file type information.
@@ -69,7 +69,7 @@ func (s *GalleryService) AddImageToPost(
 	if err := s.repo.InsertPostImage(ctx, img); err != nil {
 		// DB insert failed after a successful S3 upload.
 		// Delete the orphaned S3 object so storage stays consistent with the DB.
-		// We log the cleanup result but don't return it — the original DB error
+		// We log the cleanup result but don't return it - the original DB error
 		// is what the caller needs to know about.
 		if cleanupErr := s.store.DeleteFile(ctx, key); cleanupErr != nil {
 			log.Printf("AddImageToPost: failed to clean up s3 key %s after db error: %v", key, cleanupErr)

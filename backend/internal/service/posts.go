@@ -30,18 +30,18 @@ type URLPresigner interface {
 // presignTTL is how long each presigned URL stays valid. It needs to outlive
 // Next.js's revalidate window (60s) by a comfortable margin so the URL doesn't
 // expire mid-render or right after the page finishes streaming. One hour is a
-// conservative choice — long enough for any reasonable read path, short enough
+// conservative choice - long enough for any reasonable read path, short enough
 // to limit the blast radius if a URL leaks.
 const presignTTL = 1 * time.Hour
 
 type PostService struct {
 	posts     *repository.PostRepository
-	images    PostImageRepo // optional — nil-safe; when nil, posts are returned without images
-	presigner URLPresigner  // optional — nil-safe; when nil, images carry only storage_key
+	images    PostImageRepo // optional - nil-safe; when nil, posts are returned without images
+	presigner URLPresigner  // optional - nil-safe; when nil, images carry only storage_key
 }
 
 // NewPostService builds a post service. Both `images` and `presigner` may be nil
-// — the service degrades gracefully so the API still serves text-only posts on
+// - the service degrades gracefully so the API still serves text-only posts on
 // environments where S3 is not configured.
 func NewPostService(posts *repository.PostRepository, images PostImageRepo, presigner URLPresigner) *PostService {
 	return &PostService{posts: posts, images: images, presigner: presigner}
@@ -115,7 +115,7 @@ func (s *PostService) Delete(ctx context.Context, id string) error {
 // attachImages fills Post.Images for each post in-place, presigning URLs when
 // a presigner is available. It batches by post id so listing N posts costs one
 // SELECT instead of N. Safe to call when the gallery repo or presigner are nil
-// — those branches skip enrichment without erroring.
+// - those branches skip enrichment without erroring.
 func (s *PostService) attachImages(ctx context.Context, posts []model.Post) error {
 	if s.images == nil || len(posts) == 0 {
 		return nil
@@ -137,7 +137,7 @@ func (s *PostService) attachImages(ctx context.Context, posts []model.Post) erro
 			for j := range imgs {
 				url, err := s.presigner.PresignedURL(ctx, imgs[j].StorageKey, presignTTL)
 				if err != nil {
-					// One failed presign should not blank out the whole feed —
+					// One failed presign should not blank out the whole feed -
 					// leave storage_url empty so the frontend can fall back to a
 					// placeholder while still rendering the rest of the post.
 					log.Printf("presign %s: %v", imgs[j].StorageKey, err)

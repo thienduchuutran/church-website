@@ -29,7 +29,7 @@ func (r *HeroVideoRepository) DeactivateAll(ctx context.Context) error {
 }
 
 // InsertHeroVideo writes the new video row and populates v.ID and v.CreatedAt
-// from the RETURNING clause. is_active is hard-coded to true — DeactivateAll
+// from the RETURNING clause. is_active is hard-coded to true - DeactivateAll
 // must be called first so the partial unique index does not reject the insert.
 func (r *HeroVideoRepository) InsertHeroVideo(ctx context.Context, v *model.HeroVideo) error {
 	return r.pool.QueryRow(ctx,
@@ -42,7 +42,7 @@ func (r *HeroVideoRepository) InsertHeroVideo(ctx context.Context, v *model.Hero
 }
 
 // GetActiveHeroVideo returns the single row where is_active = true.
-// Returns model.ErrNotFound when no video has been uploaded yet — the handler
+// Returns model.ErrNotFound when no video has been uploaded yet - the handler
 // treats this as a 200 with a null payload so the frontend shows its fallback image.
 func (r *HeroVideoRepository) GetActiveHeroVideo(ctx context.Context) (*model.HeroVideo, error) {
 	var v model.HeroVideo

@@ -40,7 +40,7 @@ func (h *GalleryHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 	postID := chi.URLParam(r, "id")
 
 	// Cap the request body at 10MB. ParseMultipartForm only limits how much
-	// is held in memory — MaxBytesReader hard-stops the read at the network
+	// is held in memory - MaxBytesReader hard-stops the read at the network
 	// level, preventing a large upload from exhausting server resources.
 	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
@@ -57,10 +57,10 @@ func (h *GalleryHandler) UploadImage(w http.ResponseWriter, r *http.Request) {
 
 	// Validate the file's own Content-Type header (set per-part by the browser).
 	// We check the part header, not the request header, because the request
-	// header just says "multipart/form-data" — it says nothing about the file.
+	// header just says "multipart/form-data" - it says nothing about the file.
 	contentType := header.Header.Get("Content-Type")
 	if !allowedImageTypes[contentType] {
-		http.Error(w, "unsupported file type — use jpeg, png, webp, or gif", http.StatusBadRequest)
+		http.Error(w, "unsupported file type - use jpeg, png, webp, or gif", http.StatusBadRequest)
 		return
 	}
 
