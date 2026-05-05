@@ -1,3 +1,6 @@
+-- LEGACY: applied when DB was on Supabase. DB is now plain Postgres (Docker/RDS).
+-- Source of truth is scripts/rds-schema.sql. Do not re-apply.
+--
 -- Editable text sections for static pages (about, connect).
 -- Each row is one key-value pair scoped to a page slug.
 create table page_content (
