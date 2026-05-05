@@ -81,6 +81,58 @@ func RequireAdmin(checker AdminChecker, jwksCache *JWKSCache) func(http.Handler)
 	}
 }
 
+// OptionalAdmin is a non-rejecting variant of RequireAdmin. It tries to
+// validate the Bearer token and whitelist the email; on success it sets the
+// same context values as RequireAdmin. On any failure it calls next unchanged.
+func OptionalAdmin(checker AdminChecker, jwksCache *JWKSCache) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			tokenStr := extractBearerToken(r)
+			if tokenStr == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			claims := jwt.MapClaims{}
+			token, err := jwt.ParseWithClaims(tokenStr, claims, func(token *jwt.Token) (any, error) {
+				if _, ok := token.Method.(*jwt.SigningMethodECDSA); !ok {
+					return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+				}
+				kid, ok := token.Header["kid"].(string)
+				if !ok {
+					return nil, fmt.Errorf("token missing kid")
+				}
+				pubKey := jwksCache.GetKey(kid)
+				if pubKey == nil {
+					return nil, fmt.Errorf("key not found: %s", kid)
+				}
+				return pubKey, nil
+			})
+			if err != nil || !token.Valid {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			email, _ := claims["email"].(string)
+			sub, _ := claims["sub"].(string)
+			if email == "" {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			exists, err := checker.AdminExists(r.Context(), email)
+			if err != nil || !exists {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			ctx := context.WithValue(r.Context(), ctxAdminEmail, email)
+			ctx = context.WithValue(ctx, ctxUserID, sub)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
 func extractBearerToken(r *http.Request) string {
 	header := r.Header.Get("Authorization")
 	if !strings.HasPrefix(header, "Bearer ") {

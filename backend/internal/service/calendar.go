@@ -41,13 +41,14 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 		return nil, fmt.Errorf("validation: %w", err)
 	}
 	e := &model.CalendarEvent{
-		Date:      req.Date,
-		Title:     req.Title,
-		EventType: req.EventType,
-		Icon:      req.Icon,
-		Color:     req.Color,
-		Notes:     req.Notes,
-		AdminID:   &adminID,
+		Date:           req.Date,
+		Title:          req.Title,
+		EventType:      req.EventType,
+		Icon:           req.Icon,
+		PrivateAddress: req.PrivateAddress,
+		Color:          req.Color,
+		Notes:          req.Notes,
+		AdminID:        &adminID,
 	}
 	if err := s.repo.InsertEvent(ctx, e); err != nil {
 		return nil, fmt.Errorf("insert event: %w", err)

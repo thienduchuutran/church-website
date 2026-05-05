@@ -173,7 +173,7 @@ func main() {
 		//     Anyone can view the church calendar (birthdays, bible studies, etc.).
 		//   ADMIN-ONLY: every mutation below.
 		if calendarHandler != nil {
-			r.Get("/calendar", calendarHandler.GetMonth)
+			r.With(appMiddleware.OptionalAdmin(adminRepo, jwksCache)).Get("/calendar", calendarHandler.GetMonth)
 
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))

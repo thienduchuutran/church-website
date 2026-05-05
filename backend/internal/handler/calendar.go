@@ -32,6 +32,11 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load calendar")
 		return
 	}
+	if middleware.AdminEmailFromContext(r.Context()) == "" {
+		for i := range resp.Events {
+			resp.Events[i].PrivateAddress = nil
+		}
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
