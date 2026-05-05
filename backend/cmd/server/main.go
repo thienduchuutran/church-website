@@ -62,6 +62,7 @@ func main() {
 	var pageHandler *handler.PageHandler
 	var galleryHandler *handler.GalleryHandler
 	var calendarHandler *handler.CalendarHandler
+	var heroVideoHandler *handler.HeroVideoHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
@@ -109,10 +110,29 @@ func main() {
 		calendarRepo := repository.NewCalendarRepository(dbPool)
 		calendarSvc := service.NewCalendarService(calendarRepo)
 		calendarHandler = handler.NewCalendarHandler(calendarSvc)
+
+		// Hero video: requires S3 for upload and storage. Presigner decorates
+		// the service to attach short-lived URLs on read. If S3 isn't configured,
+		// the handler stays nil and the routes are skipped.
+		if s3Client != nil {
+			heroVideoRepo := repository.NewHeroVideoRepository(dbPool)
+			heroVideoSvc := service.NewHeroVideoService(s3Client, heroVideoRepo, presigner)
+			heroVideoHandler = handler.NewHeroVideoHandler(heroVideoSvc)
+		}
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", healthHandler.ServeHTTP)
+
+		// Hero video:
+		//   PUBLIC (no auth, intentional): GET /hero-video
+		//     The homepage fetches the current hero background video (or null if
+		//     none uploaded yet). Anyone can view it.
+		//   ADMIN-ONLY: POST /admin/hero-video
+		//     Uploading a new hero video replaces the current one. Restricted to admins.
+		if heroVideoHandler != nil {
+			r.Get("/hero-video", heroVideoHandler.GetVideo)
+		}
 
 		// Posts:
 		//   PUBLIC (no auth, intentional): GET /posts, GET /posts/{id}
@@ -131,6 +151,9 @@ func main() {
 				r.Post("/posts", postHandler.Create)
 				r.Patch("/posts/{id}", postHandler.Update)
 				r.Delete("/posts/{id}", postHandler.Delete)
+				if heroVideoHandler != nil {
+					r.Post("/admin/hero-video", heroVideoHandler.UploadVideo)
+				}
 			})
 		}
 
