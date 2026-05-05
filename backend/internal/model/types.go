@@ -270,6 +270,37 @@ func (r *UpsertMonthSettingsRequest) Validate() error {
 	return nil
 }
 
+// --- Hero video types ---
+
+// MaxHeroVideoBytes is the raw upload ceiling the handler enforces before
+// passing the file to the service for transcoding. 100 MB gives headroom for
+// uncompressed iPhone MOV files; the service reduces them to ≤ 10 MB.
+const MaxHeroVideoBytes = 100 << 20 // 100 MB
+
+// AllowedVideoContentTypes is the set of MIME types accepted at the upload
+// endpoint. video/quicktime covers .mov, the default iPhone export format.
+var AllowedVideoContentTypes = map[string]bool{
+	"video/mp4":       true,
+	"video/webm":      true,
+	"video/quicktime": true,
+}
+
+// HeroVideo is the single shared type across the repo, service, and handler
+// layers for the homepage background video.
+type HeroVideo struct {
+	ID          string    `json:"id"`
+	StorageKey  string    `json:"-"`           // S3 object key — never sent to the client
+	FileName    string    `json:"file_name"`
+	FileSize    *int64    `json:"file_size"`
+	ContentType *string   `json:"content_type"`
+	UploadedBy  *string   `json:"uploaded_by"` // JWT sub of the uploading admin
+	IsActive    bool      `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+	// StorageURL is a short-lived presigned S3 URL populated by the service at
+	// read time. Omitted when no presigner is configured (dev without S3 creds).
+	StorageURL string `json:"storage_url,omitempty"`
+}
+
 // --- Page content types ---
 
 // PageContent represents a single editable section on a static page (about, connect).
