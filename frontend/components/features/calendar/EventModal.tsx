@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from '@phosphor-icons/react'
 import { createEvent, deleteEvent, updateEvent, upsertMonthNote } from '@/lib/calendar'
@@ -57,22 +57,18 @@ export default function EventModal({
   const [confirmDelete, setConfirmDelete] = useState(false)
 
   // Portal + animation state — mirrors EditPostModal's pattern.
-  const [mounted, setMounted] = useState(false)
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
   const [closing, setClosing] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
-    setMounted(true)
+    ;(firstInputRef.current as HTMLElement)?.focus()
     return () => {
       if (closeTimer.current) clearTimeout(closeTimer.current)
     }
   }, [])
-
-  useEffect(() => {
-    if (mounted) (firstInputRef.current as HTMLElement)?.focus()
-  }, [mounted])
 
   // Run the exit animation, then unmount via the parent's onClose.
   const handleClose = useCallback(() => {
