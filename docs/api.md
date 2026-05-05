@@ -101,6 +101,29 @@ Remove a reaction by fingerprint.
 
 ---
 
+### `GET /api/v1/calendar`
+Returns the events for a given month, plus the optional sidebar note and the optional per-month styling row (accent color).
+
+**Query params**
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `year` | int | Yes | 4-digit year, e.g. `2026` |
+| `month` | int | Yes | 1–12 |
+
+**Response `200`**
+```json
+{
+  "events": [ /* CalendarEvent[] */ ],
+  "month_note": { /* CalendarMonthNote */ } ,
+  "month_settings": { /* CalendarMonthSettings */ }
+}
+```
+`events` is always an array (never `null`). `month_note` and `month_settings` are `null` when the admin has not added a note or customized the accent color for that month.
+
+**Response `400`** — missing or invalid `year` / `month`
+
+---
+
 ### `GET /api/v1/pages/:slug`
 Returns all editable sections for a static page (e.g. `about`, `connect`).
 
@@ -209,6 +232,21 @@ Store this key if needed. To display the image, fetch the post — the backend g
 
 ---
 
+### `PUT /api/v1/calendar/months/:year/:month/settings`
+Upsert the per-month styling row. Currently a single field (`accent_color`); the row also stores the `admin_id` of the most recent editor for audit. The accent tints the day-of-week header, month title, and "today" marker on every visitor's view of that month.
+
+**Request body**
+```json
+{ "accent_color": "#C4663C" }
+```
+`accent_color` must be a 6-digit hex color (`^#[0-9A-Fa-f]{6}$`). Anything else is rejected with 400.
+
+**Response `200`** — saved `CalendarMonthSettings` object  
+**Response `400`** — invalid year/month or invalid hex color  
+**Response `401` / `403`** — unauthenticated or not an admin
+
+---
+
 ## Models
 
 ### Post
@@ -253,6 +291,20 @@ Store this key if needed. To display the image, fetch the post — the backend g
   "my_reaction": "👍"
 }
 ```
+
+### CalendarMonthSettings
+```json
+{
+  "id": "uuid",
+  "year": 2026,
+  "month": 5,
+  "accent_color": "#C4663C",
+  "admin_id": "uuid",
+  "created_at": "2026-05-04T00:00:00Z",
+  "updated_at": "2026-05-04T00:00:00Z"
+}
+```
+Per-month admin styling for the calendar. `accent_color` is a 6-digit hex string. Returned on `GET /api/v1/calendar` as `month_settings`; absent (`null`) when no row exists for that month — the frontend then falls back to its static `MONTH_THEMES` palette.
 
 ### PageContent
 ```json

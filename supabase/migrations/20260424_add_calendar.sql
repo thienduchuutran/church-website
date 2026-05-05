@@ -1,3 +1,6 @@
+-- LEGACY: applied when DB was on Supabase. DB is now plain Postgres (Docker/RDS).
+-- Source of truth is scripts/rds-schema.sql. Do not re-apply.
+--
 -- Interactive calendar: day-level events and month-level sidebar notes.
 
 create type calendar_event_type as enum (

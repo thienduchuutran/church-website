@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { apiGet } from '@/lib/api'
 
 export const metadata: Metadata = {
-  title: 'About — Our Church',
+  title: 'About - Our Church',
 }
 
 export const revalidate = 60

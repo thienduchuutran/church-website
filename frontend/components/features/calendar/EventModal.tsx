@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from '@phosphor-icons/react'
-import { apiDelete, apiPatch, apiPost, apiPut } from '@/lib/api'
+import { createEvent, deleteEvent, updateEvent, upsertMonthNote } from '@/lib/calendar'
 import {
   CalendarEvent,
   CalendarEventType,
@@ -31,6 +32,8 @@ const ICON_KEYS = Object.keys(ICON_LABELS)
 const COLOR_KEYS = Object.keys(COLOR_MAP)
 const EVENT_TYPES = Object.keys(EVENT_TYPE_LABELS) as CalendarEventType[]
 
+const EXIT_MS = 280
+
 export default function EventModal({
   mode,
   date,
@@ -46,27 +49,52 @@ export default function EventModal({
   const [eventType, setEventType] = useState<CalendarEventType>(event?.event_type ?? 'general')
   const [icon, setIcon] = useState(event?.icon ?? 'star')
   const [color, setColor] = useState(event?.color ?? 'slate')
+  const [privateAddress, setPrivateAddress] = useState(event?.private_address ?? '')
+  const [showAddress, setShowAddress] = useState(!!event?.private_address)
   const [notes, setNotes] = useState(event?.notes ?? '')
   const [noteContent, setNoteContent] = useState(monthNote?.content ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // Portal + animation state — mirrors EditPostModal's pattern.
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
+  const [closing, setClosing] = useState(false)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
   const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     ;(firstInputRef.current as HTMLElement)?.focus()
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current)
+    }
   }, [])
+
+  // Run the exit animation, then unmount via the parent's onClose.
+  const handleClose = useCallback(() => {
+    if (closing) return
+    setClosing(true)
+    closeTimer.current = setTimeout(onClose, EXIT_MS)
+  }, [closing, onClose])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') handleClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [handleClose])
 
   // Sync icon/color with event type selection for smart defaults
   function handleTypeChange(t: CalendarEventType) {
     setEventType(t)
     const defaults: Record<CalendarEventType, { icon: string; color: string }> = {
-      birthday:     { icon: 'cake',        color: 'rose'   },
-      bible_study:  { icon: 'book-open',   color: 'sky'    },
-      prayer:       { icon: 'flame',       color: 'violet' },
-      announcement: { icon: 'bell',        color: 'amber'  },
-      general:      { icon: 'star',        color: 'slate'  },
+      birthday: { icon: 'cake', color: 'rose' },
+      bible_study: { icon: 'book-open', color: 'sky' },
+      prayer: { icon: 'flame', color: 'violet' },
+      announcement: { icon: 'bell', color: 'amber' },
+      general: { icon: 'star', color: 'slate' },
     }
     setIcon(defaults[t].icon)
     setColor(defaults[t].color)
@@ -78,16 +106,16 @@ export default function EventModal({
     setError(null)
     try {
       if (mode === 'note') {
-        await apiPut(`/api/v1/calendar/months/${year}/${month}/note`, { content: noteContent }, accessToken)
-      } else if (mode === 'create') {
-        await apiPost('/api/v1/calendar/events', { date, title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
+        await upsertMonthNote(year, month, noteContent, accessToken)
+      } else if (mode === 'create' && date) {
+        await createEvent({ date, title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null }, accessToken)
       } else if (mode === 'edit' && event) {
-        await apiPatch(`/api/v1/calendar/events/${event.id}`, { title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
+        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null }, accessToken)
       }
       onSaved()
+      handleClose()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong')
-    } finally {
       setSaving(false)
     }
   }
@@ -96,8 +124,9 @@ export default function EventModal({
     if (!accessToken || !event) return
     setSaving(true)
     try {
-      await apiDelete(`/api/v1/calendar/events/${event.id}`, accessToken)
+      await deleteEvent(event.id, accessToken)
       onSaved()
+      handleClose()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Delete failed')
       setSaving(false)
@@ -108,16 +137,19 @@ export default function EventModal({
     ? true
     : title.trim().length > 0
 
-  return (
-    // Backdrop
-    <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-      onClick={(e) => e.target === e.currentTarget && onClose()}
-    >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+  if (!mounted) return null
 
-      {/* Sheet */}
-      <div className="relative z-10 w-full sm:max-w-md bg-surface rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90dvh]">
+  return createPortal(
+    <div
+      className={`fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[10px] backdrop-saturate-150 ${closing ? 'apple-backdrop-out' : 'apple-backdrop-in'}`}
+      onClick={handleClose}
+    >
+      <div
+        className={`relative w-full sm:max-w-md bg-surface rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45),0_10px_30px_-10px_rgba(0,0,0,0.25)] ring-1 ring-black/5 overflow-hidden flex flex-col max-h-[90dvh] will-change-transform ${closing ? 'apple-sheet-out' : 'apple-sheet-in'}`}
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+      >
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
@@ -127,12 +159,12 @@ export default function EventModal({
             </p>
             <h2 className="font-serif text-xl font-bold text-foreground mt-0.5">
               {mode === 'note'
-                ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month - 1]} ${year}`
+                ? `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month - 1]} ${year}`
                 : date ?? event?.date ?? ''}
             </h2>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 rounded-full hover:bg-border/40 transition-colors text-muted"
           >
             <X size={18} weight="bold" />
@@ -249,6 +281,42 @@ export default function EventModal({
                 </div>
               </div>
 
+              {/* Location address — toggle reveals textarea, available for all event types */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+                    Location address{' '}
+                    <span className="normal-case font-normal">— private, admin only</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddress(v => !v)}
+                    role="switch"
+                    aria-checked={showAddress}
+                    className={[
+                      'relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/40',
+                      showAddress ? 'bg-foreground' : 'bg-border',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={[
+                        'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                        showAddress ? 'translate-x-4' : 'translate-x-0',
+                      ].join(' ')}
+                    />
+                  </button>
+                </div>
+                {showAddress && (
+                  <textarea
+                    value={privateAddress}
+                    onChange={(e) => setPrivateAddress(e.target.value)}
+                    rows={2}
+                    placeholder="123 Street, City"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  />
+                )}
+              </div>
+
               {/* Notes */}
               <div className="flex flex-col gap-2">
                 <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
@@ -293,7 +361,7 @@ export default function EventModal({
 
           <div className="flex gap-2 ml-auto">
             <button
-              onClick={onClose}
+              onClick={handleClose}
               className="px-4 py-2 rounded-lg text-sm text-muted hover:text-foreground border border-border hover:border-foreground/30 transition-colors"
             >
               Cancel
@@ -308,6 +376,7 @@ export default function EventModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

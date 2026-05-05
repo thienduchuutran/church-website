@@ -20,7 +20,7 @@ func NewCalendarRepository(pool *pgxpool.Pool) *CalendarRepository {
 // GetEventsByMonth returns all calendar events for the given year and month.
 func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month int) ([]model.CalendarEvent, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, date::text, title, event_type, icon, color, notes, admin_id, created_at, updated_at
+		`SELECT id, date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at
 		 FROM calendar_events
 		 WHERE EXTRACT(YEAR FROM date) = $1 AND EXTRACT(MONTH FROM date) = $2
 		 ORDER BY date ASC, created_at ASC`,
@@ -34,7 +34,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 	var events []model.CalendarEvent
 	for rows.Next() {
 		var e model.CalendarEvent
-		if err := rows.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.Color,
+		if err := rows.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
 			&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt); err != nil {
 			return nil, err
 		}
@@ -66,10 +66,10 @@ func (r *CalendarRepository) GetMonthNote(ctx context.Context, year, month int) 
 // InsertEvent creates a new calendar event and populates generated fields.
 func (r *CalendarRepository) InsertEvent(ctx context.Context, e *model.CalendarEvent) error {
 	return r.pool.QueryRow(ctx,
-		`INSERT INTO calendar_events (date, title, event_type, icon, color, notes, admin_id)
-		 VALUES ($1::date, $2, $3, $4, $5, $6, $7)
+		`INSERT INTO calendar_events (date, title, event_type, icon, private_address, color, notes, admin_id)
+		 VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8)
 		 RETURNING id, created_at, updated_at`,
-		e.Date, e.Title, e.EventType, e.Icon, e.Color, e.Notes, e.AdminID,
+		e.Date, e.Title, e.EventType, e.Icon, e.PrivateAddress, e.Color, e.Notes, e.AdminID,
 	).Scan(&e.ID, &e.CreatedAt, &e.UpdatedAt)
 }
 
@@ -77,20 +77,22 @@ func (r *CalendarRepository) InsertEvent(ctx context.Context, e *model.CalendarE
 func (r *CalendarRepository) UpdateEvent(ctx context.Context, id string, req *model.UpdateCalendarEventRequest) (*model.CalendarEvent, error) {
 	row := r.pool.QueryRow(ctx,
 		`UPDATE calendar_events SET
-		   date       = COALESCE($2::date,       date),
-		   title      = COALESCE($3,             title),
-		   event_type = COALESCE($4::calendar_event_type, event_type),
-		   icon       = COALESCE($5,             icon),
-		   color      = COALESCE($6,             color),
-		   notes      = CASE WHEN $7::boolean THEN $8 ELSE notes END,
-		   updated_at = now()
+		   date            = COALESCE($2::date,                  date),
+		   title           = COALESCE($3,                        title),
+		   event_type      = COALESCE($4::calendar_event_type,   event_type),
+		   icon            = COALESCE($5,                        icon),
+		   private_address = CASE WHEN $6::boolean THEN $7 ELSE private_address END,
+		   color           = COALESCE($8,                        color),
+		   notes           = CASE WHEN $9::boolean THEN $10 ELSE notes END,
+		   updated_at      = now()
 		 WHERE id = $1
-		 RETURNING id, date::text, title, event_type, icon, color, notes, admin_id, created_at, updated_at`,
-		id, req.Date, req.Title, req.EventType, req.Icon, req.Color,
-		req.Notes != nil, req.Notes,
+		 RETURNING id, date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at`,
+		id, req.Date, req.Title, req.EventType, req.Icon,
+		req.PrivateAddress != nil, req.PrivateAddress,
+		req.Color, req.Notes != nil, req.Notes,
 	)
 	var e model.CalendarEvent
-	err := row.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.Color,
+	err := row.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
 		&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, model.ErrNotFound
@@ -111,6 +113,44 @@ func (r *CalendarRepository) DeleteEvent(ctx context.Context, id string) error {
 		return model.ErrNotFound
 	}
 	return nil
+}
+
+// GetMonthSettings returns the saved per-month styling row for the given
+// year+month, or nil (with no error) when the admin has not customized the
+// month yet - callers fall back to the static MONTH_THEMES on the frontend.
+func (r *CalendarRepository) GetMonthSettings(ctx context.Context, year, month int) (*model.CalendarMonthSettings, error) {
+	var s model.CalendarMonthSettings
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, year, month, accent_color, admin_id, created_at, updated_at
+		 FROM calendar_month_settings WHERE year = $1 AND month = $2`,
+		year, month,
+	).Scan(&s.ID, &s.Year, &s.Month, &s.AccentColor, &s.AdminID, &s.CreatedAt, &s.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// UpsertMonthSettings inserts or replaces the styling row for a given year+month.
+func (r *CalendarRepository) UpsertMonthSettings(ctx context.Context, year, month int, accentColor string, adminID *string) (*model.CalendarMonthSettings, error) {
+	var s model.CalendarMonthSettings
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO calendar_month_settings (year, month, accent_color, admin_id)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (year, month) DO UPDATE
+		   SET accent_color = EXCLUDED.accent_color,
+		       admin_id     = EXCLUDED.admin_id,
+		       updated_at   = now()
+		 RETURNING id, year, month, accent_color, admin_id, created_at, updated_at`,
+		year, month, accentColor, adminID,
+	).Scan(&s.ID, &s.Year, &s.Month, &s.AccentColor, &s.AdminID, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
 }
 
 // UpsertMonthNote inserts or updates the sidebar note for a given year+month.

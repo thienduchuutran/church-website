@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
 import { getPost } from '@/lib/posts'
 import type { Post } from '@/lib/types'
@@ -23,11 +23,10 @@ export default function EditPostModal({
   // PageTransition applies a CSS transform to the route wrapper, which
   // creates a containing block for position:fixed descendants. Rendering
   // through document.body escapes that and pins the overlay to the viewport.
-  const [mounted, setMounted] = useState(false)
+  const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
-    setMounted(true)
     return () => {
       if (closeTimer.current) clearTimeout(closeTimer.current)
     }

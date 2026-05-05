@@ -211,7 +211,29 @@ Do this in the same commit, not as an afterthought.
 ---
 
 ## Scratchpad rule
-For any feature that touches more than 2 files, create `docs/scratchpad.md` and plan the full implementation (files to change, order of changes, potential side effects) **before writing any code**.
+For any feature that touches more than 2 files, create `docs/scratchpad.md` and write a **phased implementation plan** before writing any code. Wait for approval before executing.
+
+### Phase structure
+Order phases by dependency — each phase must be complete before the next can start:
+
+| Phase | Covers |
+|---|---|
+| 1. Database | Schema migrations — everything else depends on the column/table existing |
+| 2. Backend | Model types → repository queries → handler logic → route registration |
+| 3. Frontend form | TypeScript types → API lib payloads → input UI (modals, forms) |
+| 4. Display + export | Read-only rendering, strip/list views, export behaviour, auth gates |
+
+### Per-phase table format
+Each phase gets a table with three columns:
+
+| File | Change | Why |
+|---|---|---|
+| `path/to/file` | What specifically changes — field name, method signature, query | The bigger-picture reason: what it enables, what it protects, why this layer owns it |
+
+### After the tables
+- **End-to-end flow** — short step-by-step diagram showing data moving from admin input → DB → API → public view → export
+- **Security callouts** — any auth gates added, any gaps closed or introduced
+- **Scope estimate** — rough time per phase so nothing is a surprise
 
 ## TDD rule
 Do not write implementation code until you have written the unit test for it first. Tests live in `_test.go` files (Go) or `__tests__/` (Next.js).

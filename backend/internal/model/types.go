@@ -3,8 +3,14 @@ package model
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"time"
 )
+
+// hexColorRegexp matches a 6-digit RGB hex color like "#C4663C". Used by the
+// month-settings request to keep the database column from accepting arbitrary
+// strings (e.g. CSS keywords, malformed values) the frontend can't render safely.
+var hexColorRegexp = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 
 // ErrNotFound is returned when a requested resource does not exist.
 var ErrNotFound = errors.New("not found")
@@ -150,8 +156,9 @@ type CalendarEvent struct {
 	Date      string            `json:"date"` // YYYY-MM-DD
 	Title     string            `json:"title"`
 	EventType CalendarEventType `json:"event_type"`
-	Icon      string            `json:"icon"`
-	Color     string            `json:"color"`
+	Icon           string            `json:"icon"`
+	PrivateAddress *string           `json:"private_address,omitempty"`
+	Color          string            `json:"color"`
 	Notes     *string           `json:"notes"`
 	AdminID   *string           `json:"admin_id"`
 	CreatedAt time.Time         `json:"created_at"`
@@ -168,18 +175,34 @@ type CalendarMonthNote struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// CalendarMonthSettings is the per-month admin-configurable styling for the
+// interactive calendar. Currently just an accent color, but the table is the
+// natural home for any future month-scoped admin overrides (banner image,
+// custom subtitle, etc.) — keep the JSON shape stable.
+type CalendarMonthSettings struct {
+	ID          string    `json:"id"`
+	Year        int       `json:"year"`
+	Month       int       `json:"month"`
+	AccentColor string    `json:"accent_color"`
+	AdminID     *string   `json:"admin_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type CalendarMonthResponse struct {
-	Events    []CalendarEvent    `json:"events"`
-	MonthNote *CalendarMonthNote `json:"month_note"`
+	Events        []CalendarEvent        `json:"events"`
+	MonthNote     *CalendarMonthNote     `json:"month_note"`
+	MonthSettings *CalendarMonthSettings `json:"month_settings"`
 }
 
 type CreateCalendarEventRequest struct {
-	Date      string            `json:"date"`
-	Title     string            `json:"title"`
-	EventType CalendarEventType `json:"event_type"`
-	Icon      string            `json:"icon"`
-	Color     string            `json:"color"`
-	Notes     *string           `json:"notes"`
+	Date           string            `json:"date"`
+	Title          string            `json:"title"`
+	EventType      CalendarEventType `json:"event_type"`
+	Icon           string            `json:"icon"`
+	PrivateAddress *string           `json:"private_address"`
+	Color          string            `json:"color"`
+	Notes          *string           `json:"notes"`
 }
 
 func (r *CreateCalendarEventRequest) Validate() error {
@@ -205,12 +228,13 @@ func (r *CreateCalendarEventRequest) Validate() error {
 }
 
 type UpdateCalendarEventRequest struct {
-	Date      *string            `json:"date"`
-	Title     *string            `json:"title"`
-	EventType *CalendarEventType `json:"event_type"`
-	Icon      *string            `json:"icon"`
-	Color     *string            `json:"color"`
-	Notes     *string            `json:"notes"`
+	Date           *string            `json:"date"`
+	Title          *string            `json:"title"`
+	EventType      *CalendarEventType `json:"event_type"`
+	Icon           *string            `json:"icon"`
+	PrivateAddress *string            `json:"private_address"`
+	Color          *string            `json:"color"`
+	Notes          *string            `json:"notes"`
 }
 
 func (r *UpdateCalendarEventRequest) Validate() error {
@@ -233,6 +257,17 @@ func (r *UpdateCalendarEventRequest) Validate() error {
 
 type UpsertMonthNoteRequest struct {
 	Content string `json:"content"`
+}
+
+type UpsertMonthSettingsRequest struct {
+	AccentColor string `json:"accent_color"`
+}
+
+func (r *UpsertMonthSettingsRequest) Validate() error {
+	if !hexColorRegexp.MatchString(r.AccentColor) {
+		return errors.New("accent_color must be a valid hex color e.g. #C4663C")
+	}
+	return nil
 }
 
 // --- Page content types ---

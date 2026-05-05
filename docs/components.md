@@ -234,6 +234,31 @@ Inline page component (not extracted to `components/`) that lets admins edit the
 
 ---
 
+## `AccentColorPicker`
+Inline contextual popover that lets an admin pick the accent color for the currently-viewed calendar month.
+
+**File:** `components/features/calendar/AccentColorPicker.tsx`
+
+**Props**
+| Prop | Type | Description |
+|------|------|-------------|
+| `monthLabel` | `string` | "May 2026" — shown in the popover heading |
+| `currentAccent` | `string` | Saved (or default) hex used to revert the live preview when the user cancels |
+| `onPreview` | `(hex: string) => void` | Pushes a hex up to `CalendarShell` for instant preview as the user clicks swatches or moves the native color input |
+| `onSave` | `(hex: string) => Promise<void>` | Persists the choice; rejection surfaces the inline "Couldn't save, try again" message |
+| `onClose` | `() => void` | Asks the parent to unmount the popover |
+| `saving` | `boolean` | Disables buttons + shows the "Saving…" label on the save button |
+
+**Data flow**
+1. Mounted by `CalendarShell` only when `isAdmin` is true and the user clicked the "Accent color" trigger.
+2. Internal `picked` state mirrors what the user has selected. Every swatch click and color-input change calls `onPreview(picked)`, which the shell uses to render an ephemeral preview without touching `monthSettings`.
+3. Save calls `onSave(picked)`, which the shell wires to `PUT /api/v1/calendar/months/:year/:month/settings`.
+4. Cancel / outside click / Escape revert the preview to `currentAccent` and close the popover.
+
+**Client component:** yes (state, keyboard + outside-click effects)
+
+---
+
 ## Adding a new component — checklist
 
 1. Place it in `components/ui/` (no business logic) or `components/features/<domain>/` (with logic).

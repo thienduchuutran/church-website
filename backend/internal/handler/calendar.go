@@ -32,6 +32,11 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load calendar")
 		return
 	}
+	if middleware.AdminEmailFromContext(r.Context()) == "" {
+		for i := range resp.Events {
+			resp.Events[i].PrivateAddress = nil
+		}
+	}
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -107,6 +112,32 @@ func (h *CalendarHandler) UpsertMonthNote(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, note)
+}
+
+// UpsertMonthSettings handles PUT /api/v1/calendar/months/{year}/{month}/settings (admin only).
+// Stores the accent color the admin picked in the inline color picker; the GET
+// /calendar response surfaces it back so every visitor sees the same tint.
+func (h *CalendarHandler) UpsertMonthSettings(w http.ResponseWriter, r *http.Request) {
+	yearStr := chi.URLParam(r, "year")
+	monthStr := chi.URLParam(r, "month")
+	year, err1 := strconv.Atoi(yearStr)
+	month, err2 := strconv.Atoi(monthStr)
+	if err1 != nil || err2 != nil || month < 1 || month > 12 {
+		writeError(w, http.StatusBadRequest, "invalid year or month")
+		return
+	}
+	var req model.UpsertMonthSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := middleware.UserIDFromContext(r.Context())
+	settings, err := h.svc.UpsertMonthSettings(r.Context(), year, month, req, userID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, settings)
 }
 
 func parseYearMonth(w http.ResponseWriter, r *http.Request) (int, int, bool) {
