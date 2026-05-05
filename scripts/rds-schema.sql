@@ -1,4 +1,4 @@
--- RDS schema — plain Postgres, no Supabase-specific syntax.
+-- RDS schema - plain Postgres, no Supabase-specific syntax.
 -- No RLS, no auth.users references, no PgBouncer workarounds.
 -- Run once against a fresh RDS instance:
 --   psql "$RDS_URL" -f scripts/rds-schema.sql
@@ -98,7 +98,7 @@ create table calendar_month_notes (
   unique (year, month)
 );
 
--- Calendar: per-month admin styling (accent color). Optional — frontend falls
+-- Calendar: per-month admin styling (accent color). Optional - frontend falls
 -- back to MONTH_THEMES when no row exists for a given month.
 create table calendar_month_settings (
   id           uuid primary key default gen_random_uuid(),

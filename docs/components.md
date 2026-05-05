@@ -25,7 +25,7 @@ The `navItems` array is type-discriminated (`kind: 'link' | 'dropdown'`). Mobile
 Wraps page content and replays a CSS fade-in animation on every route change.  
 **Props:** `children: React.ReactNode`  
 **Client component:** yes (`usePathname` to detect navigation)  
-**How it works:** passes `key={pathname}` to a wrapping `div` — when the key changes React unmounts and remounts the element, which restarts the `.animate-page-fade-in` CSS animation defined in `globals.css`. Used once in `layout.tsx`; all pages get the effect automatically.
+**How it works:** passes `key={pathname}` to a wrapping `div` - when the key changes React unmounts and remounts the element, which restarts the `.animate-page-fade-in` CSS animation defined in `globals.css`. Used once in `layout.tsx`; all pages get the effect automatically.
 
 ---
 
@@ -76,9 +76,9 @@ Anonymous emoji reaction picker shown at the bottom of each `PostCard`.
 | `showReactions` | `boolean` | `true` | When `false`, renders nothing |
 
 **How it works**
-1. On mount, calls `GET /api/v1/reactions/{postId}?fingerprint={fp}` via `apiGet` — one round-trip returns both the per-emoji counts and this browser's existing reaction.
+1. On mount, calls `GET /api/v1/reactions/{postId}?fingerprint={fp}` via `apiGet` - one round-trip returns both the per-emoji counts and this browser's existing reaction.
 2. Fingerprint is a random UUID stored in `localStorage` under `church_reaction_fp`. Generated once per browser, never sent to the backend on reads unless the user has interacted.
-3. Writes go through `apiPostAnon` (upsert) and `apiDeleteAnon` (remove), both hitting the Go backend — never Supabase directly.
+3. Writes go through `apiPostAnon` (upsert) and `apiDeleteAnon` (remove), both hitting the Go backend - never Supabase directly.
 4. State updates are optimistic: counts and `myReaction` update immediately, with a `pending` lock to prevent double-submit.
 
 **Allowed emojis:** `👍` `❤️` `🙏` `😂`  
@@ -131,11 +131,11 @@ Flat photo grid showing the most recent images across all albums.
 
 The post create/edit experience is split across four components plus a context provider, so each piece has a single responsibility:
 
-- `PostFormFields` — presentational. Renders the inputs.
-- `CreatePostForm` — owns state, calls `createPost`, redirects to the section route on success.
-- `EditPostForm` — owns state initialized from a `Post`, calls `updatePost`, hands control back to its parent via `onSuccess` / `onCancel`.
-- `EditPostModal` — modal chrome (backdrop, X button, Escape/click-out close) hosting `EditPostForm`. Rendered through a portal.
-- `EditModalProvider` (in `lib/edit-modal.tsx`) — owns `editingId` state at the root layout; exposes `useEditModal()`.
+- `PostFormFields` - presentational. Renders the inputs.
+- `CreatePostForm` - owns state, calls `createPost`, redirects to the section route on success.
+- `EditPostForm` - owns state initialized from a `Post`, calls `updatePost`, hands control back to its parent via `onSuccess` / `onCancel`.
+- `EditPostModal` - modal chrome (backdrop, X button, Escape/click-out close) hosting `EditPostForm`. Rendered through a portal.
+- `EditModalProvider` (in `lib/edit-modal.tsx`) - owns `editingId` state at the root layout; exposes `useEditModal()`.
 
 #### `PostFormFields`
 Pure presentational. Renders Title plus the conditional Body / Event Date / External Link inputs that apply to the given post type.
@@ -143,12 +143,12 @@ Pure presentational. Renders Title plus the conditional Body / Event Date / Exte
 **Props**
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `section` | `string` (PostType) | required | Drives which inputs render — looked up via `POST_TYPE_FIELDS` in `lib/post-types.ts` |
+| `section` | `string` (PostType) | required | Drives which inputs render - looked up via `POST_TYPE_FIELDS` in `lib/post-types.ts` |
 | `state` | `PostFormState` | required | Controlled values for all inputs |
 | `onChange` | `(next: PostFormState) => void` | required | Called with the next state on every keystroke |
 
 **Client component:** yes (controlled inputs)
-**No state, no API calls, no router** — safe to reuse from any caller.
+**No state, no API calls, no router** - safe to reuse from any caller.
 
 ---
 
@@ -166,7 +166,7 @@ Wraps `PostFormFields` with a `<form>`, error display, and submit/cancel buttons
 ---
 
 #### `EditPostForm`
-Same shell as `CreatePostForm` but initializes state from an existing `Post` and submits via `updatePost`. It does **not** redirect — the parent decides via callbacks.
+Same shell as `CreatePostForm` but initializes state from an existing `Post` and submits via `updatePost`. It does **not** redirect - the parent decides via callbacks.
 
 **Props**
 | Prop | Type | Default | Description |
@@ -186,11 +186,11 @@ Renders the modal chrome around `EditPostForm`. Fetches the post by id, then han
 **Props**
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `id` | `string` | required | Post id — fetched via `getPost(id)` |
-| `onClose` | `() => void` | required | Called by backdrop click, X button, Escape key, and the form's Cancel/Success callbacks — fired *after* the exit animation completes |
+| `id` | `string` | required | Post id - fetched via `getPost(id)` |
+| `onClose` | `() => void` | required | Called by backdrop click, X button, Escape key, and the form's Cancel/Success callbacks - fired *after* the exit animation completes |
 
 **Client component:** yes
-**Visual system:** Apple-style sheet — blurred + saturated backdrop (`backdrop-blur-xl backdrop-saturate-150`), `rounded-3xl`, layered soft shadow with a hairline `ring-1 ring-black/5`. Entry animates `scale(0.94) translateY(20px) → 1` over 480ms with `cubic-bezier(0.32, 0.72, 0, 1)` (iOS "snappy" decel curve); exit is faster (240ms) with an accel curve, per Apple HIG. Animation classes (`apple-backdrop-in/out`, `apple-sheet-in/out`) live in `globals.css` and collapse to no-op under `prefers-reduced-motion`. Internal `closing` state delays the parent's `onClose` by `EXIT_MS` so the exit animation has time to play.
+**Visual system:** Apple-style sheet - blurred + saturated backdrop (`backdrop-blur-xl backdrop-saturate-150`), `rounded-3xl`, layered soft shadow with a hairline `ring-1 ring-black/5`. Entry animates `scale(0.94) translateY(20px) → 1` over 480ms with `cubic-bezier(0.32, 0.72, 0, 1)` (iOS "snappy" decel curve); exit is faster (240ms) with an accel curve, per Apple HIG. Animation classes (`apple-backdrop-in/out`, `apple-sheet-in/out`) live in `globals.css` and collapse to no-op under `prefers-reduced-motion`. Internal `closing` state delays the parent's `onClose` by `EXIT_MS` so the exit animation has time to play.
 **Note:** This component is not used directly. `EditModalProvider` mounts it when `editingId` is set.
 
 ---
@@ -226,7 +226,7 @@ Inline page component (not extracted to `components/`) that lets admins edit the
 
 **How it works**
 1. On mount, fetches `GET /api/v1/pages/:slug` via `apiGet` to load existing section values.
-2. Renders grouped form fields driven by a `PAGE_SCHEMA` constant — each page has named groups (Hero, Mission, etc.) with typed section keys.
+2. Renders grouped form fields driven by a `PAGE_SCHEMA` constant - each page has named groups (Hero, Mission, etc.) with typed section keys.
 3. On submit, sends `PUT /api/v1/pages/:slug` via `apiPut` with the admin's JWT.
 4. Shows success/error feedback inline.
 
@@ -242,7 +242,7 @@ Inline contextual popover that lets an admin pick the accent color for the curre
 **Props**
 | Prop | Type | Description |
 |------|------|-------------|
-| `monthLabel` | `string` | "May 2026" — shown in the popover heading |
+| `monthLabel` | `string` | "May 2026" - shown in the popover heading |
 | `currentAccent` | `string` | Saved (or default) hex used to revert the live preview when the user cancels |
 | `onPreview` | `(hex: string) => void` | Pushes a hex up to `CalendarShell` for instant preview as the user clicks swatches or moves the native color input |
 | `onSave` | `(hex: string) => Promise<void>` | Persists the choice; rejection surfaces the inline "Couldn't save, try again" message |
@@ -259,10 +259,10 @@ Inline contextual popover that lets an admin pick the accent color for the curre
 
 ---
 
-## Adding a new component — checklist
+## Adding a new component - checklist
 
 1. Place it in `components/ui/` (no business logic) or `components/features/<domain>/` (with logic).
 2. Add `"use client"` only if the component uses hooks or browser APIs.
-3. If the component calls the backend, use `lib/api.ts` helpers — never call `supabase` directly for reaction or fingerprint-scoped data.
+3. If the component calls the backend, use `lib/api.ts` helpers - never call `supabase` directly for reaction or fingerprint-scoped data.
 4. **Update this file** (`docs/components.md`) with the component name, props table, and a brief description of its data flow.
 5. Update `docs/agents/frontend.md` folder structure if the file is new.

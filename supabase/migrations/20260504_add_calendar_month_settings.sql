@@ -5,10 +5,10 @@
 
 -- LEGACY: this file was applied when the DB was hosted on Supabase. The database
 -- has since moved to plain Postgres (Docker locally, RDS in production). These
--- migrations are kept for historical reference only — do not re-apply them.
+-- migrations are kept for historical reference only - do not re-apply them.
 -- The live schema source of truth is scripts/rds-schema.sql.
 --
--- admin_id is plain uuid with no FK — auth.users lives in Supabase (auth-only),
+-- admin_id is plain uuid with no FK - auth.users lives in Supabase (auth-only),
 -- not in this database. No RLS: access control is enforced at the Go layer.
 create table calendar_month_settings (
   id           uuid primary key default gen_random_uuid(),

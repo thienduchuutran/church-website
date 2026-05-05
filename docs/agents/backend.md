@@ -1,7 +1,7 @@
-# docs/agents/backend.md — Go Backend Reference
+# docs/agents/backend.md - Go Backend Reference
 
 ## Entry point
-`backend/cmd/server/main.go` — wires together the router, middleware, database connection, and starts the HTTP server.
+`backend/cmd/server/main.go` - wires together the router, middleware, database connection, and starts the HTTP server.
 
 ## Router
 Using `github.com/go-chi/chi/v5`. Lightweight, idiomatic Go, close to Express in feel.
@@ -73,17 +73,17 @@ All routes are prefixed `/api/v1/`.
 
 ### Auth contract (read this before touching `cmd/server/main.go`)
 
-Every endpoint below is split into a **public** group (no middleware) and an **admin** group (`RequireAdmin`). The split is **deliberate, not historical** — the church website's whole purpose is letting anonymous, signed-out visitors browse posts, react with emojis, view static pages, and read the calendar. **Never** move a `GET` route on `/posts`, `/posts/{id}`, `/pages/{slug}`, `/calendar`, or any `/reactions/...` path into the `RequireAdmin` group. Doing so blanks the entire site for everyone except the small admin whitelist and breaks the product. The route comments in `cmd/server/main.go` repeat this — keep them in sync if you reorganise the file.
+Every endpoint below is split into a **public** group (no middleware) and an **admin** group (`RequireAdmin`). The split is **deliberate, not historical** - the church website's whole purpose is letting anonymous, signed-out visitors browse posts, react with emojis, view static pages, and read the calendar. **Never** move a `GET` route on `/posts`, `/posts/{id}`, `/pages/{slug}`, `/calendar`, or any `/reactions/...` path into the `RequireAdmin` group. Doing so blanks the entire site for everyone except the small admin whitelist and breaks the product. The route comments in `cmd/server/main.go` repeat this - keep them in sync if you reorganise the file.
 
-If you find yourself wanting to add auth to a public read path, it's almost certainly the wrong fix. The only thing that should ever require a token is a *write* (POST/PATCH/PUT/DELETE) — and even then, public reactions write without one because they're rate-limited per fingerprint, not per user.
+If you find yourself wanting to add auth to a public read path, it's almost certainly the wrong fix. The only thing that should ever require a token is a *write* (POST/PATCH/PUT/DELETE) - and even then, public reactions write without one because they're rate-limited per fingerprint, not per user.
 
-### Public (no auth — intentional, do not protect)
+### Public (no auth - intentional, do not protect)
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/health` | Liveness check |
 | GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?limit=20` (cap 100), `?offset=0`. Each item includes presigned `images[*].storage_url`. |
 | GET | `/api/v1/posts/:id` | Single post with images and reaction counts |
-| GET | `/api/v1/reactions/:post_id` | Returns `ReactionSummary` — per-emoji counts + caller's reaction. Optional `?fingerprint=<fp>` query param; when omitted `my_reaction` is null. |
+| GET | `/api/v1/reactions/:post_id` | Returns `ReactionSummary` - per-emoji counts + caller's reaction. Optional `?fingerprint=<fp>` query param; when omitted `my_reaction` is null. |
 | POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value } }` for a static page |
@@ -183,7 +183,7 @@ Never leak internal error messages or stack traces to the client. Log them serve
 
 ## Environment variables
 
-All secrets live in the systemd service file on EC2 — there is no `.env` file on the server.
+All secrets live in the systemd service file on EC2 - there is no `.env` file on the server.
 For local development, create `backend/.env` (never commit it).
 
 ```

@@ -8,7 +8,7 @@ const HERO_RULE =
   'linear-gradient(90deg, transparent, #C4663C, #C49A3C, transparent)'
 
 export default async function HomePage() {
-  // Both feeds come from the Go backend (RDS) — Supabase is auth-only.
+  // Both feeds come from the Go backend (RDS) - Supabase is auth-only.
   // Each call's failure is captured independently so a single dead feed doesn't
   // hide the other one. We sort/slice client-side instead of pushing date filters
   // to the server, which keeps the API surface small and the route easy to cache.

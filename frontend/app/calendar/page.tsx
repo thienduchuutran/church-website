@@ -3,7 +3,7 @@ import CalendarPageClient from './CalendarPageClient'
 
 export const metadata: Metadata = {
   title: 'Calendar | Our Church',
-  description: 'Monthly church calendar — events, birthdays, Bible study, and more.',
+  description: 'Monthly church calendar - events, birthdays, Bible study, and more.',
 }
 
 export default function CalendarPage() {

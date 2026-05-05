@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { apiGet } from '@/lib/api'
 
 export const metadata: Metadata = {
-  title: 'Connect — Our Church',
+  title: 'Connect - Our Church',
 }
 
 export const revalidate = 60
@@ -28,7 +28,7 @@ const defaults: Record<string, string> = {
   contact_note: 'TODO: a short note about response times or who will reply',
   plan_a_visit_heading: 'Plan a Visit',
   plan_a_visit_body:
-    'TODO: a short paragraph telling first-time visitors what to expect — dress code, kids programs, where to park, how long the service runs.',
+    'TODO: a short paragraph telling first-time visitors what to expect - dress code, kids programs, where to park, how long the service runs.',
 }
 
 async function getSections(): Promise<Record<string, string>> {

@@ -1,4 +1,4 @@
-## Scratchpad (deprecated for new features — use progress.md)
+## Scratchpad (deprecated for new features - use progress.md)
 
 We are consolidating design/progress tracking into `docs/progress.md`.
 
@@ -6,7 +6,7 @@ We are consolidating design/progress tracking into `docs/progress.md`.
 
 ---
 
-## DB-backed page content (About & Connect) — Phase 2
+## DB-backed page content (About & Connect) - Phase 2
 
 **Goal:** Replace hardcoded `content` constants in `/about` and `/connect` pages with
 DB-backed content that admins can edit via `/admin/pages/:slug`.
@@ -31,18 +31,18 @@ RLS: public SELECT, no public INSERT/UPDATE/DELETE.
 | PUT | `/api/v1/pages/:slug` | admin | Upserts sections: `{ sections: { "key": "value", ... } }` |
 
 ### Backend files (AGENTS.md order)
-1. `backend/internal/handler/pages_test.go` — mock service, test Get + Update
-2. `backend/internal/model/types.go` — add PageContent struct + request type
-3. `backend/internal/repository/pages.go` — GetSections, UpsertSections
-4. `backend/internal/service/pages.go` — GetPageContent, UpdatePageContent
-5. `backend/internal/handler/pages.go` — service interface, Get, Update handlers
-6. `backend/cmd/server/main.go` — register routes
+1. `backend/internal/handler/pages_test.go` - mock service, test Get + Update
+2. `backend/internal/model/types.go` - add PageContent struct + request type
+3. `backend/internal/repository/pages.go` - GetSections, UpsertSections
+4. `backend/internal/service/pages.go` - GetPageContent, UpdatePageContent
+5. `backend/internal/handler/pages.go` - service interface, Get, Update handlers
+6. `backend/cmd/server/main.go` - register routes
 
 ### Frontend files
-7. `frontend/app/about/page.tsx` — fetch from API, fall back to defaults
-8. `frontend/app/connect/page.tsx` — fetch from API, fall back to defaults
-9. `frontend/app/admin/pages/[slug]/page.tsx` — admin editor form
-10. `frontend/app/admin/page.tsx` — add "Edit Pages" links
+7. `frontend/app/about/page.tsx` - fetch from API, fall back to defaults
+8. `frontend/app/connect/page.tsx` - fetch from API, fall back to defaults
+9. `frontend/app/admin/pages/[slug]/page.tsx` - admin editor form
+10. `frontend/app/admin/page.tsx` - add "Edit Pages" links
 
 ### Section keys per page
 
@@ -80,7 +80,7 @@ plan_a_visit_heading, plan_a_visit_body
 ### Design decisions
 
 - **Fingerprint**: random UUID stored in `localStorage` under key `church_reaction_fp`. Generated once per browser, persisted forever. No login required.
-- **Hover trigger**: `onMouseEnter`/`onMouseLeave` on a container `div` wrapping both the picker and the Like button — so moving the mouse from button to picker does not close it.
+- **Hover trigger**: `onMouseEnter`/`onMouseLeave` on a container `div` wrapping both the picker and the Like button - so moving the mouse from button to picker does not close it.
 - **Picker animation**: Tailwind `transition-all duration-200` + `translate-y-2 opacity-0` → `translate-y-0 opacity-100`. Uses `pointer-events-none` when hidden.
 - **Toggle off**: Clicking your own active reaction removes it (DELETE). Clicking a different emoji changes it (POST upsert).
 - **Optimistic update**: Update `counts` and `myReaction` immediately; no loading state beyond a `pending` lock to prevent double-submit.
@@ -89,8 +89,8 @@ plan_a_visit_heading, plan_a_visit_body
 
 ### Potential side effects
 
-- `ReactionBar` no longer shows all four emojis by default — it shows a Like button + counts for emojis that have reactions. This is a UX change visible site-wide on PostCard.
-- The `apiPostAnon` / `apiDeleteAnon` helpers bypass the auth header — only valid for public endpoints.
+- `ReactionBar` no longer shows all four emojis by default - it shows a Like button + counts for emojis that have reactions. This is a UX change visible site-wide on PostCard.
+- The `apiPostAnon` / `apiDeleteAnon` helpers bypass the auth header - only valid for public endpoints.
 - Backend reaction routes must be registered **before** the admin-only group in `main.go` so they don't inherit the `RequireAdmin` middleware.
 
 ---
@@ -154,36 +154,36 @@ Goal: provide ready-to-edit local env files for frontend, backend, and database 
 
 Goal: shared site shell with viewer-default PostCard/PostFeed, then admin chrome, then write path.
 
-### Milestone 1 — shell-postcard (public reads)
+### Milestone 1 - shell-postcard (public reads)
 
 Files to create/modify:
-1. `frontend/lib/types.ts` — TS types matching database schema
-2. `frontend/lib/supabase.ts` — Supabase anon client for public reads
-3. `frontend/lib/api.ts` — Fetch wrapper for Go backend writes (stubbed, fleshed out in milestone 3)
-4. `frontend/app/globals.css` — Church design tokens (Tailwind v4 CSS-first)
-5. `frontend/next.config.ts` — Image remote patterns for Supabase Storage
-6. `frontend/components/ui/Navbar.tsx` — Responsive nav with mobile menu
-7. `frontend/components/features/posts/PostCard.tsx` — Facebook-style post card (server component)
-8. `frontend/components/features/posts/PostFeed.tsx` — List of PostCards + empty state
-9. `frontend/components/features/posts/ReactionBar.tsx` — Emoji display (client component)
-10. `frontend/app/layout.tsx` — Root layout with Navbar + footer
-11. `frontend/app/page.tsx` — Homepage: hero + latest announcements + upcoming events
-12. `frontend/app/announcements/page.tsx` — Full announcement feed
-13. `frontend/app/events/page.tsx` — Full events feed
+1. `frontend/lib/types.ts` - TS types matching database schema
+2. `frontend/lib/supabase.ts` - Supabase anon client for public reads
+3. `frontend/lib/api.ts` - Fetch wrapper for Go backend writes (stubbed, fleshed out in milestone 3)
+4. `frontend/app/globals.css` - Church design tokens (Tailwind v4 CSS-first)
+5. `frontend/next.config.ts` - Image remote patterns for Supabase Storage
+6. `frontend/components/ui/Navbar.tsx` - Responsive nav with mobile menu
+7. `frontend/components/features/posts/PostCard.tsx` - Facebook-style post card (server component)
+8. `frontend/components/features/posts/PostFeed.tsx` - List of PostCards + empty state
+9. `frontend/components/features/posts/ReactionBar.tsx` - Emoji display (client component)
+10. `frontend/app/layout.tsx` - Root layout with Navbar + footer
+11. `frontend/app/page.tsx` - Homepage: hero + latest announcements + upcoming events
+12. `frontend/app/announcements/page.tsx` - Full announcement feed
+13. `frontend/app/events/page.tsx` - Full events feed
 
-### Milestone 2 — admin-layer (auth + admin chrome)
+### Milestone 2 - admin-layer (auth + admin chrome)
 
-1. `frontend/lib/auth.ts` — Auth context/provider, session helpers, admin check
-2. `frontend/components/features/admin/AdminControls.tsx` — Edit/delete overlays on PostCard
-3. `frontend/app/admin/page.tsx` — Admin dashboard (login prompt + all posts)
+1. `frontend/lib/auth.ts` - Auth context/provider, session helpers, admin check
+2. `frontend/components/features/admin/AdminControls.tsx` - Edit/delete overlays on PostCard
+3. `frontend/app/admin/page.tsx` - Admin dashboard (login prompt + all posts)
 4. Update Navbar with login/logout button
 5. Update PostCard/PostFeed to accept `isAdmin` and show controls
 
-### Milestone 3 — writes-api (create/edit/delete wiring)
+### Milestone 3 - writes-api (create/edit/delete wiring)
 
 1. Flesh out `frontend/lib/api.ts` with POST/PATCH/DELETE
-2. `frontend/components/features/admin/AdminPostForm.tsx` — Create/edit form
-3. `frontend/app/admin/[section]/page.tsx` — Section-specific create/edit page
+2. `frontend/components/features/admin/AdminPostForm.tsx` - Create/edit form
+3. `frontend/app/admin/[section]/page.tsx` - Section-specific create/edit page
 4. Backend: implement PostService, PostHandler CRUD methods
 5. Backend: wire routes + services + repos in main.go
 6. Backend: unit tests for handler and service layers

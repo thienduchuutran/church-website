@@ -1,9 +1,9 @@
-# docs/agents/database.md — Database Reference
+# docs/agents/database.md - Database Reference
 
 ## Engine
 AWS RDS PostgreSQL (`church-db`, db.t4g.micro, us-east-1).
 The Go backend connects via `pgx` using a single database user.
-The frontend never touches the database directly — all reads and writes go through the Go backend.
+The frontend never touches the database directly - all reads and writes go through the Go backend.
 
 RDS and EC2 communicate privately over port 5432 via auto-created security groups
 (`rds-ec2-1` on the RDS instance, `ec2-rds-1` on the EC2 instance). RDS is not publicly accessible.
@@ -27,7 +27,7 @@ create table admins (
 ---
 
 ### `posts`
-All content on the site — events, announcements, bible studies, playlists, gallery albums.
+All content on the site - events, announcements, bible studies, playlists, gallery albums.
 ```sql
 create type post_type as enum (
   'event', 'announcement', 'bible_study', 'playlist', 'gallery_album'
@@ -128,7 +128,7 @@ create table calendar_events (
 ---
 
 ### `calendar_month_notes`
-One sidebar note per month — displayed in the 30% right panel of the calendar.
+One sidebar note per month - displayed in the 30% right panel of the calendar.
 ```sql
 create table calendar_month_notes (
   id         uuid primary key default gen_random_uuid(),
@@ -146,7 +146,7 @@ create table calendar_month_notes (
 
 ### `calendar_month_settings`
 Per-month admin styling for the interactive calendar. Currently just an accent
-color (hex string). Optional — when no row exists, the frontend falls back to
+color (hex string). Optional - when no row exists, the frontend falls back to
 the static `MONTH_THEMES` palette in `frontend/components/features/calendar/types.ts`.
 ```sql
 create table calendar_month_settings (
@@ -197,10 +197,10 @@ See `docs/agents/database.md` → "RLS proposal" section for a plan to add DB-le
 
 ## S3 file storage
 - **Bucket**: `church-uploads-prod-058264284549-us-east-1-an`
-- **Region**: us-east-1 (same as EC2 and RDS — no cross-region latency)
+- **Region**: us-east-1 (same as EC2 and RDS - no cross-region latency)
 - **Access**: fully private. No public URLs. Access via IAM role attached to EC2.
-- **Path convention**: `{post_id}/{filename}` — groups all images for a post together.
-- **Go layer**: `backend/internal/storage/s3.go` — `UploadFile`, `DeleteFile`, `PresignedURL`.
+- **Path convention**: `{post_id}/{filename}` - groups all images for a post together.
+- **Go layer**: `backend/internal/storage/s3.go` - `UploadFile`, `DeleteFile`, `PresignedURL`.
 - Admin uploads go through the Go backend (`POST /api/v1/posts/:id/images`), not directly to S3 from the browser.
 
 ---
@@ -208,7 +208,7 @@ See `docs/agents/database.md` → "RLS proposal" section for a plan to add DB-le
 ## Migration files
 Schema changes go in `supabase/migrations/` as `YYYYMMDDHHMMSS_description.sql`.
 
-> **Note:** The original Supabase migration files are incompatible with plain RDS Postgres —
+> **Note:** The original Supabase migration files are incompatible with plain RDS Postgres -
 > they used `auth.jwt()`, the `authenticated` role, and Supabase-specific RLS syntax.
 > The current RDS schema was created manually with clean plain-Postgres SQL.
 > New migrations should use standard PostgreSQL only (no Supabase extensions).
@@ -228,7 +228,7 @@ psql "$DATABASE_URL"
 # Or with explicit params
 psql -h <rds-endpoint> -U <db-user> -d <db-name>
 ```
-RDS is only reachable from inside the EC2 security group — you cannot connect directly from your laptop.
+RDS is only reachable from inside the EC2 security group - you cannot connect directly from your laptop.
 To connect from your laptop: SSH tunnel through EC2.
 ```bash
 ssh -i <key.pem> -L 5432:<rds-endpoint>:5432 ubuntu@<elastic-ip> -N &

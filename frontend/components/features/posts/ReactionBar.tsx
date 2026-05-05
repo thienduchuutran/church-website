@@ -71,7 +71,7 @@ export default function ReactionBar({
         setCounts((prev) => ({ ...prev, [emoji]: Math.max(0, (prev[emoji] ?? 1) - 1) }))
         setMyReaction(null)
       } else {
-        // Add or switch reaction — backend does an upsert.
+        // Add or switch reaction - backend does an upsert.
         await apiPostAnon('/api/v1/reactions', { post_id: postId, emoji, fingerprint: fp })
         setCounts((prev) => {
           const next = { ...prev }
@@ -104,7 +104,7 @@ export default function ReactionBar({
         {/*
           Outer wrapper: transparent, positioned from bottom-full down to the button top.
           pb-2 fills the visual gap between the pill and the button, so the mouse never
-          leaves the container while crossing that space — no mouseleave fires mid-transit.
+          leaves the container while crossing that space - no mouseleave fires mid-transit.
         */}
         <div
           className={`absolute bottom-full left-0 pb-2 ${
@@ -151,7 +151,7 @@ export default function ReactionBar({
         </button>
       </div>
 
-      {/* Reaction count bubbles — only rendered when there are reactions */}
+      {/* Reaction count bubbles - only rendered when there are reactions */}
       {activeEmojis.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {activeEmojis.map((emoji) => (

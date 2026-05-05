@@ -1,4 +1,4 @@
-# docs/agents/discord.md — Discord Webhook Reference
+# docs/agents/discord.md - Discord Webhook Reference
 
 ## Overview
 When an admin creates a new post on the website, the Go backend automatically fires a Discord webhook
@@ -71,7 +71,7 @@ type DiscordPayload struct {
 **event:**
 ```
 Title: {post.title}
-Description: {post.body if present, else "(No description — check website for details)"}
+Description: {post.body if present, else "(No description - check website for details)"}
 URL: https://your-site.com/events
 Footer: 📅 {formatted event_date} • Posted by admin
 ```
@@ -117,7 +117,7 @@ func SendToDiscord(postType model.PostType, post model.Post) error
 ```
 
 Called from `internal/service/posts.go` after a post is successfully saved to the database.
-If the webhook fails, log the error but do NOT fail the whole request — the post was saved successfully,
+If the webhook fails, log the error but do NOT fail the whole request - the post was saved successfully,
 the Discord message is best-effort.
 
 ---
@@ -126,6 +126,6 @@ the Discord message is best-effort.
 ```go
 if err := discord.SendToDiscord(post.Type, post); err != nil {
     log.Printf("discord webhook failed for post %s: %v", post.ID, err)
-    // do not return error — post creation still succeeded
+    // do not return error - post creation still succeeded
 }
 ```

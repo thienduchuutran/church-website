@@ -25,7 +25,7 @@ export default function ExportButton({ targetRef, year, month, isAdmin }: Export
 
     const root = targetRef.current
 
-    // Strip the "today" circle highlight — save className + style to restore later
+    // Strip the "today" circle highlight - save className + style to restore later
     const todayCircles = Array.from(root.querySelectorAll<HTMLElement>('[data-today-circle]'))
     const savedCircles = todayCircles.map(el => ({
       el,

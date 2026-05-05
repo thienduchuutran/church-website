@@ -1,4 +1,4 @@
-# docs/agents/known-quirks.md — Known Bugs & Solved Problems
+# docs/agents/known-quirks.md - Known Bugs & Solved Problems
 
 This file is auto-maintained. When a non-obvious bug is solved, document it here and add a routing rule in `AGENTS.md`.
 
@@ -15,7 +15,7 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
-## Public read endpoints intentionally have no auth — do not "fix" them
+## Public read endpoints intentionally have no auth - do not "fix" them
 **Date noted:** 2026-04-27
 **Symptom:** An agent reviewing `cmd/server/main.go` notices that
 `GET /api/v1/posts`, `GET /api/v1/posts/{id}`, `GET /api/v1/pages/{slug}`,
@@ -23,8 +23,8 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 the `RequireAdmin` group, decides this looks "unprotected," and moves them
 into the admin group as a perceived security improvement. The site goes
 blank for every non-admin visitor on the next deploy.
-**Root cause:** This is a public church website. Anonymous visitors —
-people who don't and shouldn't have accounts — are the **primary** audience
+**Root cause:** This is a public church website. Anonymous visitors -
+people who don't and shouldn't have accounts - are the **primary** audience
 for posts, pages, the calendar, and reactions. Wrapping those reads in
 `RequireAdmin` is not a hardening; it deletes the product. Reactions write
 without a token on purpose: anti-spam is enforced by the per-fingerprint
@@ -51,7 +51,7 @@ behave as if it never existed.
 **Root cause:** Split-brain database. The Go backend writes posts to AWS
 RDS (the source of truth per `AGENTS.md`), but the Next.js public/admin
 pages were still calling `supabase.from('posts')...` against the legacy
-Supabase Postgres. Two physically separate databases — writes landed in
+Supabase Postgres. Two physically separate databases - writes landed in
 RDS, reads came from Supabase, so new posts were invisible. This was
 migration debt: page content (`/about`, `/connect`) had been moved to
 the Go API, but the post feeds were never migrated.
@@ -69,7 +69,7 @@ the Go API, but the post feeds were never migrated.
 - `frontend/lib/types.ts` `Post.post_images` was renamed to `images` to
   match the backend JSON tag, and `PostCard.tsx` was updated.
 - Stale comment in `scripts/rds-schema.sql` ("posts are read from Supabase
-  by the frontend directly") was removed — it documented the pre-migration
+  by the frontend directly") was removed - it documented the pre-migration
   state and was actively misleading.
 **Detection rule going forward:** No code under `frontend/` may call
 `supabase.from(...)`. Supabase is auth-only. Grep for it in CI if you want
@@ -91,7 +91,7 @@ service/posts.go, repository/gallery.go, handler/posts.go}`,
 but by design `admin_id` stores the **Supabase JWT `sub` claim** (the auth
 user UUID), not the local `admins.id`. The two UUID spaces are unrelated, so
 the FK could never be satisfied. The canonical schema in
-`scripts/rds-schema.sql` explicitly says no FK should exist on this column —
+`scripts/rds-schema.sql` explicitly says no FK should exist on this column -
 production drifted from it (likely a hand-applied constraint at some point).
 The same drift may exist on `calendar_events.admin_id` and
 `calendar_month_notes.admin_id`, since they store `admin_id` the same way.
@@ -105,7 +105,7 @@ WHERE conrelid IN ('calendar_events'::regclass, 'calendar_month_notes'::regclass
   AND contype = 'f';
 -- Drop any *_admin_id_fkey found there too.
 ```
-Code was already correct — `service/posts.go` sets `AdminID = &userID` where
+Code was already correct - `service/posts.go` sets `AdminID = &userID` where
 `userID` is the JWT `sub` (see `middleware/auth.go`), matching the comment
 in `scripts/rds-schema.sql`.
 **Files affected:** none (production schema only). Reference:

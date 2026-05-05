@@ -101,7 +101,7 @@ export default function CalendarGrid({
                 isClickable ? 'cursor-pointer hover:bg-gray-50 transition-colors' : '',
               ].join(' ')}
             >
-              {/* Date number — top right */}
+              {/* Date number - top right */}
               <span
                 data-today-circle={isToday ? 'true' : undefined}
                 className={[

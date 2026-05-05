@@ -64,12 +64,12 @@ const PAGE_SCHEMA: Record<string, { label: string; groups: { heading: string; ke
         heading: 'Service Times',
         keys: [
           { key: 'service_times_heading', label: 'Heading' },
-          { key: 'service_time_1_day', label: 'Service 1 — Day' },
-          { key: 'service_time_1_time', label: 'Service 1 — Time' },
-          { key: 'service_time_1_label', label: 'Service 1 — Label' },
-          { key: 'service_time_2_day', label: 'Service 2 — Day' },
-          { key: 'service_time_2_time', label: 'Service 2 — Time' },
-          { key: 'service_time_2_label', label: 'Service 2 — Label' },
+          { key: 'service_time_1_day', label: 'Service 1 - Day' },
+          { key: 'service_time_1_time', label: 'Service 1 - Time' },
+          { key: 'service_time_1_label', label: 'Service 1 - Label' },
+          { key: 'service_time_2_day', label: 'Service 2 - Day' },
+          { key: 'service_time_2_time', label: 'Service 2 - Time' },
+          { key: 'service_time_2_label', label: 'Service 2 - Label' },
         ],
       },
       {

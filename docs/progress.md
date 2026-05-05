@@ -1,4 +1,4 @@
-# progress.md — System Growth & Resume Notes
+# progress.md - System Growth & Resume Notes
 
 ## Project Context
 church-website: a Next.js frontend + Go backend + Supabase data/auth/storage app for church management.

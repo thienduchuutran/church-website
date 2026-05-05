@@ -7,13 +7,13 @@ Errors always return `{ "error": "human-readable message" }`.
 
 ---
 
-## Auth contract — read before adding or moving any route
+## Auth contract - read before adding or moving any route
 
-Every public endpoint below is **intentionally** unauthenticated. Anonymous visitors must be able to browse posts, react, read static pages, and view the calendar without signing in — that is the whole point of a public church website. **Never** wrap any of these `GET`s (or the `/reactions` writes) in `RequireAdmin`; doing so makes the entire site invisible to non-admins. Only mutations on `/posts`, `/pages/:slug`, `/calendar/...`, and image uploads require a JWT.
+Every public endpoint below is **intentionally** unauthenticated. Anonymous visitors must be able to browse posts, react, read static pages, and view the calendar without signing in - that is the whole point of a public church website. **Never** wrap any of these `GET`s (or the `/reactions` writes) in `RequireAdmin`; doing so makes the entire site invisible to non-admins. Only mutations on `/posts`, `/pages/:slug`, `/calendar/...`, and image uploads require a JWT.
 
 ---
 
-## Public endpoints (no auth required — do not protect)
+## Public endpoints (no auth required - do not protect)
 
 ### `GET /api/v1/health`
 Liveness check.
@@ -31,19 +31,19 @@ List posts. Supports optional filtering.
 **Query params**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| `type` | string | — | Filter by post type: `event`, `announcement`, `bible_study`, `playlist`, `gallery_album` |
+| `type` | string | - | Filter by post type: `event`, `announcement`, `bible_study`, `playlist`, `gallery_album` |
 | `limit` | int | 20 | Max results. Server caps at 100. |
 | `offset` | int | 0 | Pagination offset |
 
-**Response `200`** — array of Post objects (see [Models](#models)). Each post's `images` field is populated when the post has uploaded images, with a fresh presigned `storage_url` on every request.
+**Response `200`** - array of Post objects (see [Models](#models)). Each post's `images` field is populated when the post has uploaded images, with a fresh presigned `storage_url` on every request.
 
 ---
 
 ### `GET /api/v1/posts/:id`
 Single post with images and reaction counts.
 
-**Response `200`** — Post object  
-**Response `404`** — post not found
+**Response `200`** - Post object  
+**Response `404`** - post not found
 
 ---
 
@@ -83,8 +83,8 @@ Add or change a reaction (upsert by fingerprint+post).
 ```
 Allowed emojis: `👍` `❤️` `🙏` `😂`
 
-**Response `204`** — no body  
-**Response `400`** — missing fields or invalid emoji
+**Response `204`** - no body  
+**Response `400`** - missing fields or invalid emoji
 
 ---
 
@@ -96,8 +96,8 @@ Remove a reaction by fingerprint.
 { "fingerprint": "browser-uuid" }
 ```
 
-**Response `204`** — no body  
-**Response `400`** — missing fingerprint
+**Response `204`** - no body  
+**Response `400`** - missing fingerprint
 
 ---
 
@@ -120,7 +120,7 @@ Returns the events for a given month, plus the optional sidebar note and the opt
 ```
 `events` is always an array (never `null`). `month_note` and `month_settings` are `null` when the admin has not added a note or customized the accent color for that month.
 
-**Response `400`** — missing or invalid `year` / `month`
+**Response `400`** - missing or invalid `year` / `month`
 
 ---
 
@@ -138,7 +138,7 @@ Returns all editable sections for a static page (e.g. `about`, `connect`).
   }
 }
 ```
-`sections` is always an object (never `null`). Missing keys mean no content has been saved yet — the frontend fills defaults.
+`sections` is always an object (never `null`). Missing keys mean no content has been saved yet - the frontend fills defaults.
 
 ---
 
@@ -159,9 +159,9 @@ Upsert editable sections for a static page. Only supplied keys are updated; exis
 }
 ```
 
-**Response `204`** — no body
-**Response `400`** — missing slug or empty sections
-**Response `401` / `403`** — unauthenticated or not an admin
+**Response `204`** - no body
+**Response `400`** - missing slug or empty sections
+**Response `401` / `403`** - unauthenticated or not an admin
 
 ---
 
@@ -180,9 +180,9 @@ Create a new post.
 ```
 `event_date` is required when `type` is `event`. All other fields except `title` and `type` are optional.
 
-**Response `201`** — created Post object  
-**Response `400`** — validation error  
-**Response `401`** / `403`** — unauthenticated or not an admin
+**Response `201`** - created Post object  
+**Response `400`** - validation error  
+**Response `401`** / `403`** - unauthenticated or not an admin
 
 ---
 
@@ -199,23 +199,23 @@ Edit an existing post. All fields are optional; only supplied fields are updated
 }
 ```
 
-**Response `200`** — updated Post object  
-**Response `404`** — post not found
+**Response `200`** - updated Post object  
+**Response `404`** - post not found
 
 ---
 
 ### `DELETE /api/v1/posts/:id`
 Delete a post and its images.
 
-**Response `204`** — no body  
-**Response `404`** — post not found
+**Response `204`** - no body  
+**Response `404`** - post not found
 
 ---
 
 ### `POST /api/v1/posts/:id/images`
 Upload an image file and attach it to a post. The file is stored in S3; only the S3 key is saved in the database. Use `GET /api/v1/posts/:id` to retrieve presigned download URLs.
 
-**Request** — `multipart/form-data`  
+**Request** - `multipart/form-data`  
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `image` | file | Yes | Image file. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max 10 MB. |
@@ -224,11 +224,11 @@ Upload an image file and attach it to a post. The file is stored in S3; only the
 ```json
 { "key": "images/posts/<post-id>/1714000000000.jpg" }
 ```
-Store this key if needed. To display the image, fetch the post — the backend generates a fresh presigned URL on each read.
+Store this key if needed. To display the image, fetch the post - the backend generates a fresh presigned URL on each read.
 
-**Response `400`** — missing file or unsupported content type  
-**Response `401` / `403`** — unauthenticated or not an admin  
-**Response `500`** — S3 or database failure
+**Response `400`** - missing file or unsupported content type  
+**Response `401` / `403`** - unauthenticated or not an admin  
+**Response `500`** - S3 or database failure
 
 ---
 
@@ -241,9 +241,9 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
 ```
 `accent_color` must be a 6-digit hex color (`^#[0-9A-Fa-f]{6}$`). Anything else is rejected with 400.
 
-**Response `200`** — saved `CalendarMonthSettings` object  
-**Response `400`** — invalid year/month or invalid hex color  
-**Response `401` / `403`** — unauthenticated or not an admin
+**Response `200`** - saved `CalendarMonthSettings` object  
+**Response `400`** - invalid year/month or invalid hex color  
+**Response `401` / `403`** - unauthenticated or not an admin
 
 ---
 
@@ -265,7 +265,7 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
   "reactions": []
 }
 ```
-`admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose — see `scripts/rds-schema.sql` and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.
+`admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose - see `scripts/rds-schema.sql` and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.
 
 ### PostImage
 ```json
@@ -277,7 +277,7 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
   "display_order": 0
 }
 ```
-`storage_key` is the canonical S3 object key. `storage_url` is a freshly-presigned download URL (≈1 hour TTL) regenerated on every list/get response. Always render images from `storage_url`; never store it long-term — it expires. `storage_url` is omitted when the backend was started without S3 credentials.
+`storage_key` is the canonical S3 object key. `storage_url` is a freshly-presigned download URL (≈1 hour TTL) regenerated on every list/get response. Always render images from `storage_url`; never store it long-term - it expires. `storage_url` is omitted when the backend was started without S3 credentials.
 
 ### ReactionCount
 ```json
@@ -304,7 +304,7 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
   "updated_at": "2026-05-04T00:00:00Z"
 }
 ```
-Per-month admin styling for the calendar. `accent_color` is a 6-digit hex string. Returned on `GET /api/v1/calendar` as `month_settings`; absent (`null`) when no row exists for that month — the frontend then falls back to its static `MONTH_THEMES` palette.
+Per-month admin styling for the calendar. `accent_color` is a 6-digit hex string. Returned on `GET /api/v1/calendar` as `month_settings`; absent (`null`) when no row exists for that month - the frontend then falls back to its static `MONTH_THEMES` palette.
 
 ### PageContent
 ```json
@@ -316,14 +316,14 @@ Per-month admin styling for the calendar. `accent_color` is a 6-digit hex string
   "updated_at": "2026-04-09T00:00:00Z"
 }
 ```
-> The API never returns raw `PageContent` rows — it returns `{ sections: { key: value, ... } }`. This model is for reference only.
+> The API never returns raw `PageContent` rows - it returns `{ sections: { key: value, ... } }`. This model is for reference only.
 
 ---
 
-## Adding a new endpoint — checklist
+## Adding a new endpoint - checklist
 
 1. Write the handler test first (`backend/internal/handler/<feature>_test.go`).
-2. Add the method to the repository, then the service, then the handler — never skip a layer.
+2. Add the method to the repository, then the service, then the handler - never skip a layer.
 3. Register the route in `backend/cmd/server/main.go`. Public routes go outside the `RequireAdmin` group.
 4. **Update this file** (`docs/api.md`) with the new endpoint, request/response shape, and any new model types.
 5. Update `docs/agents/backend.md` route table.

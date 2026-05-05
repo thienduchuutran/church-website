@@ -24,7 +24,7 @@ export interface PostImage {
   id: string
   post_id: string
   storage_key: string
-  // Short-lived presigned S3 URL (≈1h). Always use this to render the image —
+  // Short-lived presigned S3 URL (≈1h). Always use this to render the image -
   // never store it long-term, since it expires.
   storage_url: string
   display_order: number

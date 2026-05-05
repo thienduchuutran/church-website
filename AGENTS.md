@@ -1,4 +1,4 @@
-# AGENTS.md — Church Website
+# AGENTS.md - Church Website
 
 ## Project overview
 A public-facing church website for a Christian & Missionary Alliance congregation (~100 members).
@@ -10,18 +10,18 @@ Each post auto-fires a Discord webhook to the matching channel.
 - **Frontend**: Next.js (App Router) → EC2 + Nginx + systemd (served at `vgomne.ddns.net`)
 - **Backend**: Go (`chi` router, handler/service/repository pattern) → EC2 + systemd
 - **Database**: AWS RDS PostgreSQL (`church-db`, db.t4g.micro, us-east-1)
-- **Auth**: Supabase Auth — Google OAuth + JWKS-verified JWT (**still in use**, not migrated)
+- **Auth**: Supabase Auth - Google OAuth + JWKS-verified JWT (**still in use**, not migrated)
 - **File Storage**: AWS S3 (`church-uploads-prod-058264284549-us-east-1-an`, us-east-1)
-- **Reverse proxy**: Nginx on EC2 — routes `/api/*` → Go on port 8080, everything else → Next.js on port 3000
-- **CI/CD**: GitHub Actions — cross-compiles Go binary for Linux, builds Next.js, SCPs artifacts to EC2, SSHs in and restarts systemd services
+- **Reverse proxy**: Nginx on EC2 - routes `/api/*` → Go on port 8080, everything else → Next.js on port 3000
+- **CI/CD**: GitHub Actions - cross-compiles Go binary for Linux, builds Next.js, SCPs artifacts to EC2, SSHs in and restarts systemd services
 
 ## Infrastructure overview
 All services run on a single EC2 instance (us-east-1, Northern Virginia) with a static Elastic IP.
 Nginx sits in front of both apps and handles SSL termination (Let's Encrypt via Certbot).
-Both Go and Next.js are registered as systemd services — they auto-start on boot and self-restart on crash.
+Both Go and Next.js are registered as systemd services - they auto-start on boot and self-restart on crash.
 RDS and EC2 talk privately over port 5432 via auto-created security groups (`rds-ec2-1` on RDS, `ec2-rds-1` on EC2).
 S3 bucket is fully private (no public access); access is controlled by IAM policies.
-All secrets live in systemd service environment files — no `.env` file on disk.
+All secrets live in systemd service environment files - no `.env` file on disk.
 
 ```
 Internet → Nginx (EC2, port 443/80)
@@ -54,7 +54,7 @@ cd backend && go run ./cmd/server
 
 ## Global rules (apply everywhere)
 - Never commit `.env`, `.env.local`, or any file containing secrets.
-- All secrets live in environment variables only — never hardcoded.
+- All secrets live in environment variables only - never hardcoded.
 - Write code in English only (comments, variable names, route paths).
 - Prefer explicit over clever. Readable code beats terse code.
 - Every new function needs at least one sentence comment explaining *why*, not just what.
@@ -63,7 +63,7 @@ cd backend && go run ./cmd/server
 
 ---
 
-## Routing rules — read the child doc before answering
+## Routing rules - read the child doc before answering
 
 | If the user asks about...                                 | Read this file first                    |
 |-----------------------------------------------------------|-----------------------------------------|
@@ -76,7 +76,7 @@ cd backend && go run ./cmd/server
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
 | Posts/events/announcements not showing up after a write   | `docs/agents/known-quirks.md` ("Posts created on production don't show up in the UI") |
 | FK violation on `posts_admin_id_fkey` or similar          | `docs/agents/known-quirks.md` ("Posting fails with `posts_admin_id_fkey`...") |
-| Whether an endpoint should require auth / "should I protect this read?" | `docs/agents/backend.md` → Auth contract + `cmd/server/main.go` route comments. **Default answer: no — public reads are intentional.** |
+| Whether an endpoint should require auth / "should I protect this read?" | `docs/agents/backend.md` → Auth contract + `cmd/server/main.go` route comments. **Default answer: no - public reads are intentional.** |
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |
 
@@ -91,12 +91,12 @@ cd backend && go run ./cmd/server
 Follow these steps **in order** every time you build a new backend feature or endpoint.
 Never skip a step, never do them out of order.
 
-### Step 1 — Write the test first (TDD)
+### Step 1 - Write the test first (TDD)
 File: `backend/internal/handler/<feature>_test.go`
 
 Write a mock of the service interface and HTTP tests for every case:
 success, missing fields, invalid input, service error. The code will not
-compile yet — that is expected and correct.
+compile yet - that is expected and correct.
 
 ```go
 // Example: reactions_test.go
@@ -105,10 +105,10 @@ func TestReactionHandler_Upsert_success(t *testing.T) { ... }
 func TestReactionHandler_Upsert_missingFields(t *testing.T) { ... }
 ```
 
-### Step 2 — Define the model / types
+### Step 2 - Define the model / types
 File: `backend/internal/model/types.go`
 
-Add any new structs the feature needs — domain objects, request shapes,
+Add any new structs the feature needs - domain objects, request shapes,
 response shapes. Think of this as declaring what the data looks like before
 writing any logic.
 
@@ -120,10 +120,10 @@ type ReactionSummary struct {
 }
 ```
 
-### Step 3 — Write the repository function
+### Step 3 - Write the repository function
 File: `backend/internal/repository/<feature>.go`
 
-Write the raw SQL query. No business logic here — just take inputs, run a
+Write the raw SQL query. No business logic here - just take inputs, run a
 query against the DB, return rows or an error. Use `pgx.ErrNoRows` for
 not-found cases; do not let pgx errors leak upward as-is.
 
@@ -134,10 +134,10 @@ func (r *ReactionRepository) GetMyReaction(ctx context.Context, postID, fingerpr
 }
 ```
 
-### Step 4 — Write the service function
+### Step 4 - Write the service function
 File: `backend/internal/service/<feature>.go`
 
-Call the repository function. This is where business logic lives — rate
+Call the repository function. This is where business logic lives - rate
 limiting, combining multiple repo calls, enforcing rules that go beyond a
 single query. For simple pass-throughs it may just delegate, but the layer
 must always exist so logic has a home when it grows.
@@ -149,14 +149,14 @@ func (s *ReactionService) GetMyReaction(ctx context.Context, postID, fingerprint
 ```
 
 Also add the new method to the **service interface** declared at the top of
-`handler/<feature>.go` — the handler depends on the interface, not the
+`handler/<feature>.go` - the handler depends on the interface, not the
 concrete struct. This is what lets tests swap in a mock.
 
-### Step 5 — Write the handler function
+### Step 5 - Write the handler function
 File: `backend/internal/handler/<feature>.go`
 
 Parse and validate the HTTP request, call the service, write the response.
-Three responsibilities only — no SQL, no business logic.
+Three responsibilities only - no SQL, no business logic.
 
 ```go
 func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
@@ -167,7 +167,7 @@ func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-### Step 6 — Register the route
+### Step 6 - Register the route
 File: `backend/cmd/server/main.go`
 
 Wire the handler method to a URL path and HTTP method inside the chi router.
@@ -188,17 +188,17 @@ r.Group(func(r chi.Router) {
 This is the step that makes the endpoint callable from the outside world.
 Without it, the handler exists but nothing routes HTTP traffic to it.
 
-### Step 7 — Build the UI
+### Step 7 - Build the UI
 Files: `frontend/components/features/<domain>/` or `frontend/app/`
 
-- Use `apiGet` / `apiPostAnon` / `apiDeleteAnon` from `lib/api.ts` — never
+- Use `apiGet` / `apiPostAnon` / `apiDeleteAnon` from `lib/api.ts` - never
   call Supabase directly for data that goes through the backend.
 - Add `"use client"` only when the component needs `useState`, `useEffect`,
   event handlers, or browser APIs.
 - Keep components in `components/ui/` if they have no business logic, or
   `components/features/` if they do.
 
-### Step 8 — Update the docs
+### Step 8 - Update the docs
 Do this in the same commit, not as an afterthought.
 
 | What changed | Update this file |
@@ -214,11 +214,11 @@ Do this in the same commit, not as an afterthought.
 For any feature that touches more than 2 files, create `docs/scratchpad.md` and write a **phased implementation plan** before writing any code. Wait for approval before executing.
 
 ### Phase structure
-Order phases by dependency — each phase must be complete before the next can start:
+Order phases by dependency - each phase must be complete before the next can start:
 
 | Phase | Covers |
 |---|---|
-| 1. Database | Schema migrations — everything else depends on the column/table existing |
+| 1. Database | Schema migrations - everything else depends on the column/table existing |
 | 2. Backend | Model types → repository queries → handler logic → route registration |
 | 3. Frontend form | TypeScript types → API lib payloads → input UI (modals, forms) |
 | 4. Display + export | Read-only rendering, strip/list views, export behaviour, auth gates |
@@ -228,12 +228,12 @@ Each phase gets a table with three columns:
 
 | File | Change | Why |
 |---|---|---|
-| `path/to/file` | What specifically changes — field name, method signature, query | The bigger-picture reason: what it enables, what it protects, why this layer owns it |
+| `path/to/file` | What specifically changes - field name, method signature, query | The bigger-picture reason: what it enables, what it protects, why this layer owns it |
 
 ### After the tables
-- **End-to-end flow** — short step-by-step diagram showing data moving from admin input → DB → API → public view → export
-- **Security callouts** — any auth gates added, any gaps closed or introduced
-- **Scope estimate** — rough time per phase so nothing is a surprise
+- **End-to-end flow** - short step-by-step diagram showing data moving from admin input → DB → API → public view → export
+- **Security callouts** - any auth gates added, any gaps closed or introduced
+- **Scope estimate** - rough time per phase so nothing is a surprise
 
 ## TDD rule
 Do not write implementation code until you have written the unit test for it first. Tests live in `_test.go` files (Go) or `__tests__/` (Next.js).

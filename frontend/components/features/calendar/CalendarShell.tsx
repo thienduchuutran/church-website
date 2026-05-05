@@ -26,7 +26,7 @@ const slideVariants = {
   center: { x: 0, opacity: 1 },
   exit: (dir: number) => ({ x: -dir * SLIDE_DISTANCE, opacity: 0 }),
 }
-// Reduced-motion users get a pure crossfade — no translation.
+// Reduced-motion users get a pure crossfade - no translation.
 const reducedMotionVariants = {
   enter: { opacity: 0 },
   center: { opacity: 1 },
@@ -204,7 +204,7 @@ export default function CalendarShell({
   }
 
   function handleEventSaved() {
-    // Modal plays its own exit animation, so we don't unmount it here —
+    // Modal plays its own exit animation, so we don't unmount it here -
     // just clear return-to-list state and refresh the month data.
     setReturnToListDate(null)
     fetchMonth(year, month)
@@ -329,7 +329,7 @@ export default function CalendarShell({
           <div data-export-hide className="flex items-center gap-2 shrink-0">
             <button
               onClick={prevMonth}
-              aria-label={`Previous month — ${prevMonthName}`}
+              aria-label={`Previous month - ${prevMonthName}`}
               title={prevMonthName}
               className="w-11 h-11 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
             >
@@ -364,7 +364,7 @@ export default function CalendarShell({
           </div>
         )}
 
-        {/* Calendar grid — direction-aware slide on month change */}
+        {/* Calendar grid - direction-aware slide on month change */}
         <div className="relative overflow-hidden">
           <AnimatePresence mode="wait" initial={false} custom={direction}>
             <motion.div
@@ -388,7 +388,7 @@ export default function CalendarShell({
           </AnimatePresence>
         </div>
 
-        {/* Info strip below grid — compact 3 columns */}
+        {/* Info strip below grid - compact 3 columns */}
         {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin) && (
           <div
             className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-x-2 border-b-2 border-gray-900"
@@ -472,7 +472,7 @@ export default function CalendarShell({
               )}
             </div>
 
-            {/* Locations — admin only, full-width row after the 3 columns, entries flow inline */}
+            {/* Locations - admin only, full-width row after the 3 columns, entries flow inline */}
             {isAdmin && eventsWithAddress.length > 0 && (
               <div className="sm:col-span-3 min-w-0 border-t border-gray-200 pt-2">
                 <p className="font-display text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
@@ -490,7 +490,7 @@ export default function CalendarShell({
                       >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
                         <span className="font-display font-semibold text-gray-700">{day} {e.title}</span>
-                        <span className="font-sans text-gray-400">—</span>
+                        <span className="font-sans text-gray-400">-</span>
                         <span className="font-sans text-gray-500">{e.private_address}</span>
                       </div>
                     )
@@ -501,7 +501,7 @@ export default function CalendarShell({
           </div>
         )}
 
-        {/* Legend — inline, compact */}
+        {/* Legend - inline, compact */}
         <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {[
             { color: 'rose', label: 'Birthday' },

@@ -57,7 +57,7 @@ export default function EventModal({
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  // Portal + animation state — mirrors EditPostModal's pattern.
+  // Portal + animation state - mirrors EditPostModal's pattern.
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
   const [closing, setClosing] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -281,12 +281,12 @@ export default function EventModal({
                 </div>
               </div>
 
-              {/* Location address — toggle reveals textarea, available for all event types */}
+              {/* Location address - toggle reveals textarea, available for all event types */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                     Location address{' '}
-                    <span className="normal-case font-normal">— private, admin only</span>
+                    <span className="normal-case font-normal">- private, admin only</span>
                   </label>
                   <button
                     type="button"

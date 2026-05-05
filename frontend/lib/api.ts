@@ -21,9 +21,9 @@ async function handleResponse(res: Response) {
 
 export async function apiGet(path: string, accessToken?: string | null) {
   // no-store ensures the browser (and any intermediate cache) always hits the
-  // network — needed for endpoints like /reactions whose response changes
+  // network - needed for endpoints like /reactions whose response changes
   // whenever the user reacts on another page but the URL stays identical.
-  // accessToken is optional — when present it's forwarded as Bearer so
+  // accessToken is optional - when present it's forwarded as Bearer so
   // auth-aware endpoints (e.g. GET /calendar with OptionalAdmin) can return
   // privileged fields like private_address that are stripped for public requests.
   const headers: HeadersInit = accessToken ? { Authorization: `Bearer ${accessToken}` } : {}
@@ -80,7 +80,7 @@ export async function apiDelete(path: string, accessToken: string) {
   )
 }
 
-// apiPostAnon sends a POST without an auth token — for public endpoints like reactions.
+// apiPostAnon sends a POST without an auth token - for public endpoints like reactions.
 export async function apiPostAnon(path: string, body: unknown) {
   return handleResponse(
     await fetch(`${API_URL}${path}`, {
