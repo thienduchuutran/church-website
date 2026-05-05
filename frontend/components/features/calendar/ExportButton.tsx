@@ -22,17 +22,38 @@ export default function ExportButton({ targetRef, year, month, isAdmin }: Export
   async function handleExport() {
     if (!targetRef.current) return
     setExporting(true)
+
+    const root = targetRef.current
+
+    // Strip the "today" circle highlight — save className + style to restore later
+    const todayCircles = Array.from(root.querySelectorAll<HTMLElement>('[data-today-circle]'))
+    const savedCircles = todayCircles.map(el => ({
+      el,
+      className: el.className,
+      style: el.getAttribute('style') ?? '',
+    }))
+    todayCircles.forEach(el => {
+      el.className = 'text-xs font-semibold self-end leading-none mb-0.5 text-gray-600'
+      el.removeAttribute('style')
+    })
+
     try {
       const { toPng } = await import('html-to-image')
-      const url = await toPng(targetRef.current, {
+      const url = await toPng(root, {
         pixelRatio: 2,
         cacheBust: true,
+        filter: (node) => !(node instanceof HTMLElement && node.hasAttribute('data-export-hide')),
       })
       const link = document.createElement('a')
       link.download = `calendar-${MONTH_NAMES[month - 1]}-${year}.png`
       link.href = url
       link.click()
     } finally {
+      savedCircles.forEach(({ el, className, style }) => {
+        el.className = className
+        if (style) el.setAttribute('style', style)
+        else el.removeAttribute('style')
+      })
       setExporting(false)
     }
   }

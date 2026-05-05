@@ -9,8 +9,8 @@ import type {
 
 const BASE = '/api/v1/calendar'
 
-export async function getMonth(year: number, month: number): Promise<CalendarMonthResponse> {
-  return apiGet(`${BASE}?year=${year}&month=${month}`) as Promise<CalendarMonthResponse>
+export async function getMonth(year: number, month: number, accessToken?: string | null): Promise<CalendarMonthResponse> {
+  return apiGet(`${BASE}?year=${year}&month=${month}`, accessToken) as Promise<CalendarMonthResponse>
 }
 
 export async function createEvent(

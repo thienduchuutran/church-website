@@ -103,6 +103,7 @@ export default function CalendarGrid({
             >
               {/* Date number — top right */}
               <span
+                data-today-circle={isToday ? 'true' : undefined}
                 className={[
                   'text-xs font-semibold self-end leading-none mb-0.5',
                   isToday ? 'rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-white' : 'text-gray-600',

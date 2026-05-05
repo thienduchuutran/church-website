@@ -106,7 +106,7 @@ export default function CalendarShell({
     setLoading(true)
     setError(null)
     try {
-      const data: CalendarMonthResponse = await getMonth(y, m)
+      const data: CalendarMonthResponse = await getMonth(y, m, accessToken)
       setEvents(data.events ?? [])
       setMonthNote(data.month_note ?? null)
       setMonthSettings(data.month_settings ?? null)
@@ -116,7 +116,7 @@ export default function CalendarShell({
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [accessToken])
 
   // Persist the accent for the currently-viewed month. The picker awaits the
   // returned promise so it can show its own inline error if the PUT fails.
@@ -226,6 +226,7 @@ export default function CalendarShell({
             onClick={goToToday}
             disabled={isOnCurrentMonth}
             aria-label="Jump to current month"
+            data-export-hide
             className="shrink-0 px-5 py-2 rounded-full border-2 border-gray-900 text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
           >
             Today
@@ -279,7 +280,7 @@ export default function CalendarShell({
                 Hidden entirely from non-admins so the marketing surface stays
                 clean for visitors. */}
             {isAdmin && (
-              <div className="absolute top-0 right-0 flex items-center gap-2">
+              <div data-export-hide className="absolute top-0 right-0 flex items-center gap-2">
                 <div style={{ position: 'relative' }}>
                   <button
                     type="button"
@@ -325,7 +326,7 @@ export default function CalendarShell({
           </div>
 
           {/* Nav cluster - circular icon buttons, same border family as Today */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div data-export-hide className="flex items-center gap-2 shrink-0">
             <button
               onClick={prevMonth}
               aria-label={`Previous month — ${prevMonthName}`}
@@ -449,33 +450,6 @@ export default function CalendarShell({
               )}
             </div>
 
-            {/* Locations — admin only, all event types with a private address */}
-            {isAdmin && eventsWithAddress.length > 0 && (
-              <div className="sm:col-span-3 min-w-0 border-t border-gray-200 pt-2">
-                <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
-                  Locations
-                </p>
-                <div className="flex flex-col gap-y-0.5">
-                  {eventsWithAddress.map(e => {
-                    const day = parseInt(e.date.split('-')[2], 10)
-                    const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
-                    return (
-                      <div
-                        key={e.id}
-                        onClick={() => handleEditFromStrip(e)}
-                        className="flex items-baseline gap-1.5 text-[11px] leading-tight rounded px-1 -mx-1 cursor-pointer hover:bg-gray-100"
-                      >
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: colors.dot }} />
-                        <span className="font-semibold text-gray-700 shrink-0">{day} {e.title}</span>
-                        <span className="text-gray-400 shrink-0">—</span>
-                        <span className="text-gray-500">{e.private_address}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
             {/* Month note */}
             <div className="min-w-0">
               <div className="flex items-center justify-between mb-1">
@@ -497,6 +471,33 @@ export default function CalendarShell({
                 <p className="text-[11px] text-gray-400 italic">No note this month.</p>
               )}
             </div>
+
+            {/* Locations — admin only, full-width row after the 3 columns, entries flow inline */}
+            {isAdmin && eventsWithAddress.length > 0 && (
+              <div className="sm:col-span-3 min-w-0 border-t border-gray-200 pt-2">
+                <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
+                  Locations
+                </p>
+                <div className="flex flex-wrap gap-x-5 gap-y-0.5">
+                  {eventsWithAddress.map(e => {
+                    const day = parseInt(e.date.split('-')[2], 10)
+                    const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
+                    return (
+                      <div
+                        key={e.id}
+                        onClick={() => handleEditFromStrip(e)}
+                        className="flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 cursor-pointer hover:bg-gray-100"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
+                        <span className="font-semibold text-gray-700">{day} {e.title}</span>
+                        <span className="text-gray-400">—</span>
+                        <span className="text-gray-500">{e.private_address}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         )}
 
