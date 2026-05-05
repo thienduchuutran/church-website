@@ -289,7 +289,7 @@ export default function EventModal({
                 <div className="flex flex-col gap-2">
                   <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
                     Location address{' '}
-                    <span className="normal-case font-normal">— private, only appears in export</span>
+                    <span className="normal-case font-normal">- private to admins</span>
                   </label>
                   <textarea
                     value={privateAddress}

@@ -34,9 +34,9 @@ export default function CalendarPageClient({ initialYear, initialMonth }: Calend
         />
       </div>
 
-      {/* Export button — visible to everyone */}
+      {/* Export button — admin only */}
       <div className="mt-3 flex justify-end" style={{ width: '1100px' }}>
-        <ExportButton targetRef={calendarRef} year={year} month={month} />
+        <ExportButton targetRef={calendarRef} year={year} month={month} isAdmin={isAdmin} />
       </div>
     </div>
   )

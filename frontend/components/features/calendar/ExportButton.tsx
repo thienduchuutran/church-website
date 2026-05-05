@@ -12,9 +12,11 @@ interface ExportButtonProps {
   targetRef: React.RefObject<HTMLDivElement | null>
   year: number
   month: number
+  isAdmin: boolean
 }
 
-export default function ExportButton({ targetRef, year, month }: ExportButtonProps) {
+export default function ExportButton({ targetRef, year, month, isAdmin }: ExportButtonProps) {
+  if (!isAdmin) return null
   const [exporting, setExporting] = useState(false)
 
   async function handleExport() {

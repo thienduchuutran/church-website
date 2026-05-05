@@ -434,11 +434,16 @@ export default function CalendarShell({
                       <div
                         key={e.id}
                         onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
-                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                        className={`flex flex-col text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                       >
-                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
-                        <span className="font-semibold text-gray-700">{e.title}</span>
-                        <span className="text-gray-400">{day}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
+                          <span className="font-semibold text-gray-700">{e.title}</span>
+                          <span className="text-gray-400">{day}</span>
+                        </div>
+                        {e.private_address && (
+                          <p className="text-[10px] text-gray-400 pl-3 leading-tight">{e.private_address}</p>
+                        )}
                       </div>
                     )
                   })}
