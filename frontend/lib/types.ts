@@ -35,6 +35,18 @@ export interface ReactionCount {
   count: number
 }
 
+export interface HeroVideo {
+  id: string
+  file_name: string
+  file_size: number | null
+  content_type: string | null
+  uploaded_by: string | null
+  is_active: boolean
+  created_at: string
+  // Short-lived presigned S3 URL. Omitted when no S3 creds are configured (dev).
+  video_url?: string
+}
+
 export interface Admin {
   id: string
   email: string

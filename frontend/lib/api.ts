@@ -91,6 +91,19 @@ export async function apiPostAnon(path: string, body: unknown) {
   )
 }
 
+// apiPostMultipart sends a POST with a FormData body (file upload).
+// Content-Type is intentionally omitted so the browser sets the multipart
+// boundary automatically - setting it manually breaks the boundary string.
+export async function apiPostMultipart(path: string, formData: FormData, accessToken: string) {
+  return handleResponse(
+    await fetch(`${API_URL}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: formData,
+    }),
+  )
+}
+
 // apiDeleteAnon sends a DELETE without an auth token, with an optional JSON body.
 export async function apiDeleteAnon(path: string, body?: unknown) {
   return handleResponse(
