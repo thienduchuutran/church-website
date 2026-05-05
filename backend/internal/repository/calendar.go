@@ -113,6 +113,44 @@ func (r *CalendarRepository) DeleteEvent(ctx context.Context, id string) error {
 	return nil
 }
 
+// GetMonthSettings returns the saved per-month styling row for the given
+// year+month, or nil (with no error) when the admin has not customized the
+// month yet - callers fall back to the static MONTH_THEMES on the frontend.
+func (r *CalendarRepository) GetMonthSettings(ctx context.Context, year, month int) (*model.CalendarMonthSettings, error) {
+	var s model.CalendarMonthSettings
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, year, month, accent_color, admin_id, created_at, updated_at
+		 FROM calendar_month_settings WHERE year = $1 AND month = $2`,
+		year, month,
+	).Scan(&s.ID, &s.Year, &s.Month, &s.AccentColor, &s.AdminID, &s.CreatedAt, &s.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
+// UpsertMonthSettings inserts or replaces the styling row for a given year+month.
+func (r *CalendarRepository) UpsertMonthSettings(ctx context.Context, year, month int, accentColor string, adminID *string) (*model.CalendarMonthSettings, error) {
+	var s model.CalendarMonthSettings
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO calendar_month_settings (year, month, accent_color, admin_id)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (year, month) DO UPDATE
+		   SET accent_color = EXCLUDED.accent_color,
+		       admin_id     = EXCLUDED.admin_id,
+		       updated_at   = now()
+		 RETURNING id, year, month, accent_color, admin_id, created_at, updated_at`,
+		year, month, accentColor, adminID,
+	).Scan(&s.ID, &s.Year, &s.Month, &s.AccentColor, &s.AdminID, &s.CreatedAt, &s.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &s, nil
+}
+
 // UpsertMonthNote inserts or updates the sidebar note for a given year+month.
 func (r *CalendarRepository) UpsertMonthNote(ctx context.Context, year, month int, content string, adminID *string) (*model.CalendarMonthNote, error) {
 	var n model.CalendarMonthNote

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X } from '@phosphor-icons/react'
-import { apiDelete, apiPatch, apiPost, apiPut } from '@/lib/api'
+import { createEvent, deleteEvent, updateEvent, upsertMonthNote } from '@/lib/calendar'
 import {
   CalendarEvent,
   CalendarEventType,
@@ -108,11 +108,11 @@ export default function EventModal({
     setError(null)
     try {
       if (mode === 'note') {
-        await apiPut(`/api/v1/calendar/months/${year}/${month}/note`, { content: noteContent }, accessToken)
-      } else if (mode === 'create') {
-        await apiPost('/api/v1/calendar/events', { date, title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
+        await upsertMonthNote(year, month, noteContent, accessToken)
+      } else if (mode === 'create' && date) {
+        await createEvent({ date, title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
       } else if (mode === 'edit' && event) {
-        await apiPatch(`/api/v1/calendar/events/${event.id}`, { title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
+        await updateEvent(event.id, { title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
       }
       onSaved()
       handleClose()
@@ -126,7 +126,7 @@ export default function EventModal({
     if (!accessToken || !event) return
     setSaving(true)
     try {
-      await apiDelete(`/api/v1/calendar/events/${event.id}`, accessToken)
+      await deleteEvent(event.id, accessToken)
       onSaved()
       handleClose()
     } catch (e: unknown) {

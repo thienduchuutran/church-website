@@ -181,6 +181,7 @@ func main() {
 				r.Patch("/calendar/events/{id}", calendarHandler.UpdateEvent)
 				r.Delete("/calendar/events/{id}", calendarHandler.DeleteEvent)
 				r.Put("/calendar/months/{year}/{month}/note", calendarHandler.UpsertMonthNote)
+				r.Put("/calendar/months/{year}/{month}/settings", calendarHandler.UpsertMonthSettings)
 			})
 		}
 	})

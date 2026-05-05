@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { CaretLeft, CaretRight } from '@phosphor-icons/react'
-import { apiGet } from '@/lib/api'
-import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, MONTH_THEMES, COLOR_MAP } from './types'
+import { getMonth, upsertMonthSettings } from '@/lib/calendar'
+import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP } from './types'
 import CalendarGrid from './CalendarGrid'
 import CalendarIcon from './CalendarIcon'
 import EventModal from './EventModal'
 import DayEventsModal from './DayEventsModal'
 import MonthPicker from './MonthPicker'
+import AccentColorPicker from './AccentColorPicker'
 
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -51,8 +52,17 @@ export default function CalendarShell({
 }: CalendarShellProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [monthNote, setMonthNote] = useState<CalendarMonthNote | null>(null)
+  const [monthSettings, setMonthSettings] = useState<CalendarMonthSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  // Accent picker - only used by admins. liveAccent is an ephemeral preview
+  // that overrides the saved color until the picker closes; accentSaved drives
+  // the brief "Saved" confirmation pill next to the title.
+  const [accentPickerOpen, setAccentPickerOpen] = useState(false)
+  const [liveAccent, setLiveAccent] = useState<string | null>(null)
+  const [savingAccent, setSavingAccent] = useState(false)
+  const [accentSaved, setAccentSaved] = useState(false)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
@@ -85,19 +95,44 @@ export default function CalendarShell({
   const prevMonthName = MONTH_NAMES[month === 1 ? 11 : month - 2]
   const nextMonthName = MONTH_NAMES[month === 12 ? 0 : month]
 
+  // Live preview wins, then the saved per-month override, then the static
+  // MONTH_THEMES fallback. We feed this into a derived theme so CalendarGrid's
+  // header bar and today marker tint update without it needing to know about
+  // the picker at all.
+  const activeAccent = liveAccent ?? monthSettings?.accent_color ?? theme.header
+  const activeTheme = { ...theme, header: activeAccent, title: activeAccent }
+
   const fetchMonth = useCallback(async (y: number, m: number) => {
     setLoading(true)
     setError(null)
     try {
-      const data: CalendarMonthResponse = await apiGet(`/api/v1/calendar?year=${y}&month=${m}`)
+      const data: CalendarMonthResponse = await getMonth(y, m)
       setEvents(data.events ?? [])
       setMonthNote(data.month_note ?? null)
+      setMonthSettings(data.month_settings ?? null)
+      setLiveAccent(null)
     } catch {
       setError("Couldn't load calendar. Please try again.")
     } finally {
       setLoading(false)
     }
   }, [])
+
+  // Persist the accent for the currently-viewed month. The picker awaits the
+  // returned promise so it can show its own inline error if the PUT fails.
+  async function handleSaveAccent(hex: string) {
+    if (!accessToken) throw new Error('not signed in')
+    setSavingAccent(true)
+    try {
+      const saved: CalendarMonthSettings = await upsertMonthSettings(year, month, hex, accessToken)
+      setMonthSettings(saved)
+      setLiveAccent(null)
+      setAccentSaved(true)
+      window.setTimeout(() => setAccentSaved(false), 2500)
+    } finally {
+      setSavingAccent(false)
+    }
+  }
 
   useEffect(() => { fetchMonth(year, month) }, [year, month, fetchMonth])
 
@@ -213,7 +248,7 @@ export default function CalendarShell({
               >
                 <span
                   className="font-bold"
-                  style={{ fontSize: '4.5rem', color: theme.title }}
+                  style={{ fontSize: '4.5rem', color: activeAccent }}
                 >
                   {monthName}
                 </span>
@@ -229,7 +264,7 @@ export default function CalendarShell({
               <MonthPicker
                 year={year}
                 month={month}
-                themeColor={theme.title}
+                themeColor={activeAccent}
                 onSelect={(y, m) => {
                   setYear(y)
                   setMonth(m)
@@ -237,6 +272,54 @@ export default function CalendarShell({
                 }}
                 onClose={() => setPickerOpen(false)}
               />
+            )}
+
+            {/* Admin-only accent picker trigger - sits to the right of the title.
+                Hidden entirely from non-admins so the marketing surface stays
+                clean for visitors. */}
+            {isAdmin && (
+              <div className="absolute top-0 right-0 flex items-center gap-2">
+                <div style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => setAccentPickerOpen((v) => !v)}
+                    onMouseDown={(e) => e.stopPropagation()}
+                    aria-haspopup="dialog"
+                    aria-expanded={accentPickerOpen}
+                    aria-label="Change month accent color"
+                    className="flex items-center gap-1 text-[10px] font-medium border border-dashed rounded px-2 py-0.5 transition-colors"
+                    style={{
+                      borderColor: activeAccent,
+                      color: activeAccent,
+                      backgroundColor: `${activeAccent}12`,
+                    }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full"
+                      style={{ backgroundColor: activeAccent }}
+                    />
+                    Accent color
+                  </button>
+                  {accentPickerOpen && (
+                    <AccentColorPicker
+                      monthLabel={`${monthName} ${year}`}
+                      currentAccent={monthSettings?.accent_color ?? theme.header}
+                      onPreview={setLiveAccent}
+                      onSave={handleSaveAccent}
+                      onClose={() => setAccentPickerOpen(false)}
+                      saving={savingAccent}
+                    />
+                  )}
+                </div>
+                {accentSaved && (
+                  <span
+                    className="text-[10px] transition-opacity"
+                    style={{ color: '#4A7A5C' }}
+                  >
+                    Saved
+                  </span>
+                )}
+              </div>
             )}
           </div>
 
@@ -297,7 +380,7 @@ export default function CalendarShell({
                 events={events}
                 onDayClick={handleDayClick}
                 isAdmin={isAdmin}
-                theme={theme}
+                theme={activeTheme}
               />
             </motion.div>
           </AnimatePresence>
@@ -311,7 +394,7 @@ export default function CalendarShell({
           >
             {/* Birthdays */}
             <div className="min-w-0">
-              <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: theme.title }}>
+              <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                 Birthdays
               </p>
               {birthdays.length > 0 ? (
@@ -339,7 +422,7 @@ export default function CalendarShell({
 
             {/* Bible Study */}
             <div className="min-w-0">
-              <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: theme.title }}>
+              <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                 Bible Study
               </p>
               {bibleStudyDays.length > 0 ? (
@@ -368,7 +451,7 @@ export default function CalendarShell({
             {/* Month note */}
             <div className="min-w-0">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: theme.title }}>
+                <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: activeAccent }}>
                   Notes
                 </p>
                 {isAdmin && (

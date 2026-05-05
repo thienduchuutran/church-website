@@ -23,10 +23,33 @@ export interface CalendarMonthNote {
   updated_at: string
 }
 
+export interface CalendarMonthSettings {
+  id: string
+  year: number
+  month: number
+  accent_color: string
+  admin_id: string | null
+  created_at: string
+  updated_at: string
+}
+
 export interface CalendarMonthResponse {
   events: CalendarEvent[]
   month_note: CalendarMonthNote | null
+  month_settings: CalendarMonthSettings | null
 }
+
+// Curated swatches the admin picker offers as one-click options. All five live
+// inside the site's design palette so an admin who clicks "Plum" or "Dusk"
+// still lands on a brand-coherent color. The native color input is offered
+// alongside for the rare case they want something off-palette.
+export const ACCENT_PRESETS: { label: string; hex: string }[] = [
+  { label: 'Terracotta', hex: '#C4663C' },
+  { label: 'Sage',       hex: '#4A7A5C' },
+  { label: 'Gold',       hex: '#C49A3C' },
+  { label: 'Plum',       hex: '#7C3A6E' },
+  { label: 'Dusk',       hex: '#3A5C7C' },
+]
 
 // All months draw from the site design system: terracotta, sage, gold rotate
 // as the header color so each month has subtle personality without breaking

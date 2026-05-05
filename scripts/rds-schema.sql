@@ -97,6 +97,19 @@ create table calendar_month_notes (
   unique (year, month)
 );
 
+-- Calendar: per-month admin styling (accent color). Optional — frontend falls
+-- back to MONTH_THEMES when no row exists for a given month.
+create table calendar_month_settings (
+  id           uuid primary key default gen_random_uuid(),
+  year         int not null,
+  month        int not null check (month between 1 and 12),
+  accent_color text not null,
+  admin_id     uuid,
+  created_at   timestamptz default now(),
+  updated_at   timestamptz default now(),
+  unique (year, month)
+);
+
 -- ── Indexes ──────────────────────────────────────────────────────────────────
 
 create index on posts(type);
@@ -108,3 +121,4 @@ create index on page_content(page_slug);
 create index on calendar_events(date);
 create index on calendar_events(date, event_type);
 create index on calendar_month_notes(year, month);
+create index on calendar_month_settings(year, month);

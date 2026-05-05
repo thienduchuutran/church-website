@@ -87,7 +87,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value } }` for a static page |
-| GET | `/api/v1/calendar` | Returns events + month note for a given month |
+| GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month |
 
 > Full request/response shapes and model definitions live in `docs/api.md`.
 
@@ -104,6 +104,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | PATCH | `/api/v1/calendar/events/:id` | Edit a calendar event |
 | DELETE | `/api/v1/calendar/events/:id` | Delete a calendar event |
 | PUT | `/api/v1/calendar/months/:year/:month/note` | Upsert the month's sidebar note |
+| PUT | `/api/v1/calendar/months/:year/:month/settings` | Upsert the month's per-month styling (accent color) |
 
 ---
 
