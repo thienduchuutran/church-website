@@ -49,6 +49,7 @@ export default function EventModal({
   const [eventType, setEventType] = useState<CalendarEventType>(event?.event_type ?? 'general')
   const [icon, setIcon] = useState(event?.icon ?? 'star')
   const [color, setColor] = useState(event?.color ?? 'slate')
+  const [privateAddress, setPrivateAddress] = useState(event?.private_address ?? '')
   const [notes, setNotes] = useState(event?.notes ?? '')
   const [noteContent, setNoteContent] = useState(monthNote?.content ?? '')
   const [saving, setSaving] = useState(false)
@@ -92,11 +93,11 @@ export default function EventModal({
   function handleTypeChange(t: CalendarEventType) {
     setEventType(t)
     const defaults: Record<CalendarEventType, { icon: string; color: string }> = {
-      birthday:     { icon: 'cake',        color: 'rose'   },
-      bible_study:  { icon: 'book-open',   color: 'sky'    },
-      prayer:       { icon: 'flame',       color: 'violet' },
-      announcement: { icon: 'bell',        color: 'amber'  },
-      general:      { icon: 'star',        color: 'slate'  },
+      birthday: { icon: 'cake', color: 'rose' },
+      bible_study: { icon: 'book-open', color: 'sky' },
+      prayer: { icon: 'flame', color: 'violet' },
+      announcement: { icon: 'bell', color: 'amber' },
+      general: { icon: 'star', color: 'slate' },
     }
     setIcon(defaults[t].icon)
     setColor(defaults[t].color)
@@ -110,9 +111,9 @@ export default function EventModal({
       if (mode === 'note') {
         await upsertMonthNote(year, month, noteContent, accessToken)
       } else if (mode === 'create' && date) {
-        await createEvent({ date, title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
+        await createEvent({ date, title, event_type: eventType, icon, color, private_address: privateAddress || null, notes: notes || null }, accessToken)
       } else if (mode === 'edit' && event) {
-        await updateEvent(event.id, { title, event_type: eventType, icon, color, notes: notes || null }, accessToken)
+        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: privateAddress || null, notes: notes || null }, accessToken)
       }
       onSaved()
       handleClose()
@@ -161,7 +162,7 @@ export default function EventModal({
             </p>
             <h2 className="font-serif text-xl font-bold text-foreground mt-0.5">
               {mode === 'note'
-                ? `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][month - 1]} ${year}`
+                ? `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month - 1]} ${year}`
                 : date ?? event?.date ?? ''}
             </h2>
           </div>
@@ -282,6 +283,23 @@ export default function EventModal({
                   })}
                 </div>
               </div>
+
+              {/* Location address - bible_study only */}
+              {eventType === 'bible_study' && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
+                    Location address{' '}
+                    <span className="normal-case font-normal">— private, only appears in export</span>
+                  </label>
+                  <textarea
+                    value={privateAddress}
+                    onChange={(e) => setPrivateAddress(e.target.value)}
+                    rows={2}
+                    placeholder="123 Street, City"
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                  />
+                </div>
+              )}
 
               {/* Notes */}
               <div className="flex flex-col gap-2">

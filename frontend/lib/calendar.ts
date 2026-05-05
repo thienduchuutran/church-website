@@ -20,6 +20,7 @@ export async function createEvent(
     event_type: CalendarEventType
     icon: string
     color: string
+    private_address?: string | null
     notes: string | null
   },
   token: string,
@@ -34,6 +35,7 @@ export async function updateEvent(
     event_type?: CalendarEventType
     icon?: string
     color?: string
+    private_address?: string | null
     notes?: string | null
   },
   token: string,
