@@ -157,6 +157,7 @@ type CalendarEvent struct {
 	Title     string            `json:"title"`
 	EventType CalendarEventType `json:"event_type"`
 	Icon      string            `json:"icon"`
+	PrivateAddress *string `json:"private_address"`
 	Color     string            `json:"color"`
 	Notes     *string           `json:"notes"`
 	AdminID   *string           `json:"admin_id"`
@@ -226,12 +227,13 @@ func (r *CreateCalendarEventRequest) Validate() error {
 }
 
 type UpdateCalendarEventRequest struct {
-	Date      *string            `json:"date"`
-	Title     *string            `json:"title"`
-	EventType *CalendarEventType `json:"event_type"`
-	Icon      *string            `json:"icon"`
-	Color     *string            `json:"color"`
-	Notes     *string            `json:"notes"`
+	Date           *string            `json:"date"`
+	Title          *string            `json:"title"`
+	EventType      *CalendarEventType `json:"event_type"`
+	Icon           *string            `json:"icon"`
+	PrivateAddress *string            `json:"private_address"`
+	Color          *string            `json:"color"`
+	Notes          *string            `json:"notes"`
 }
 
 func (r *UpdateCalendarEventRequest) Validate() error {
