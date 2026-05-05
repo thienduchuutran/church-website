@@ -56,11 +56,6 @@ func RequireAdmin(checker AdminChecker, jwksCache *JWKSCache) func(http.Handler)
 				return
 			}
 
-			if !token.Valid {
-				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
-				return
-			}
-
 			email, _ := claims["email"].(string)
 			sub, _ := claims["sub"].(string)
 			if email == "" {

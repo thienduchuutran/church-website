@@ -50,6 +50,7 @@ export default function EventModal({
   const [icon, setIcon] = useState(event?.icon ?? 'star')
   const [color, setColor] = useState(event?.color ?? 'slate')
   const [privateAddress, setPrivateAddress] = useState(event?.private_address ?? '')
+  const [showAddress, setShowAddress] = useState(!!event?.private_address)
   const [notes, setNotes] = useState(event?.notes ?? '')
   const [noteContent, setNoteContent] = useState(monthNote?.content ?? '')
   const [saving, setSaving] = useState(false)
@@ -107,9 +108,9 @@ export default function EventModal({
       if (mode === 'note') {
         await upsertMonthNote(year, month, noteContent, accessToken)
       } else if (mode === 'create' && date) {
-        await createEvent({ date, title, event_type: eventType, icon, color, private_address: privateAddress || null, notes: notes || null }, accessToken)
+        await createEvent({ date, title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null }, accessToken)
       } else if (mode === 'edit' && event) {
-        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: privateAddress || null, notes: notes || null }, accessToken)
+        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null }, accessToken)
       }
       onSaved()
       handleClose()
@@ -280,13 +281,32 @@ export default function EventModal({
                 </div>
               </div>
 
-              {/* Location address - bible_study only */}
-              {eventType === 'bible_study' && (
-                <div className="flex flex-col gap-2">
+              {/* Location address — toggle reveals textarea, available for all event types */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
                   <label className="text-[11px] font-semibold tracking-wider uppercase text-muted">
                     Location address{' '}
-                    <span className="normal-case font-normal">- private to admins</span>
+                    <span className="normal-case font-normal">— private, admin only</span>
                   </label>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddress(v => !v)}
+                    role="switch"
+                    aria-checked={showAddress}
+                    className={[
+                      'relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/40',
+                      showAddress ? 'bg-foreground' : 'bg-border',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={[
+                        'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                        showAddress ? 'translate-x-4' : 'translate-x-0',
+                      ].join(' ')}
+                    />
+                  </button>
+                </div>
+                {showAddress && (
                   <textarea
                     value={privateAddress}
                     onChange={(e) => setPrivateAddress(e.target.value)}
@@ -294,8 +314,8 @@ export default function EventModal({
                     placeholder="123 Street, City"
                     className="w-full rounded-lg border border-border bg-background px-3 py-2.5 text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
                   />
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Notes */}
               <div className="flex flex-col gap-2">
