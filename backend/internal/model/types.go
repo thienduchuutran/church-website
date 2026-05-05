@@ -178,7 +178,7 @@ type CalendarMonthNote struct {
 // CalendarMonthSettings is the per-month admin-configurable styling for the
 // interactive calendar. Currently just an accent color, but the table is the
 // natural home for any future month-scoped admin overrides (banner image,
-// custom subtitle, etc.) — keep the JSON shape stable.
+// custom subtitle, etc.) - keep the JSON shape stable.
 type CalendarMonthSettings struct {
 	ID          string    `json:"id"`
 	Year        int       `json:"year"`
@@ -273,9 +273,9 @@ func (r *UpsertMonthSettingsRequest) Validate() error {
 // --- Hero video types ---
 
 // MaxHeroVideoBytes is the raw upload ceiling the handler enforces before
-// passing the file to the service for transcoding. 100 MB gives headroom for
-// uncompressed iPhone MOV files; the service reduces them to ≤ 10 MB.
-const MaxHeroVideoBytes = 100 << 20 // 100 MB
+// passing the file to the service for transcoding. 200 MB accommodates iPhone 4K
+// 30-sec clips (150-200 MB uncompressed); Phase 2 transcoding reduces to ≤ 10 MB.
+const MaxHeroVideoBytes = 200 << 20 // 200 MB
 
 // AllowedVideoContentTypes is the set of MIME types accepted at the upload
 // endpoint. video/quicktime covers .mov, the default iPhone export format.
@@ -289,16 +289,16 @@ var AllowedVideoContentTypes = map[string]bool{
 // layers for the homepage background video.
 type HeroVideo struct {
 	ID          string    `json:"id"`
-	StorageKey  string    `json:"-"`           // S3 object key — never sent to the client
+	StorageKey  string    `json:"-"`           // S3 object key - never sent to the client
 	FileName    string    `json:"file_name"`
 	FileSize    *int64    `json:"file_size"`
 	ContentType *string   `json:"content_type"`
 	UploadedBy  *string   `json:"uploaded_by"` // JWT sub of the uploading admin
 	IsActive    bool      `json:"is_active"`
 	CreatedAt   time.Time `json:"created_at"`
-	// StorageURL is a short-lived presigned S3 URL populated by the service at
+	// VideoURL is a short-lived presigned S3 URL populated by the service at
 	// read time. Omitted when no presigner is configured (dev without S3 creds).
-	StorageURL string `json:"storage_url,omitempty"`
+	VideoURL string `json:"video_url,omitempty"`
 }
 
 // --- Page content types ---

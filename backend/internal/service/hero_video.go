@@ -7,10 +7,22 @@ import (
 	"log"
 	"mime/multipart"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 )
+
+// heroVideoPresignTTL is how long a presigned URL for the hero video stays valid.
+// 24 hours is safe for a background video that loads once per page view - much
+// longer than a typical browser session, yet short enough to limit the blast
+// radius if a URL leaks.
+const heroVideoPresignTTL = 24 * time.Hour
+
+// cacheExpiry is how long we cache the active hero video in-memory before
+// refreshing from the database. 5 minutes balances freshness (new uploads appear
+// quickly) with reducing database load.
+const cacheExpiry = 5 * time.Minute
 
 // VideoStore is the subset of storage.S3Client HeroVideoService needs.
 // Defined locally so the service is decoupled from the storage package and
@@ -30,7 +42,13 @@ type HeroVideoRepo interface {
 type HeroVideoService struct {
 	store     VideoStore
 	repo      HeroVideoRepo
-	presigner URLPresigner // optional - nil-safe; when nil, storage_url is omitted from responses
+	presigner URLPresigner // optional - nil-safe; when nil, video_url is omitted from responses
+
+	// In-memory cache for GetActiveHeroVideo. Protects against database hammering
+	// when the homepage is popular.
+	cacheMu    sync.Mutex
+	cachedVideo *model.HeroVideo
+	cacheTime  time.Time
 }
 
 func NewHeroVideoService(store VideoStore, repo HeroVideoRepo, presigner URLPresigner) *HeroVideoService {
@@ -101,14 +119,27 @@ func (s *HeroVideoService) UploadHeroVideo(
 		return nil, fmt.Errorf("db insert: %w", err)
 	}
 
+	// Invalidate the cache so GetActiveHeroVideo picks up the new video immediately.
+	s.cacheMu.Lock()
+	s.cachedVideo = nil
+	s.cacheMu.Unlock()
+
 	return v, nil
 }
 
 // GetActiveHeroVideo returns the current hero video with a presigned URL attached.
+// The result is cached for 5 minutes to reduce database load on popular pages.
 // Returns nil, nil when no video has been uploaded yet - this is not an error,
 // it is a valid initial state. The handler sends {"video":null} and the frontend
 // shows its fallback image.
 func (s *HeroVideoService) GetActiveHeroVideo(ctx context.Context) (*model.HeroVideo, error) {
+	s.cacheMu.Lock()
+	if s.cachedVideo != nil && time.Since(s.cacheTime) < cacheExpiry {
+		defer s.cacheMu.Unlock()
+		return s.cachedVideo, nil
+	}
+	s.cacheMu.Unlock()
+
 	v, err := s.repo.GetActiveHeroVideo(ctx)
 	if err != nil {
 		if errors.Is(err, model.ErrNotFound) {
@@ -118,15 +149,20 @@ func (s *HeroVideoService) GetActiveHeroVideo(ctx context.Context) (*model.HeroV
 	}
 
 	if s.presigner != nil {
-		url, err := s.presigner.PresignedURL(ctx, v.StorageKey, presignTTL)
+		url, err := s.presigner.PresignedURL(ctx, v.StorageKey, heroVideoPresignTTL)
 		if err != nil {
 			// A failed presign should not prevent the endpoint from responding.
-			// Leave StorageURL empty; the frontend falls back to its placeholder.
+			// Leave VideoURL empty; the frontend falls back to its placeholder.
 			log.Printf("GetActiveHeroVideo: presign %s: %v", v.StorageKey, err)
 		} else {
-			v.StorageURL = url
+			v.VideoURL = url
 		}
 	}
+
+	s.cacheMu.Lock()
+	s.cachedVideo = v
+	s.cacheTime = time.Now()
+	s.cacheMu.Unlock()
 
 	return v, nil
 }

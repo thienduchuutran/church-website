@@ -48,6 +48,7 @@ func (h *HeroVideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 
 	// Extract the uploading admin's UUID from the request context.
 	// Set by RequireAdmin middleware after validating the JWT.
+	// Upload invalidates the cached hero video so changes appear immediately.
 	uploadedBy := middleware.UserIDFromContext(r.Context())
 	v, err := h.svc.UploadHeroVideo(r.Context(), file, header, &uploadedBy)
 	if err != nil {

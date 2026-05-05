@@ -112,8 +112,9 @@ func main() {
 		calendarHandler = handler.NewCalendarHandler(calendarSvc)
 
 		// Hero video: requires S3 for upload and storage. Presigner decorates
-		// the service to attach short-lived URLs on read. If S3 isn't configured,
-		// the handler stays nil and the routes are skipped.
+		// the service to attach short-lived URLs (24-hour TTL) on read, cached for
+		// 5 minutes to reduce database load. If S3 isn't configured, the handler
+		// stays nil and the routes are skipped.
 		if s3Client != nil {
 			heroVideoRepo := repository.NewHeroVideoRepository(dbPool)
 			heroVideoSvc := service.NewHeroVideoService(s3Client, heroVideoRepo, presigner)
