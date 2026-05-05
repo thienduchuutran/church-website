@@ -212,6 +212,7 @@ export default function CalendarShell({
 
   const birthdays = events.filter(e => e.event_type === 'birthday')
   const bibleStudyDays = events.filter(e => e.event_type === 'bible_study')
+  const eventsWithAddress = events.filter(e => e.private_address)
 
   return (
     <>
@@ -434,16 +435,11 @@ export default function CalendarShell({
                       <div
                         key={e.id}
                         onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
-                        className={`flex flex-col text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                       >
-                        <div className="flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
-                          <span className="font-semibold text-gray-700">{e.title}</span>
-                          <span className="text-gray-400">{day}</span>
-                        </div>
-                        {e.private_address && (
-                          <p className="text-[10px] text-gray-400 pl-3 leading-tight">{e.private_address}</p>
-                        )}
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
+                        <span className="font-semibold text-gray-700">{e.title}</span>
+                        <span className="text-gray-400">{day}</span>
                       </div>
                     )
                   })}
@@ -452,6 +448,33 @@ export default function CalendarShell({
                 <p className="text-[11px] text-gray-400 italic">None this month.</p>
               )}
             </div>
+
+            {/* Locations — admin only, all event types with a private address */}
+            {isAdmin && eventsWithAddress.length > 0 && (
+              <div className="sm:col-span-3 min-w-0 border-t border-gray-200 pt-2">
+                <p className="text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
+                  Locations
+                </p>
+                <div className="flex flex-col gap-y-0.5">
+                  {eventsWithAddress.map(e => {
+                    const day = parseInt(e.date.split('-')[2], 10)
+                    const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
+                    return (
+                      <div
+                        key={e.id}
+                        onClick={() => handleEditFromStrip(e)}
+                        className="flex items-baseline gap-1.5 text-[11px] leading-tight rounded px-1 -mx-1 cursor-pointer hover:bg-gray-100"
+                      >
+                        <span className="w-1.5 h-1.5 rounded-full shrink-0 mt-1" style={{ backgroundColor: colors.dot }} />
+                        <span className="font-semibold text-gray-700 shrink-0">{day} {e.title}</span>
+                        <span className="text-gray-400 shrink-0">—</span>
+                        <span className="text-gray-500">{e.private_address}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Month note */}
             <div className="min-w-0">
