@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Inter, Lora, DM_Sans, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { AuthProvider } from '@/lib/auth'
@@ -33,6 +33,11 @@ export const metadata: Metadata = {
   title: 'Vietnamese Gospel Outreach Ministry New England',
   description:
     'Community hub for our congregation in Saugus, MA: announcements, events, calendar, and resources.',
+}
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
 }
 
 export default function RootLayout({
