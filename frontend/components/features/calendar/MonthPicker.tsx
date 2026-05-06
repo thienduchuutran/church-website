@@ -55,7 +55,7 @@ export default function MonthPicker({
       ref={ref}
       role="dialog"
       aria-label="Jump to month"
-      className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 z-30 w-[280px] bg-white border-2 border-gray-900 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.35)] origin-top transition-all duration-150 ${
+      className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 z-30 w-[280px] max-w-[calc(100vw-2rem)] bg-white border-2 border-gray-900 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.35)] origin-top transition-all duration-150 ${
         shown ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
       }`}
     >
