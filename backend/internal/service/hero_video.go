@@ -37,6 +37,7 @@ type HeroVideoRepo interface {
 	DeactivateAll(ctx context.Context) error
 	InsertHeroVideo(ctx context.Context, v *model.HeroVideo) error
 	GetActiveHeroVideo(ctx context.Context) (*model.HeroVideo, error)
+	SetVisibility(ctx context.Context, visible bool) error
 }
 
 type HeroVideoService struct {
@@ -125,6 +126,18 @@ func (s *HeroVideoService) UploadHeroVideo(
 	s.cacheMu.Unlock()
 
 	return v, nil
+}
+
+// SetHeroVideoVisibility toggles whether the active video is shown on the homepage.
+// Busts the in-memory cache so the change is visible to visitors on the next request.
+func (s *HeroVideoService) SetHeroVideoVisibility(ctx context.Context, visible bool) error {
+	if err := s.repo.SetVisibility(ctx, visible); err != nil {
+		return err
+	}
+	s.cacheMu.Lock()
+	s.cachedVideo = nil
+	s.cacheMu.Unlock()
+	return nil
 }
 
 // GetActiveHeroVideo returns the current hero video with a presigned URL attached.

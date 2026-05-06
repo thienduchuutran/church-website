@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/lib/auth'
-import { getHeroVideo, uploadHeroVideo } from '@/lib/hero'
+import { getHeroVideo, setHeroVideoVisibility, uploadHeroVideo } from '@/lib/hero'
 import type { HeroVideo } from '@/lib/types'
 
 const ACCEPTED_TYPES = ['video/mp4', 'video/webm', 'video/quicktime']
@@ -23,6 +23,8 @@ export default function HeroVideoUpload() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadedVideo, setUploadedVideo] = useState<HeroVideo | null>(null)
+  const [toggling, setToggling] = useState(false)
+  const [toggleError, setToggleError] = useState<string | null>(null)
 
   useEffect(() => {
     getHeroVideo()
@@ -66,11 +68,27 @@ export default function HeroVideoUpload() {
     }
   }
 
+  async function handleToggle() {
+    if (!current || !session) return
+    const newVisible = !current.is_visible
+    setToggleError(null)
+    setCurrent((prev) => (prev ? { ...prev, is_visible: newVisible } : prev)) // optimistic
+    setToggling(true)
+    try {
+      await setHeroVideoVisibility(newVisible, session.access_token)
+    } catch {
+      setCurrent((prev) => (prev ? { ...prev, is_visible: !newVisible } : prev)) // revert
+      setToggleError('Could not update visibility. Please try again.')
+    } finally {
+      setToggling(false)
+    }
+  }
+
   return (
     <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
       <div>
         <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">
-          Hero Background Video
+          Background Video For Homepage
         </h2>
         <p className="mt-1 font-sans text-xs text-muted">
           Replaces the homepage background. Accepts MP4, WebM, or MOV up to 200 MB.
@@ -104,6 +122,40 @@ export default function HeroVideoUpload() {
               aria-label="Current hero background video preview"
             />
           )}
+        </div>
+      )}
+
+      {/* Visibility toggle — only shown when a video exists */}
+      {current && (
+        <div className="flex items-center justify-between rounded-lg border border-border bg-background px-4 py-3">
+          <div>
+            <p className="font-sans text-sm font-medium text-foreground">Show on homepage</p>
+            <p className="font-sans text-xs text-muted">
+              {current.is_visible ? 'Video is visible to visitors' : 'Dark background shown instead'}
+            </p>
+          </div>
+          <button
+            onClick={handleToggle}
+            disabled={toggling}
+            role="switch"
+            aria-checked={current.is_visible}
+            aria-label="Toggle homepage video visibility"
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${
+              current.is_visible ? 'bg-primary' : 'bg-border'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform ${
+                current.is_visible ? 'translate-x-6' : 'translate-x-1'
+              }`}
+            />
+          </button>
+        </div>
+      )}
+
+      {toggleError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-700">
+          {toggleError}
         </div>
       )}
 

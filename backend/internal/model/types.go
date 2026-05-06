@@ -295,6 +295,7 @@ type HeroVideo struct {
 	ContentType *string   `json:"content_type"`
 	UploadedBy  *string   `json:"uploaded_by"` // JWT sub of the uploading admin
 	IsActive    bool      `json:"is_active"`
+	IsVisible   bool      `json:"is_visible"`
 	CreatedAt   time.Time `json:"created_at"`
 	// VideoURL is a short-lived presigned S3 URL populated by the service at
 	// read time. Omitted when no presigner is configured (dev without S3 creds).

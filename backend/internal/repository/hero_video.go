@@ -41,17 +41,33 @@ func (r *HeroVideoRepository) InsertHeroVideo(ctx context.Context, v *model.Hero
 	).Scan(&v.ID, &v.CreatedAt)
 }
 
+// SetVisibility updates the is_visible flag on the currently active video.
+// Returns model.ErrNotFound when no active video exists.
+func (r *HeroVideoRepository) SetVisibility(ctx context.Context, visible bool) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE hero_videos SET is_visible = $1 WHERE is_active = true`,
+		visible,
+	)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return model.ErrNotFound
+	}
+	return nil
+}
+
 // GetActiveHeroVideo returns the single row where is_active = true.
 // Returns model.ErrNotFound when no video has been uploaded yet - the handler
 // treats this as a 200 with a null payload so the frontend shows its fallback image.
 func (r *HeroVideoRepository) GetActiveHeroVideo(ctx context.Context) (*model.HeroVideo, error) {
 	var v model.HeroVideo
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, storage_key, file_name, file_size, content_type, uploaded_by, is_active, created_at
+		`SELECT id, storage_key, file_name, file_size, content_type, uploaded_by, is_active, is_visible, created_at
 		 FROM hero_videos
 		 WHERE is_active = true
 		 LIMIT 1`,
-	).Scan(&v.ID, &v.StorageKey, &v.FileName, &v.FileSize, &v.ContentType, &v.UploadedBy, &v.IsActive, &v.CreatedAt)
+	).Scan(&v.ID, &v.StorageKey, &v.FileName, &v.FileSize, &v.ContentType, &v.UploadedBy, &v.IsActive, &v.IsVisible, &v.CreatedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, model.ErrNotFound

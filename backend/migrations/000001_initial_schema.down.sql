@@ -1,0 +1,11 @@
+drop table if exists hero_videos;
+drop table if exists calendar_month_settings;
+drop table if exists calendar_month_notes;
+drop table if exists calendar_events;
+drop table if exists page_content;
+drop table if exists reactions;
+drop table if exists post_images;
+drop table if exists posts;
+drop table if exists admins;
+drop type if exists calendar_event_type;
+drop type if exists post_type;

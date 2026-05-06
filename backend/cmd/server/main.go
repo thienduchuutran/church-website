@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
+	"strings"
 	"net/http"
 	"os"
 	"os/signal"
@@ -11,6 +13,9 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
+	"github.com/golang-migrate/migrate/v4"
+	_ "github.com/golang-migrate/migrate/v4/database/pgx/v5"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/joho/godotenv"
 
 	"github.com/thienduchuutran/church-website/backend/internal/handler"
@@ -18,8 +23,35 @@ import (
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
 	"github.com/thienduchuutran/church-website/backend/internal/service"
 	"github.com/thienduchuutran/church-website/backend/internal/storage"
+	"github.com/thienduchuutran/church-website/backend/migrations"
 	"github.com/thienduchuutran/church-website/backend/pkg/database"
 )
+
+// runMigrations applies all pending up-migrations from the embedded SQL files.
+// It is a no-op when the schema is already current (migrate.ErrNoChange).
+func runMigrations(dbURL string) error {
+	// golang-migrate's pgx/v5 driver registers under the pgx5:// scheme.
+	// Rewrite postgres:// / postgresql:// so the DATABASE_URL env var needs
+	// no changes between local and production.
+	pgx5URL := strings.NewReplacer(
+		"postgresql://", "pgx5://",
+		"postgres://", "pgx5://",
+	).Replace(dbURL)
+
+	d, err := iofs.New(migrations.FS, ".")
+	if err != nil {
+		return fmt.Errorf("create migration source: %w", err)
+	}
+	m, err := migrate.NewWithSourceInstance("iofs", d, pgx5URL)
+	if err != nil {
+		return fmt.Errorf("init migrator: %w", err)
+	}
+	defer m.Close()
+	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
+		return fmt.Errorf("up: %w", err)
+	}
+	return nil
+}
 
 func main() {
 	_ = godotenv.Load()
@@ -27,6 +59,13 @@ func main() {
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
+	}
+
+	if dbURL := os.Getenv("DATABASE_URL"); dbURL != "" {
+		if err := runMigrations(dbURL); err != nil {
+			log.Fatalf("migrations: %v", err)
+		}
+		log.Println("database schema up to date")
 	}
 
 	supabaseURL := os.Getenv("SUPABASE_URL")
@@ -154,6 +193,7 @@ func main() {
 				r.Delete("/posts/{id}", postHandler.Delete)
 				if heroVideoHandler != nil {
 					r.Post("/admin/hero-video", heroVideoHandler.UploadVideo)
+					r.Patch("/admin/hero-video/visibility", heroVideoHandler.SetVisibility)
 				}
 			})
 		}

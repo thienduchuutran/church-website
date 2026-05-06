@@ -1,10 +1,3 @@
--- RDS schema - plain Postgres, no Supabase-specific syntax.
--- No RLS, no auth.users references, no PgBouncer workarounds.
--- Run once against a fresh RDS instance:
---   psql "$RDS_URL" -f scripts/rds-schema.sql
-
--- ── Enums ────────────────────────────────────────────────────────────────────
-
 create type post_type as enum (
   'event', 'announcement', 'bible_study', 'playlist', 'gallery_album'
 );
@@ -13,10 +6,6 @@ create type calendar_event_type as enum (
   'birthday', 'bible_study', 'general', 'announcement', 'prayer'
 );
 
--- ── Tables ───────────────────────────────────────────────────────────────────
-
--- Admin whitelist: only emails in this table may use the admin panel.
--- The Go backend reads this table via RequireAdmin middleware.
 create table admins (
   id           uuid primary key default gen_random_uuid(),
   email        text unique not null,
@@ -24,9 +13,6 @@ create table admins (
   created_at   timestamptz default now()
 );
 
--- All site content: events, announcements, bible studies, playlists, albums.
--- admin_id stores the JWT sub claim (Supabase auth UUID); no FK here because
--- auth.users lives in Supabase (auth-only), not in this database.
 create table posts (
   id            uuid primary key default gen_random_uuid(),
   type          post_type not null,
@@ -47,11 +33,6 @@ create table post_images (
   created_at    timestamptz default now()
 );
 
--- post_id has no FK on purpose: reactions are written by anonymous visitors
--- via a separate handler that never touches the posts table, and dropping a
--- post should not cascade-delete its reactions (we'd lose history). The post
--- must exist for the frontend to render it, so referential integrity is
--- enforced at the application layer when reactions are read.
 create table reactions (
   id          uuid primary key default gen_random_uuid(),
   post_id     uuid not null,
@@ -61,7 +42,6 @@ create table reactions (
   unique (post_id, fingerprint)
 );
 
--- Editable text sections for static pages (about, connect).
 create table page_content (
   id          uuid primary key default gen_random_uuid(),
   page_slug   text not null,
@@ -71,7 +51,6 @@ create table page_content (
   unique (page_slug, section_key)
 );
 
--- Calendar: one row per day-level entry.
 create table calendar_events (
   id               uuid primary key default gen_random_uuid(),
   date             date not null,
@@ -86,7 +65,6 @@ create table calendar_events (
   updated_at       timestamptz default now()
 );
 
--- Calendar: one sidebar note per month.
 create table calendar_month_notes (
   id         uuid primary key default gen_random_uuid(),
   year       int not null,
@@ -98,8 +76,6 @@ create table calendar_month_notes (
   unique (year, month)
 );
 
--- Calendar: per-month admin styling (accent color). Optional - frontend falls
--- back to MONTH_THEMES when no row exists for a given month.
 create table calendar_month_settings (
   id           uuid primary key default gen_random_uuid(),
   year         int not null,
@@ -111,23 +87,16 @@ create table calendar_month_settings (
   unique (year, month)
 );
 
--- Hero background video. Only one row may have is_active = true at a time
--- (enforced by the partial unique index below). The Go upload handler sets all
--- other rows to is_active = false before activating the new upload.
--- storage_key is the S3 object key; URLs are presigned at read time.
 create table hero_videos (
   id           uuid        primary key default gen_random_uuid(),
   storage_key  text        not null,
   file_name    text        not null,
   file_size    bigint,
   content_type text,
-  uploaded_by  uuid,                          -- admin sub from JWT
+  uploaded_by  uuid,
   is_active    boolean     not null default true,
-  is_visible   boolean     not null default true,
   created_at   timestamptz not null default now()
 );
-
--- ── Indexes ──────────────────────────────────────────────────────────────────
 
 create index on posts(type);
 create index on posts(created_at desc);

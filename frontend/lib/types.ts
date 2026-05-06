@@ -42,6 +42,7 @@ export interface HeroVideo {
   content_type: string | null
   uploaded_by: string | null
   is_active: boolean
+  is_visible: boolean
   created_at: string
   // Short-lived presigned S3 URL. Omitted when no S3 creds are configured (dev).
   video_url?: string

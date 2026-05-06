@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"mime/multipart"
 	"net/http"
@@ -15,6 +16,7 @@ import (
 type HeroVideoService interface {
 	UploadHeroVideo(ctx context.Context, file multipart.File, header *multipart.FileHeader, uploadedBy *string) (*model.HeroVideo, error)
 	GetActiveHeroVideo(ctx context.Context) (*model.HeroVideo, error)
+	SetHeroVideoVisibility(ctx context.Context, visible bool) error
 }
 
 type HeroVideoHandler struct {
@@ -60,6 +62,30 @@ func (h *HeroVideoHandler) UploadVideo(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	json.NewEncoder(w).Encode(v)
+}
+
+// SetVisibility handles PATCH /api/v1/admin/hero-video/visibility.
+// Accepts { "is_visible": bool } and toggles whether the active hero video
+// is shown on the homepage. Returns 204 on success.
+// Requires admin authentication (enforced by RequireAdmin middleware).
+func (h *HeroVideoHandler) SetVisibility(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		IsVisible bool `json:"is_visible"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if err := h.svc.SetHeroVideoVisibility(r.Context(), body.IsVisible); err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			http.Error(w, "no active video", http.StatusNotFound)
+			return
+		}
+		log.Printf("SetVisibility: %v", err)
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // GetVideo handles GET /api/v1/hero-video. Returns the currently active hero

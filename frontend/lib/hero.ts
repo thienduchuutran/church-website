@@ -1,4 +1,4 @@
-import { apiGet, apiPostMultipart } from './api'
+import { apiGet, apiPatch, apiPostMultipart } from './api'
 import type { HeroVideo } from './types'
 
 const HERO_VIDEO_PATH = '/api/v1/hero-video'
@@ -16,4 +16,9 @@ export async function uploadHeroVideo(file: File, token: string): Promise<HeroVi
   const form = new FormData()
   form.append('video', file)
   return (await apiPostMultipart(ADMIN_HERO_VIDEO_PATH, form, token)) as HeroVideo
+}
+
+// setHeroVideoVisibility toggles whether the active hero video is shown on the homepage.
+export async function setHeroVideoVisibility(visible: boolean, token: string): Promise<void> {
+  await apiPatch(ADMIN_HERO_VIDEO_PATH + '/visibility', { is_visible: visible }, token)
 }
