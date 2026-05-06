@@ -48,7 +48,7 @@ export default async function HomePage() {
 
   return (
     <div>
-      <section className="relative overflow-hidden bg-[#1C1210] px-4 py-[clamp(4.5rem,14vw,8rem)] text-center text-white sm:px-6 lg:px-8">
+      <section className="relative flex min-h-[85vh] items-center justify-center overflow-hidden bg-[#1C1210] px-4 py-[clamp(4.5rem,14vw,8rem)] text-center text-white sm:px-6 lg:px-8">
         <HeroVideo videoUrl={heroVideo?.is_visible ? heroVideo.video_url : undefined} />
         <div
           aria-hidden
