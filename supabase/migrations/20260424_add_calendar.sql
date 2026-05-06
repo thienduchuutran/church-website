@@ -12,8 +12,8 @@ create type calendar_event_type as enum (
 );
 
 -- One row per calendar entry on a specific date.
--- icon  — Phosphor icon key (e.g. 'cake', 'book-open', 'bell')
--- color — editorial palette key (e.g. 'red', 'amber', 'emerald')
+-- icon  - Phosphor icon key (e.g. 'cake', 'book-open', 'bell')
+-- color - editorial palette key (e.g. 'red', 'amber', 'emerald')
 create table calendar_events (
   id           uuid primary key default gen_random_uuid(),
   date         date not null,
@@ -30,7 +30,7 @@ create table calendar_events (
 create index on calendar_events(date);
 create index on calendar_events(date, event_type);
 
--- One row per month — the "eye-catchy" sidebar note block shown beside the calendar.
+-- One row per month - the "eye-catchy" sidebar note block shown beside the calendar.
 create table calendar_month_notes (
   id         uuid primary key default gen_random_uuid(),
   year       int not null,

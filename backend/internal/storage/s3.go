@@ -18,7 +18,7 @@ type S3Client struct {
 }
 
 func NewS3Client(bucketName, region string) (*S3Client, error) {
-    // Automatically uses the EC2 IAM role — no keys needed
+    // Automatically uses the EC2 IAM role - no keys needed
     cfg, err := config.LoadDefaultConfig(context.TODO(),
         config.WithRegion(region),
     )

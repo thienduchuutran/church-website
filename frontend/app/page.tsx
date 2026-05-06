@@ -1,24 +1,28 @@
 import Link from 'next/link'
 import { listPosts } from '@/lib/posts'
+import { getHeroVideo } from '@/lib/hero'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
+import HeroVideo from '@/components/features/hero/HeroVideo'
 
 /** Hero decorative strip: terracotta to warm gold, PRODUCT-allowed gradient use */
 const HERO_RULE =
   'linear-gradient(90deg, transparent, #C4663C, #C49A3C, transparent)'
 
 export default async function HomePage() {
-  // Both feeds come from the Go backend (RDS) — Supabase is auth-only.
+  // Both feeds come from the Go backend (RDS) - Supabase is auth-only.
   // Each call's failure is captured independently so a single dead feed doesn't
   // hide the other one. We sort/slice client-side instead of pushing date filters
   // to the server, which keeps the API surface small and the route easy to cache.
-  const [announcementsResult, eventsResult] = await Promise.allSettled([
+  const [announcementsResult, eventsResult, heroVideoResult] = await Promise.allSettled([
     listPosts({ type: 'announcement', limit: 3 }),
     listPosts({ type: 'event', limit: 20 }),
+    getHeroVideo(),
   ])
 
   const announcementsError = announcementsResult.status === 'rejected'
   const eventsError = eventsResult.status === 'rejected'
+  const heroVideo = heroVideoResult.status === 'fulfilled' ? heroVideoResult.value : null
 
   const announcementPosts: Post[] =
     announcementsResult.status === 'fulfilled' ? announcementsResult.value : []
@@ -45,9 +49,10 @@ export default async function HomePage() {
   return (
     <div>
       <section className="relative overflow-hidden bg-[#1C1210] px-4 py-[clamp(4.5rem,14vw,8rem)] text-center text-white sm:px-6 lg:px-8">
+        <HeroVideo videoUrl={heroVideo?.is_visible ? heroVideo.video_url : undefined} />
         <div
           aria-hidden
-          className="pointer-events-none absolute -right-[8%] -top-[18%] h-[min(110vw,44rem)] w-[min(110vw,44rem)] rounded-full"
+          className="pointer-events-none absolute -right-[8%] -top-[18%] z-[2] h-[min(110vw,44rem)] w-[min(110vw,44rem)] rounded-full"
           style={{
             background:
               'radial-gradient(circle closest-side, rgba(196, 102, 60, 0.2) 0%, transparent 72%)',
@@ -55,7 +60,7 @@ export default async function HomePage() {
         />
         <div className="relative z-10 mx-auto max-w-[min(100%,40rem)]">
           <p className="mb-3 font-sans text-[0.6875rem] font-semibold uppercase leading-normal tracking-[0.08em] text-[#C4663C] sm:mb-4 sm:text-xs">
-            Vietnamese Gospel Outreach · Saugus, MA
+            Vietnamese Gospel Outreach Ministry· Saugus, MA
           </p>
           <h1 className="font-serif text-[clamp(2.25rem,5.5vw,4rem)] font-bold leading-[1.06] tracking-[-0.025em] text-[#f5f0eb]">
             Welcome to{' '}

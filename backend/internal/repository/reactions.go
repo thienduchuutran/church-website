@@ -69,7 +69,7 @@ func (r *ReactionRepository) GetMyReaction(ctx context.Context, postID, fingerpr
 		postID, fingerprint,
 	).Scan(&emoji)
 	if err != nil {
-		// pgx.ErrNoRows means the fingerprint hasn't reacted yet — not an error.
+		// pgx.ErrNoRows means the fingerprint hasn't reacted yet - not an error.
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}

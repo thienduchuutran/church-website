@@ -1,4 +1,4 @@
-# docs/agents/auth.md — Authentication Reference
+# docs/agents/auth.md - Authentication Reference
 
 ## Overview
 Authentication is handled entirely by Supabase Auth using Google OAuth.
@@ -83,11 +83,11 @@ if (!adminRow) {
 ## Backend: JWT verification middleware (`internal/middleware/auth.go`)
 
 The Go backend receives the Supabase JWT in the `Authorization: Bearer <token>` header.
-It verifies the JWT using the Supabase JWT secret (not by calling Supabase's API — this is done locally and is fast).
+It verifies the JWT using the Supabase JWT secret (not by calling Supabase's API - this is done locally and is fast).
 Then it checks the email from the JWT payload exists in the `admins` table.
 
 ```go
-// Pseudocode — see actual implementation in internal/middleware/auth.go
+// Pseudocode - see actual implementation in internal/middleware/auth.go
 func RequireAdmin(next http.Handler) http.Handler {
     return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
         token := extractBearerToken(r)
@@ -136,7 +136,7 @@ This is the correct secure flow for production-grade JWT verification.
 ## Adding a new admin
 1. Go to Supabase dashboard → Table Editor → `admins`
 2. Insert a new row with the person's Google account email address
-3. That's it — no code change needed
+3. That's it - no code change needed
 
 ## Removing an admin
 1. Delete their row from the `admins` table in Supabase dashboard
@@ -146,5 +146,5 @@ This is the correct secure flow for production-grade JWT verification.
 
 ## Important notes
 - Supabase JWTs expire after 1 hour by default. The Supabase client auto-refreshes them silently.
-- The `anon` key in the frontend is safe to expose — Supabase RLS policies enforce what the anon key can and cannot do.
+- The `anon` key in the frontend is safe to expose - Supabase RLS policies enforce what the anon key can and cannot do.
 - The `service_role` key must only ever be in `backend/.env`. It bypasses RLS entirely.

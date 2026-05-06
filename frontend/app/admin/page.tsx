@@ -7,6 +7,7 @@ import { useEditModal } from '@/lib/edit-modal'
 import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostCard from '@/components/features/posts/PostCard'
+import HeroVideoUpload from '@/components/features/admin/HeroVideoUpload'
 
 const POST_TYPES = [
   { type: 'event', label: 'Event' },
@@ -75,6 +76,10 @@ export default function AdminPage() {
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
         <h1 className="font-serif text-3xl font-bold text-foreground">Admin Dashboard</h1>
         <span className="font-sans text-sm text-muted">{session.user.email}</span>
+      </div>
+
+      <div className="mb-8">
+        <HeroVideoUpload />
       </div>
 
       <div className="mb-8 space-y-4">

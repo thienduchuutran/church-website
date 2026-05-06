@@ -1,4 +1,4 @@
-# docs/agents/frontend.md — Next.js Frontend Reference
+# docs/agents/frontend.md - Next.js Frontend Reference
 
 ## Framework
 Next.js with the App Router (`/app` directory). React Server Components where possible, client components only when interactivity requires it.
@@ -75,12 +75,12 @@ frontend/
 
 ## Data fetching
 
-**Supabase is auth-only.** All application data — posts, images, page content, calendar, reactions — lives in AWS RDS and is reached through the Go backend. The frontend must **never** call `supabase.from(...)` for app data; doing so reads from the wrong database (the legacy Supabase Postgres) and creates a split-brain where writes and reads disagree. See `docs/agents/known-quirks.md` → "Posts created on production don't show up in the UI" for the original outage this caused.
+**Supabase is auth-only.** All application data - posts, images, page content, calendar, reactions - lives in AWS RDS and is reached through the Go backend. The frontend must **never** call `supabase.from(...)` for app data; doing so reads from the wrong database (the legacy Supabase Postgres) and creates a split-brain where writes and reads disagree. See `docs/agents/known-quirks.md` → "Posts created on production don't show up in the UI" for the original outage this caused.
 
 ### Two layers
 
-- **`lib/api.ts`** — generic transport wrappers. Knows about `NEXT_PUBLIC_API_URL`, JSON encoding, Bearer-token headers, and `ApiError`. It does **not** know about any specific resource. Functions: `apiGet`, `apiGetCached`, `apiPost`, `apiPatch`, `apiPut`, `apiDelete`, `apiPostAnon`, `apiDeleteAnon`.
-- **Resource services** (e.g. `lib/posts.ts`) — typed, resource-specific functions built on top of `lib/api.ts`. Components import these, **not** the generic wrappers, when working with a known resource. This way `/api/v1/posts` is referenced in exactly one file: when the URL or response shape changes you fix it once.
+- **`lib/api.ts`** - generic transport wrappers. Knows about `NEXT_PUBLIC_API_URL`, JSON encoding, Bearer-token headers, and `ApiError`. It does **not** know about any specific resource. Functions: `apiGet`, `apiGetCached`, `apiPost`, `apiPatch`, `apiPut`, `apiDelete`, `apiPostAnon`, `apiDeleteAnon`.
+- **Resource services** (e.g. `lib/posts.ts`) - typed, resource-specific functions built on top of `lib/api.ts`. Components import these, **not** the generic wrappers, when working with a known resource. This way `/api/v1/posts` is referenced in exactly one file: when the URL or response shape changes you fix it once.
 
 ### `lib/posts.ts`
 
@@ -94,11 +94,11 @@ frontend/
 | `deletePost(id, token)` | `DELETE /posts/{id}` | `AdminControls` |
 
 ```ts
-// Server component — cached for 60s
+// Server component - cached for 60s
 import { listPostsCached } from '@/lib/posts'
 const posts = await listPostsCached({ type: 'announcement' }, 60)
 
-// Client component — always hits the network
+// Client component - always hits the network
 import { listPosts } from '@/lib/posts'
 const posts = await listPosts({ type: filter ?? undefined, limit: 100 })
 
@@ -124,23 +124,23 @@ When a resource grows beyond two or three call sites, extract a `lib/<resource>.
 
 | Page | Route | Data source |
 |------|-------|-------------|
-| Homepage | `/` | Go backend — `apiGetCached('/api/v1/posts?type=announcement&limit=3', 60)` + `apiGetCached('/api/v1/posts?type=event&limit=20', 60)`; events filtered/sorted client-side to the next 2 upcoming. **PRODUCT** hero (`#1C1210`, radial glow, bottom gradient rule, dual CTAs); Playfair + terracotta eyebrow/italic phrase; section `h2` Playfair 600. |
-| Events | `/events` | Go backend — `apiGetCached('/api/v1/posts?type=event', 60)` |
-| Announcements | `/announcements` | Go backend — `apiGetCached('/api/v1/posts?type=announcement', 60)` |
-| Gallery | `/gallery` | Go backend — `GET /api/v1/posts?type=gallery_album` (response includes presigned `images[*].storage_url`) |
-| Resources | `/resources` | Go backend — `GET /api/v1/posts?type=bible_study` and `?type=playlist` |
-| About | `/about` | Go backend — `GET /api/v1/pages/about` (falls back to hardcoded defaults) |
-| Connect | `/connect` | Go backend — `GET /api/v1/pages/connect` (falls back to hardcoded defaults) |
-| Admin dashboard | `/admin` | Go backend — `apiGet('/api/v1/posts?limit=100')` (client component, requires Google login) |
+| Homepage | `/` | Go backend - `apiGetCached('/api/v1/posts?type=announcement&limit=3', 60)` + `apiGetCached('/api/v1/posts?type=event&limit=20', 60)`; events filtered/sorted client-side to the next 2 upcoming. **PRODUCT** hero (`#1C1210`, radial glow, bottom gradient rule, dual CTAs); Playfair + terracotta eyebrow/italic phrase; section `h2` Playfair 600. |
+| Events | `/events` | Go backend - `apiGetCached('/api/v1/posts?type=event', 60)` |
+| Announcements | `/announcements` | Go backend - `apiGetCached('/api/v1/posts?type=announcement', 60)` |
+| Gallery | `/gallery` | Go backend - `GET /api/v1/posts?type=gallery_album` (response includes presigned `images[*].storage_url`) |
+| Resources | `/resources` | Go backend - `GET /api/v1/posts?type=bible_study` and `?type=playlist` |
+| About | `/about` | Go backend - `GET /api/v1/pages/about` (falls back to hardcoded defaults) |
+| Connect | `/connect` | Go backend - `GET /api/v1/pages/connect` (falls back to hardcoded defaults) |
+| Admin dashboard | `/admin` | Go backend - `apiGet('/api/v1/posts?limit=100')` (client component, requires Google login) |
 | Admin editor | `/admin/[section]` | Go backend (POST/PATCH) |
-| Page editor | `/admin/pages/[slug]` | Go backend — `GET` + `PUT /api/v1/pages/:slug` (admin only) |
+| Page editor | `/admin/pages/[slug]` | Go backend - `GET` + `PUT /api/v1/pages/:slug` (admin only) |
 
 ---
 
 ## PostCard component
 The "Facebook-style" card used everywhere. Props:
-- `post` — full Post object (title, body, event_date, external_link, images, reactions)
-- `showReactions` — boolean, defaults true (pass false in admin view)
+- `post` - full Post object (title, body, event_date, external_link, images, reactions)
+- `showReactions` - boolean, defaults true (pass false in admin view)
 
 Anatomy: date badge → title → body text → optional image(s) → optional link button → ReactionBar.
 

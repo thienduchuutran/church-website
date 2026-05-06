@@ -46,12 +46,12 @@ for table in admins posts post_images reactions page_content; do
   if [[ "$src" == "$dst" ]]; then
     echo "  ✓ $table: $dst rows"
   else
-    echo "  ✗ $table: Supabase=$src RDS=$dst — MISMATCH"
+    echo "  ✗ $table: Supabase=$src RDS=$dst - MISMATCH"
   fi
 done
 
 echo ""
-echo "Done. calendar_events and calendar_month_notes are empty (new tables — nothing to migrate)."
+echo "Done. calendar_events and calendar_month_notes are empty (new tables - nothing to migrate)."
 echo ""
 echo "Next: update DATABASE_URL in the systemd service on EC2:"
 echo "  sudo systemctl edit --full church-backend"

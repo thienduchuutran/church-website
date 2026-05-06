@@ -13,13 +13,13 @@ const defaults: Record<string, string> = {
   hero_subtitle: 'TODO: one-line tagline that captures who you are',
   mission_heading: 'Our Mission',
   mission_body:
-    'TODO: write a short paragraph describing the mission of the church — why you exist and who you serve.',
+    'TODO: write a short paragraph describing the mission of the church - why you exist and who you serve.',
   beliefs_heading: 'What We Believe',
   beliefs_body:
     'TODO: summarize your core beliefs in a few sentences. Feel free to link to a longer statement of faith later.',
   story_heading: 'Our Story',
   story_body:
-    'TODO: a brief history of the church — when it was founded, key moments, where it is today.',
+    'TODO: a brief history of the church - when it was founded, key moments, where it is today.',
   values_heading: 'Our Values',
   values_item_1: 'TODO: first core value',
   values_item_2: 'TODO: second core value',

@@ -49,7 +49,7 @@ type deleteReactionRequest struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
-// Upsert handles POST /api/v1/reactions — adds or changes a viewer's reaction.
+// Upsert handles POST /api/v1/reactions - adds or changes a viewer's reaction.
 func (h *ReactionHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	var req upsertReactionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -71,7 +71,7 @@ func (h *ReactionHandler) Upsert(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// Delete handles DELETE /api/v1/reactions/{post_id} — removes a viewer's reaction.
+// Delete handles DELETE /api/v1/reactions/{post_id} - removes a viewer's reaction.
 func (h *ReactionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	postID := chi.URLParam(r, "post_id")
 	var req deleteReactionRequest
@@ -92,7 +92,7 @@ func (h *ReactionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // GetCounts handles GET /api/v1/reactions/{post_id}[?fingerprint=<fp>].
 // Returns per-emoji counts and, when a fingerprint is provided, the caller's own reaction.
-// No auth required — fingerprint is the anonymous identity.
+// No auth required - fingerprint is the anonymous identity.
 func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
 	postID := chi.URLParam(r, "post_id")
 	if postID == "" {
@@ -124,7 +124,7 @@ func (h *ReactionHandler) GetCounts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reaction totals change on every POST/DELETE, so the browser must never
-	// serve a cached copy — otherwise the same GET URL on different pages would
+	// serve a cached copy - otherwise the same GET URL on different pages would
 	// return stale counts and a stale my_reaction after the user reacted.
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, summary)

@@ -27,7 +27,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
 
-  // Calls the backend instead of querying Supabase directly — required now
+  // Calls the backend instead of querying Supabase directly - required now
   // that the admins table lives on RDS, not in Supabase Postgres.
   async function checkAdmin(accessToken: string) {
     try {

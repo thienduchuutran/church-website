@@ -22,7 +22,7 @@ export default function MonthPicker({
   onSelect,
   onClose,
 }: MonthPickerProps) {
-  // Browse year is independent from selected year — user can flip ahead
+  // Browse year is independent from selected year - user can flip ahead
   // through years to scan, then click a month to commit the change.
   const [browseYear, setBrowseYear] = useState(year)
   const [shown, setShown] = useState(false)

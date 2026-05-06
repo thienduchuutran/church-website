@@ -24,7 +24,7 @@ export interface PostImage {
   id: string
   post_id: string
   storage_key: string
-  // Short-lived presigned S3 URL (≈1h). Always use this to render the image —
+  // Short-lived presigned S3 URL (≈1h). Always use this to render the image -
   // never store it long-term, since it expires.
   storage_url: string
   display_order: number
@@ -33,6 +33,19 @@ export interface PostImage {
 export interface ReactionCount {
   emoji: string
   count: number
+}
+
+export interface HeroVideo {
+  id: string
+  file_name: string
+  file_size: number | null
+  content_type: string | null
+  uploaded_by: string | null
+  is_active: boolean
+  is_visible: boolean
+  created_at: string
+  // Short-lived presigned S3 URL. Omitted when no S3 creds are configured (dev).
+  video_url?: string
 }
 
 export interface Admin {

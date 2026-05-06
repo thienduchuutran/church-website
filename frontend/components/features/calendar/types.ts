@@ -76,7 +76,7 @@ export const MONTH_THEMES: Record<number, { title: string; header: string; heade
   12: { title: GOLD, header: GOLD, headerText: DARK_BASE },
 }
 
-// Maps color keys to CSS hex values — used with inline styles to avoid
+// Maps color keys to CSS hex values - used with inline styles to avoid
 // Tailwind purging dynamically-constructed class names.
 export const COLOR_MAP: Record<string, { dot: string; text: string; bg: string }> = {
   slate: { dot: '#64748b', text: '#475569', bg: '#f1f5f9' },

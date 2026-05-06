@@ -5,7 +5,7 @@ import PostFeed from '@/components/features/posts/PostFeed'
 import AdminFeedActions from '@/components/features/admin/AdminFeedActions'
 
 export const metadata: Metadata = {
-  title: 'Events — Our Church',
+  title: 'Events - Our Church',
 }
 
 export default async function EventsPage() {

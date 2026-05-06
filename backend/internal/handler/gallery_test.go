@@ -1,5 +1,5 @@
 // gallery_test.go follows TDD (Test-Driven Development): we write the tests
-// BEFORE writing the real handler. The tests define the contract — exactly what
+// BEFORE writing the real handler. The tests define the contract - exactly what
 // inputs the handler must accept and what HTTP status codes it must return.
 // The code won't compile until we write the real handler (next step), and that
 // is intentional and correct.
@@ -28,11 +28,11 @@ import (
 // mockGalleryService is a fake implementation of the GalleryService interface.
 //
 // Bigger picture: the real GalleryService talks to S3 and RDS. We never want
-// unit tests to do that — they'd be slow, need real credentials, and could
+// unit tests to do that - they'd be slow, need real credentials, and could
 // accidentally modify production data. Instead we define a fake that returns
 // whatever we tell it to, so tests are fast, isolated, and fully predictable.
 //
-// The interface itself doesn't exist yet — it will be declared inside
+// The interface itself doesn't exist yet - it will be declared inside
 // handler/gallery.go in the next step. Go interfaces are satisfied implicitly:
 // as long as mockGalleryService has all the methods the interface requires,
 // the compiler accepts it as a valid implementation.
@@ -44,7 +44,7 @@ type mockGalleryService struct {
 }
 
 // AddImageToPost is the only method the GalleryService interface needs.
-// The _ prefix on each parameter means "I'm ignoring this value" — the mock
+// The _ prefix on each parameter means "I'm ignoring this value" - the mock
 // doesn't actually process anything, it just returns the pre-set fields above.
 func (m *mockGalleryService) AddImageToPost(_ context.Context, _ string, _ multipart.File, _ *multipart.FileHeader) (*model.PostImage, error) {
 	return m.image, m.err
@@ -88,7 +88,7 @@ func newImageUploadRequest(t *testing.T, fileContentType string, content []byte)
 		t.Fatal(err)
 	}
 	fmt.Fprint(part, string(content)) // write the fake file bytes into the part
-	w.Close()                         // writes the final boundary marker — must be called before reading body
+	w.Close()                         // writes the final boundary marker - must be called before reading body
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/posts/abc123/images", body)
 	// The request-level Content-Type must include the multipart boundary string
@@ -141,11 +141,11 @@ func TestGalleryHandler_UploadImage_success(t *testing.T) {
 
 // TestGalleryHandler_UploadImage_missingFile tests the case where the request
 // has no file attached at all. The handler must reject this with 400 Bad Request
-// before ever calling the service — no point asking S3 to upload nothing.
+// before ever calling the service - no point asking S3 to upload nothing.
 func TestGalleryHandler_UploadImage_missingFile(t *testing.T) {
 	h := NewGalleryHandler(&mockGalleryService{})
 
-	// No body, no Content-Type — simulates a POST with no file selected.
+	// No body, no Content-Type - simulates a POST with no file selected.
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/posts/abc123/images", nil)
 	req = withIDParam(req, "abc123")
 	rec := httptest.NewRecorder()

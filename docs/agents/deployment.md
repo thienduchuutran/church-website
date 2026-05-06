@@ -1,4 +1,4 @@
-# docs/agents/deployment.md — Hosting & Deployment Reference
+# docs/agents/deployment.md - Hosting & Deployment Reference
 
 ## Architecture overview
 ```
@@ -32,7 +32,7 @@ GitHub (monorepo) → GitHub Actions CI/CD
 ## EC2 instance
 
 - **Region**: us-east-1 (Northern Virginia)
-- **Domain**: `vgomne.ddns.net` (DDNS — points at the Elastic IP)
+- **Domain**: `vgomne.ddns.net` (DDNS - points at the Elastic IP)
 - **Elastic IP**: static, survives stop/restart
 - **Security Group inbound rules**:
   | Port | Source | Purpose |
@@ -83,7 +83,7 @@ Reload after config changes: `sudo nginx -t && sudo systemctl reload nginx`
 
 ## systemd services
 
-Both apps are registered as system services — they auto-start on boot and restart on crash.
+Both apps are registered as system services - they auto-start on boot and restart on crash.
 
 ### Go backend (`/etc/systemd/system/church-backend.service`)
 ```ini
@@ -141,7 +141,7 @@ WantedBy=multi-user.target
 
 ---
 
-## SSL/HTTPS — Let's Encrypt (Certbot)
+## SSL/HTTPS - Let's Encrypt (Certbot)
 
 Certificates are obtained and auto-renewed via Certbot.
 ```bash
@@ -151,7 +151,7 @@ Auto-renewal is handled by a systemd timer (`certbot.timer`). Certificates last 
 
 ---
 
-## CI/CD — GitHub Actions
+## CI/CD - GitHub Actions
 
 **Workflow file**: `.github/workflows/deploy.yml`
 
@@ -211,14 +211,14 @@ sudo systemctl status church-backend
 
 ---
 
-## Environment variables — where each one lives
+## Environment variables - where each one lives
 
 | Variable | Frontend systemd env | Backend systemd env | GitHub Secret (build-time) |
 |---|---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | ✅ | | ✅ |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | | ✅ |
 | `NEXT_PUBLIC_API_URL` | ✅ | | ✅ |
-| `DATABASE_URL` | | ✅ | | RDS endpoint — private, only reachable from EC2 |
+| `DATABASE_URL` | | ✅ | | RDS endpoint - private, only reachable from EC2 |
 | `SUPABASE_URL` | | ✅ | | Used only for JWKS key fetch (auth), not DB |
 | `DISCORD_WEBHOOK_*` (all 5) | | ✅ | |
 | `FRONTEND_ORIGIN` | | ✅ | |

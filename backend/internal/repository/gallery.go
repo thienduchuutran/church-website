@@ -29,7 +29,7 @@ func (r *GalleryRepository) InsertPostImage(ctx context.Context, img *model.Post
 // GetImagesByPostIDs batch-loads images for a set of post ids and groups them by post_id.
 // One query covers both the list endpoint (many posts) and the get endpoint
 // (one post called with a length-1 slice), so we do not keep a separate
-// single-post variant — that path was removed when this function landed.
+// single-post variant - that path was removed when this function landed.
 // Returns an empty map (not nil) when no ids are supplied so callers can skip a nil-check.
 func (r *GalleryRepository) GetImagesByPostIDs(ctx context.Context, postIDs []string) (map[string][]model.PostImage, error) {
 	out := make(map[string][]model.PostImage)

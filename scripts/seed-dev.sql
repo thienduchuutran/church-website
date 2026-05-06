@@ -15,7 +15,7 @@ insert into posts (type, title, body, event_date) values
   ('event',        'Youth Retreat',          'Annual youth retreat in the mountains.',   now() + interval '21 days'),
   ('announcement', 'Welcome to the site',    'This is local dev seed data. Nothing here is real.', null),
   ('announcement', 'Fellowship lunch',       'Join us after service this Sunday.',       null),
-  ('bible_study',  'Gospel of John — Week 1','Notes on John 1:1-18.',                    null),
+  ('bible_study',  'Gospel of John - Week 1','Notes on John 1:1-18.',                    null),
   ('playlist',     'Easter 2026 Worship',    null,                                       null),
   ('gallery_album','Christmas 2025',         'Photos from the Christmas service.',       null)
 on conflict do nothing;

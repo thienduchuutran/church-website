@@ -4,15 +4,15 @@ import { useEffect, useRef, useState } from 'react'
 import { ACCENT_PRESETS } from './types'
 
 interface AccentColorPickerProps {
-  monthLabel: string                       // e.g. "May 2026" — shown in the popover title
-  currentAccent: string                    // saved (or default) accent — used to revert previews
+  monthLabel: string                       // e.g. "May 2026" - shown in the popover title
+  currentAccent: string                    // saved (or default) accent - used to revert previews
   onPreview: (hex: string) => void         // live-updates the calendar header before save
   onSave: (hex: string) => Promise<void>   // persist; resolves on success, rejects on error
   onClose: () => void
   saving: boolean
 }
 
-// Anchored popover (not portaled) — parent must give it `position: relative`.
+// Anchored popover (not portaled) - parent must give it `position: relative`.
 // Render lives next to the trigger so layout shifts and focus stay local. We
 // intentionally hand-roll the outside-click + escape handlers instead of
 // pulling a popover lib, to match the rest of the calendar's small primitives.
@@ -69,7 +69,7 @@ export default function AccentColorPicker({
       document.removeEventListener('mousedown', onMouseDown)
     }
     // We intentionally re-bind on every render so cancelAndClose closes over
-    // the latest `picked` and `currentAccent` — the listener body is cheap.
+    // the latest `picked` and `currentAccent` - the listener body is cheap.
   })
 
   const isPresetActive = (hex: string) => hex.toLowerCase() === picked.toLowerCase()

@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Gallery — Our Church',
+  title: 'Gallery - Our Church',
 }
 
 export default function GalleryPage() {

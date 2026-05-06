@@ -1,4 +1,4 @@
-# Vietnamese Gospel Outreach Ministry New England — Design Context
+# Vietnamese Gospel Outreach Ministry New England - Design Context
 
 ## Project
 Community website for a Vietnamese-American Christian & Missionary Alliance 
@@ -10,17 +10,17 @@ community hub, not a marketing website.
 Warm + Contemporary Energy. Tight-knit family that's alive and moving. 
 Somewhere between North Point Community Church's warmth and a well-designed 
 independent coffee shop that feels like home. Confident, not flashy. 
-Warm, not rustic. First 3-second feeling: modern, trustworthy, warm — 
+Warm, not rustic. First 3-second feeling: modern, trustworthy, warm - 
 I feel welcomed and I know exactly where to go.
 
 ## Color System
-- Background: #FAF7F2 — warm cream, never pure white or gray
-- Hero bg: #1C1210 — deep warm dark, brown-black, intimate like a coffee shop at night
-- Primary accent (Terracotta): #C4663C — CTAs, active nav, announcement labels. Max 3–4 appearances per page
-- Secondary accent (Sage): #4A7A5C — youth labels, success states, secondary tags
-- Tertiary (Warm gold): #C49A3C — decorative only: blockquote bars, calendar dots, divider rules. Never on interactive elements
+- Background: #FAF7F2 - warm cream, never pure white or gray
+- Hero bg: #1C1210 - deep warm dark, brown-black, intimate like a coffee shop at night
+- Primary accent (Terracotta): #C4663C - CTAs, active nav, announcement labels. Max 3–4 appearances per page
+- Secondary accent (Sage): #4A7A5C - youth labels, success states, secondary tags
+- Tertiary (Warm gold): #C49A3C - decorative only: blockquote bars, calendar dots, divider rules. Never on interactive elements
 - Card surfaces: #FFFFFF with 0.5px solid #EAE5DE borders (warm-tinted, never gray)
-- Body text: #1C1A18 — near-black with warm undertone
+- Body text: #1C1A18 - near-black with warm undertone
 - Muted text: #6B6560
 - Faint text: #9C9490
 
@@ -46,29 +46,29 @@ These fonts only, never substituted.
 - Generous negative space. Space separates sections, not background color changes
 - Max width: 760px single-column, 960px two-column
 - Card borders: 0.5px solid #EAE5DE. No shadows except on hover: 0 8px 28px rgba(28,20,16,0.09)
-- Border radius: 14px cards, 8px buttons, 20px badge pills — not uniform everywhere
+- Border radius: 14px cards, 8px buttons, 20px badge pills - not uniform everywhere
 
 ## Hero Spec
 - Background: #1C1210
-- Radial terracotta glow top-right: rgba(196,102,60,0.20) — subtle, not dramatic
-- Bottom gradient rule: linear-gradient(90deg, transparent, #C4663C, #C49A3C, transparent) at 40% opacity, 2–3px tall — only decorative element
+- Radial terracotta glow top-right: rgba(196,102,60,0.20) - subtle, not dramatic
+- Bottom gradient rule: linear-gradient(90deg, transparent, #C4663C, #C49A3C, transparent) at 40% opacity, 2–3px tall - only decorative element
 - No photography, no background image. Type and darkness do all the work.
 - Content order: eyebrow label (uppercase terracotta) → Playfair h1 with one italic terracotta phrase → one-sentence muted white description → two buttons (primary: terracotta fill, secondary: ghost white border)
 
 ## Hard Avoids
-- No navy blue anywhere — old palette, fully removed
+- No navy blue anywhere - old palette, fully removed
 - No pure #000000 or #FFFFFF backgrounds
-- No gray borders — all borders warm-tinted
+- No gray borders - all borders warm-tinted
 - No more than one accent at equal visual weight per page
 - No shadows on non-hovered elements
 - No gradients except hero bottom rule and hero glow
 - No DM Sans at weight 700
-- No section background color changes to separate content — use space
-- No blue on any interactive element — failure if it appears
+- No section background color changes to separate content - use space
+- No blue on any interactive element - failure if it appears
 - No icon grids (3–4 boxes in a row with icon + text)
 - No hero → three-column grid → testimonial → CTA strip layout
-- No cards wrapping everything — use rules and whitespace when containment isn't needed
-- No Inter, Roboto, or Space Grotesk — ever
+- No cards wrapping everything - use rules and whitespace when containment isn't needed
+- No Inter, Roboto, or Space Grotesk - ever
 - No hover states that turn blue or gray
 - No decorative blobs, gradient meshes, or floating shapes
 
