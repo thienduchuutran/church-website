@@ -79,7 +79,7 @@ export default function AccentColorPicker({
       ref={ref}
       role="dialog"
       aria-label={`Accent color for ${monthLabel}`}
-      className="absolute top-full left-0 mt-1.5 z-30 w-[220px] bg-white border border-gray-300 rounded-md p-2.5"
+      className="absolute top-full left-0 mt-1.5 z-30 w-[220px] max-w-[calc(100vw-2rem)] bg-white border border-gray-300 rounded-md p-2.5"
       style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}
       onMouseDown={(e) => e.stopPropagation()}
     >
