@@ -37,6 +37,15 @@ export default function ExportButton({ targetRef, year, month, isAdmin }: Export
       el.removeAttribute('style')
     })
 
+    // Force the export canvas to 1100px - the live page is fluid (so mobile
+    // visitors don't get a 1100px-wide horizontal-scroll mess), but the PNG
+    // export must always match the printed-calendar aspect ratio. Note: the
+    // grid/agenda swap inside is still viewport-driven, so an admin who
+    // exports from a phone-sized viewport (<768px) will get the agenda PNG.
+    const savedRootStyle = root.getAttribute('style') ?? ''
+    root.style.width = '1100px'
+    root.style.maxWidth = 'none'
+
     try {
       const { toPng } = await import('html-to-image')
       const url = await toPng(root, {
@@ -49,6 +58,8 @@ export default function ExportButton({ targetRef, year, month, isAdmin }: Export
       link.href = url
       link.click()
     } finally {
+      if (savedRootStyle) root.setAttribute('style', savedRootStyle)
+      else root.removeAttribute('style')
       savedCircles.forEach(({ el, className, style }) => {
         el.className = className
         if (style) el.setAttribute('style', style)

@@ -19,11 +19,12 @@ export default function CalendarPageClient({ initialYear, initialMonth }: Calend
   return (
     <div className="mx-auto px-4 py-3 sm:px-6 lg:px-8 flex flex-col items-center">
       {/*
-        Fixed export dimensions - matches the reference printed-calendar
-        aspect ratio (~1100 × 840, 1.3:1 landscape). The export PNG will be
-        exactly this size × pixelRatio (2x = 2200 × 1680).
+        Live page is fluid (capped at 1100px on wide screens). The 1100px is
+        the printed-calendar aspect ratio (~1100 × 840) and is re-applied
+        only at export time by ExportButton, so the snapshot always renders
+        at the same canvas size regardless of the viewer's viewport.
       */}
-      <div ref={calendarRef} className="bg-white p-3" style={{ width: '1100px' }}>
+      <div ref={calendarRef} className="@container bg-white p-3 w-full max-w-[1100px]">
         <CalendarShell
           year={year}
           month={month}
@@ -35,7 +36,7 @@ export default function CalendarPageClient({ initialYear, initialMonth }: Calend
       </div>
 
       {/* Export button - admin only */}
-      <div className="mt-3 flex justify-end" style={{ width: '1100px' }}>
+      <div className="mt-3 flex justify-end w-full max-w-[1100px]">
         <ExportButton targetRef={calendarRef} year={year} month={month} isAdmin={isAdmin} />
       </div>
     </div>

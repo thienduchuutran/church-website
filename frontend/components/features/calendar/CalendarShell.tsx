@@ -219,21 +219,24 @@ export default function CalendarShell({
       <div className={`transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
 
         {/* Editorial masthead: Today (left) | massive month + year (center) | icon nav (right) */}
-        <div className="flex items-center justify-between gap-6 mb-3">
+        <div className="flex items-center justify-between gap-2 @xl:gap-6 mb-3">
 
-          {/* Today - bold pill, anchors the left side */}
+          {/* Today - bold pill, anchors the left side. min-h hits the iOS 44px
+              tap-target floor since py-2 alone leaves it shy of that. */}
           <button
             onClick={goToToday}
             disabled={isOnCurrentMonth}
             aria-label="Jump to current month"
             data-export-hide
-            className="shrink-0 px-5 py-2 rounded-full border-2 border-gray-900 font-display text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
+            className="shrink-0 inline-flex items-center min-h-[44px] px-4 @xl:px-5 py-2 rounded-full border-2 border-gray-900 font-display text-[10px] @xl:text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
           >
             Today
           </button>
 
-          {/* Center - the headline. Month is the hero, year is a quiet companion. */}
-          <div className="relative flex-1 flex justify-center">
+          {/* Center - the headline. Month is the hero, year is a quiet companion.
+              Sizes ramp from mobile (text-3xl/text-base) to desktop (4.5rem/2rem)
+              so a 375px row can fit Today + headline + nav without wrapping. */}
+          <div className="relative flex-1 flex justify-center min-w-0">
             <h1 className="m-0 font-serif">
               <button
                 type="button"
@@ -242,21 +245,21 @@ export default function CalendarShell({
                 aria-haspopup="dialog"
                 aria-expanded={pickerOpen}
                 aria-label={`${monthName} ${year} - change month`}
-                className="group flex items-baseline gap-3 cursor-pointer transition-opacity hover:opacity-70 leading-[0.9]"
+                className="group flex items-baseline gap-1.5 @xl:gap-3 cursor-pointer transition-opacity hover:opacity-70 leading-[0.9] max-w-full"
                 style={{
                   fontFamily: 'var(--font-serif)',
                   letterSpacing: '-0.025em',
                 }}
               >
                 <span
-                  className="font-bold"
-                  style={{ fontSize: '4.5rem', color: activeAccent }}
+                  className="font-bold truncate text-3xl @xl:text-5xl @3xl:text-[4.5rem]"
+                  style={{ color: activeAccent }}
                 >
                   {monthName}
                 </span>
                 <span
-                  className="font-light text-gray-300 group-hover:text-gray-400 transition-colors"
-                  style={{ fontSize: '2rem', letterSpacing: '0.01em' }}
+                  className="font-light text-gray-300 group-hover:text-gray-400 transition-colors text-base @xl:text-2xl @3xl:text-[2rem]"
+                  style={{ letterSpacing: '0.01em' }}
                 >
                   {year}
                 </span>
@@ -325,13 +328,14 @@ export default function CalendarShell({
             )}
           </div>
 
-          {/* Nav cluster - circular icon buttons, same border family as Today */}
-          <div data-export-hide className="flex items-center gap-2 shrink-0">
+          {/* Nav cluster - circular icon buttons, same border family as Today.
+              48x48 hits the Material Design touch-target floor. */}
+          <div data-export-hide className="flex items-center gap-1.5 @xl:gap-2 shrink-0">
             <button
               onClick={prevMonth}
               aria-label={`Previous month - ${prevMonthName}`}
               title={prevMonthName}
-              className="w-11 h-11 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
+              className="w-12 h-12 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
             >
               <CaretLeft size={20} weight="bold" />
             </button>
@@ -339,7 +343,7 @@ export default function CalendarShell({
               onClick={nextMonth}
               aria-label={`Next month - ${nextMonthName}`}
               title={nextMonthName}
-              className="w-11 h-11 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
+              className="w-12 h-12 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
             >
               <CaretRight size={20} weight="bold" />
             </button>
@@ -391,7 +395,7 @@ export default function CalendarShell({
         {/* Info strip below grid - compact 3 columns */}
         {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin) && (
           <div
-            className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-x-2 border-b-2 border-gray-900"
+            className="grid grid-cols-1 @xl:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-x-2 border-b-2 border-gray-900"
             style={{ backgroundColor: '#fafafa' }}
           >
             {/* Birthdays */}
@@ -474,7 +478,7 @@ export default function CalendarShell({
 
             {/* Locations - admin only, full-width row after the 3 columns, entries flow inline */}
             {isAdmin && eventsWithAddress.length > 0 && (
-              <div className="sm:col-span-3 min-w-0 border-t border-gray-200 pt-2">
+              <div className="@xl:col-span-3 min-w-0 border-t border-gray-200 pt-2">
                 <p className="font-display text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                   Locations
                 </p>

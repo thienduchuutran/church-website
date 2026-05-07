@@ -52,25 +52,18 @@ export default function CalendarGrid({
     return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
   }
 
-  // Mobile agenda: only days that have events, in ascending order. Empty days
-  // are dropped because a phone-sized list of 30 mostly-empty rows is noise.
-  // Admins still get a "+ add event" affordance in the empty state below.
-  const agendaDays = Object.keys(eventsByDay)
-    .map((d) => parseInt(d, 10))
-    .sort((a, b) => a - b)
-
-  const weekdayLong = (day: number) =>
-    new Date(year, month - 1, day).toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-    })
+  // Single-letter day-of-week headers for the mobile month grid. Each cell
+  // is ~49px on a 375px screen, so a 3-letter abbreviation would crowd the
+  // day number. This matches Google Calendar's mobile month layout.
+  const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 
   return (
     <div className="w-full">
-      {/* Desktop: full 7-col grid. Hidden under md because a 53px cell on a
-          375px screen is unreadable - the mobile agenda below replaces it. */}
-      <div className="hidden md:block border-2 border-gray-900 overflow-hidden">
+      {/* Desktop: full 7-col grid with full event chips. Gated by container
+          width (not viewport) so the export PNG - which forces the wrapper
+          to 1100px regardless of device - always renders this editorial
+          layout, even when the admin is exporting from a phone. */}
+      <div className="hidden @3xl:block border-2 border-gray-900 overflow-hidden">
         {/* Day-of-week headers */}
         <div className="grid grid-cols-7">
           {DAY_HEADERS.map((d, i) => (
@@ -159,69 +152,102 @@ export default function CalendarGrid({
         </div>
       </div>
 
-      {/* Mobile: agenda/list view. Same data, different shape - matches the
-          pattern Google/Apple Calendar use when the device is too narrow for
-          a meaningful month grid. */}
-      <div className="block md:hidden space-y-3">
-        {agendaDays.length === 0 ? (
-          <div className="border-2 border-gray-900 px-4 py-8 text-center">
-            <p className="font-display text-sm text-gray-500">No events this month.</p>
-            {isAdmin && (
-              <p className="mt-1 font-sans text-xs text-gray-400">
-                Switch to a desktop view or use a tablet to add events.
-              </p>
-            )}
-          </div>
-        ) : (
-          agendaDays.map((day) => {
+      {/* Mobile: compact 7-column month grid - Google Calendar pattern. Every
+          day is visible; events render as thin colored bars under the day
+          number. Tap any day with events (or any day for admins) to open the
+          day-events sheet, where full titles and details live. Container-
+          gated so the export PNG never falls back to this view. */}
+      <div className="block @3xl:hidden">
+        {/* Day-of-week strip - single letters because 3-letter abbreviations
+            crowd a 49px column on a 375px viewport. */}
+        <div className="grid grid-cols-7 mb-1.5">
+          {DAY_LETTERS.map((letter, i) => (
+            <div
+              key={i}
+              className="text-center font-display text-[10px] font-bold uppercase tracking-[0.15em] py-1"
+              style={{ color: theme.header }}
+            >
+              {letter}
+            </div>
+          ))}
+        </div>
+
+        {/* Cells */}
+        <div className="grid grid-cols-7 border-t border-l border-gray-200 rounded-sm overflow-hidden">
+          {cells.map((day, idx) => {
+            if (day === null) {
+              return (
+                <div
+                  key={`empty-${idx}`}
+                  className="border-r border-b border-gray-200 min-h-[60px] bg-gray-50/40"
+                />
+              )
+            }
+
             const dayEvents = eventsByDay[day] ?? []
             const isToday = day === todayDay
             const dateStr = formatDate(day)
             const isClickable = isAdmin || dayEvents.length > 0
+            // Cap visible bars at 3 - any more crowds a 60px-tall cell. The
+            // remainder surfaces as "+N" so the day still indicates "lots
+            // happening" at a glance.
+            const visibleBars = dayEvents.slice(0, 3)
+            const overflow = dayEvents.length - visibleBars.length
 
             return (
-              <div
+              <button
                 key={day}
+                type="button"
                 onClick={() => isClickable && onDayClick?.(dateStr)}
+                disabled={!isClickable}
+                aria-label={`${day} - ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
                 className={[
-                  'border-2 border-gray-900 bg-white px-4 py-3',
-                  isClickable ? 'cursor-pointer active:bg-gray-50 transition-colors' : '',
+                  'border-r border-b border-gray-200 min-h-[60px] px-1 pt-1 pb-1.5 flex flex-col items-stretch gap-1 bg-white text-left',
+                  isClickable ? 'active:bg-gray-100 transition-colors' : 'cursor-default',
                 ].join(' ')}
               >
-                <div className="mb-2">
-                  <span
-                    className={[
-                      'inline-block font-display text-xs font-bold uppercase tracking-wider',
-                      isToday ? 'rounded-full px-2 py-0.5 text-white' : 'text-gray-600',
-                    ].join(' ')}
-                    style={isToday ? { backgroundColor: theme.header } : {}}
-                  >
-                    {weekdayLong(day)}
-                  </span>
+                {/* Day number row - centered. Today gets a filled accent
+                    circle; matches the desktop grid's today affordance. */}
+                <div className="flex justify-center">
+                  {isToday ? (
+                    <span
+                      className="rounded-full w-6 h-6 flex items-center justify-center text-[12px] font-bold text-white leading-none"
+                      style={{ backgroundColor: theme.header }}
+                    >
+                      {day}
+                    </span>
+                  ) : (
+                    <span className="font-sans text-[12px] font-medium text-gray-700 leading-none pt-1">
+                      {day}
+                    </span>
+                  )}
                 </div>
-                <div className="space-y-1.5">
-                  {dayEvents.map((e) => {
-                    const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
-                    return (
-                      <div
-                        key={e.id}
-                        className="flex items-center gap-2 min-w-0 rounded px-2 py-1.5 font-display text-sm font-semibold leading-snug"
-                        style={{
-                          backgroundColor: colors.bg,
-                          borderLeft: `3px solid ${colors.dot}`,
-                          color: colors.text,
-                        }}
-                      >
-                        <CalendarIcon iconKey={e.icon} size={14} color={colors.dot} />
-                        <span className="truncate">{e.title}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
+
+                {/* Event bars - thin and colored, no text. Title lives in
+                    the day-events modal that opens on tap. */}
+                {visibleBars.length > 0 && (
+                  <div className="flex flex-col gap-[2px] mt-auto">
+                    {visibleBars.map((e) => {
+                      const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
+                      return (
+                        <div
+                          key={e.id}
+                          className="h-[3px] rounded-sm w-full"
+                          style={{ backgroundColor: colors.dot }}
+                        />
+                      )
+                    })}
+                    {overflow > 0 && (
+                      <span className="font-sans text-[9px] text-gray-500 leading-none mt-0.5">
+                        +{overflow}
+                      </span>
+                    )}
+                  </div>
+                )}
+              </button>
             )
-          })
-        )}
+          })}
+        </div>
       </div>
     </div>
   )
