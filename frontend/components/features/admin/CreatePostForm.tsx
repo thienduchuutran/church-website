@@ -13,7 +13,15 @@ import {
 } from '@/lib/post-types'
 import PostFormFields from './PostFormFields'
 
-export default function CreatePostForm({ section }: { section: string }) {
+export default function CreatePostForm({
+  section,
+  onSuccess,
+  onCancel,
+}: {
+  section: string
+  onSuccess?: () => void
+  onCancel?: () => void
+}) {
   const { session } = useAuth()
   const router = useRouter()
   const [state, setState] = useState<PostFormState>(EMPTY_POST_FORM)
@@ -27,11 +35,21 @@ export default function CreatePostForm({ section }: { section: string }) {
     setError(null)
     try {
       await createPost(toPostPayload(section, state), session.access_token)
-      router.push(POST_TYPE_ROUTES[section] ?? '/')
+      router.refresh()
+      if (onSuccess) {
+        onSuccess()
+      } else {
+        router.push(POST_TYPE_ROUTES[section] ?? '/')
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong')
       setSaving(false)
     }
+  }
+
+  function handleCancel() {
+    if (onCancel) onCancel()
+    else router.back()
   }
 
   return (
@@ -52,7 +70,7 @@ export default function CreatePostForm({ section }: { section: string }) {
         </button>
         <button
           type="button"
-          onClick={() => router.back()}
+          onClick={handleCancel}
           className="rounded-lg border border-border px-5 py-2.5 font-display text-sm font-medium text-muted transition-colors hover:bg-surface"
         >
           Cancel
