@@ -10,12 +10,16 @@ interface AccentColorPickerProps {
   onSave: (hex: string) => Promise<void>   // persist; resolves on success, rejects on error
   onClose: () => void
   saving: boolean
+  centered?: boolean                       // when true, render as a fixed-position centered modal
+                                           // (used by the FAB action sheet on mobile); default
+                                           // false renders the existing anchored popover
 }
 
-// Anchored popover (not portaled) - parent must give it `position: relative`.
-// Render lives next to the trigger so layout shifts and focus stay local. We
-// intentionally hand-roll the outside-click + escape handlers instead of
-// pulling a popover lib, to match the rest of the calendar's small primitives.
+// Anchored popover (not portaled) - parent must give it `position: relative`
+// in popover mode. In `centered` mode the picker positions itself as a fixed
+// centered modal and the caller is responsible for the backdrop. We hand-roll
+// outside-click + escape handlers instead of pulling a popover lib, to match
+// the rest of the calendar's small primitives.
 export default function AccentColorPicker({
   monthLabel,
   currentAccent,
@@ -23,6 +27,7 @@ export default function AccentColorPicker({
   onSave,
   onClose,
   saving,
+  centered = false,
 }: AccentColorPickerProps) {
   const [picked, setPicked] = useState(currentAccent)
   const [error, setError] = useState<string | null>(null)
@@ -79,8 +84,12 @@ export default function AccentColorPicker({
       ref={ref}
       role="dialog"
       aria-label={`Accent color for ${monthLabel}`}
-      className="absolute top-full left-0 mt-1.5 z-30 w-[220px] max-w-[calc(100vw-2rem)] bg-white border border-gray-300 rounded-md p-2.5"
-      style={{ boxShadow: '0 4px 16px rgba(0,0,0,0.10)' }}
+      className={
+        centered
+          ? 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[280px] max-w-[calc(100vw-2rem)] bg-white border border-gray-300 rounded-lg p-3'
+          : 'absolute top-full left-0 mt-1.5 z-30 w-[220px] max-w-[calc(100vw-2rem)] bg-white border border-gray-300 rounded-md p-2.5'
+      }
+      style={{ boxShadow: centered ? '0 20px 50px rgba(0,0,0,0.25)' : '0 4px 16px rgba(0,0,0,0.10)' }}
       onMouseDown={(e) => e.stopPropagation()}
     >
       <p className="font-display text-[11px] font-medium text-gray-500 mb-2">

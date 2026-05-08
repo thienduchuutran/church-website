@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
-import { CaretLeft, CaretRight } from '@phosphor-icons/react'
+import { CaretLeft, CaretRight, Plus, Palette, DownloadSimple } from '@phosphor-icons/react'
 import { getMonth, upsertMonthSettings } from '@/lib/calendar'
 import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP } from './types'
 import CalendarGrid from './CalendarGrid'
@@ -40,6 +40,8 @@ interface CalendarShellProps {
   setMonth: (m: number) => void
   isAdmin: boolean
   accessToken: string | null
+  onExport: () => void | Promise<void>
+  exporting: boolean
 }
 
 export default function CalendarShell({
@@ -49,6 +51,8 @@ export default function CalendarShell({
   setMonth,
   isAdmin,
   accessToken,
+  onExport,
+  exporting,
 }: CalendarShellProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [monthNote, setMonthNote] = useState<CalendarMonthNote | null>(null)
@@ -76,6 +80,13 @@ export default function CalendarShell({
 
   // Month picker popover (anchored to the title)
   const [pickerOpen, setPickerOpen] = useState(false)
+
+  // FAB action sheet (admin only). Tap the floating "+" → bottom sheet
+  // appears with admin actions. Source-tracked so the accent picker can
+  // render as a centered modal when triggered from the sheet, vs. as an
+  // anchored popover when triggered from the inline desktop button.
+  const [fabOpen, setFabOpen] = useState(false)
+  const [accentPickerSource, setAccentPickerSource] = useState<'inline' | 'fab' | null>(null)
 
   // Direction-aware slide: compare current position (year*12 + month) against
   // the previous one. +1 = forward in time, -1 = backward, 0 = first render.
@@ -210,6 +221,19 @@ export default function CalendarShell({
     fetchMonth(year, month)
   }
 
+  // FAB action sheet handlers. The sheet itself is the entry point - tap
+  // the "+" to expand it; tap an action to fire it and dismiss.
+  function handleFABAccent() {
+    setFabOpen(false)
+    setAccentPickerSource('fab')
+    setAccentPickerOpen(true)
+  }
+
+  async function handleFABExport() {
+    setFabOpen(false)
+    await onExport()
+  }
+
   const birthdays = events.filter(e => e.event_type === 'birthday')
   const bibleStudyDays = events.filter(e => e.event_type === 'bible_study')
   const eventsWithAddress = events.filter(e => e.private_address)
@@ -218,25 +242,38 @@ export default function CalendarShell({
     <>
       <div className={`transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
 
-        {/* Editorial masthead: Today (left) | massive month + year (center) | icon nav (right) */}
-        <div className="flex items-center justify-between gap-2 @xl:gap-6 mb-3">
+        {/* Editorial masthead. Mobile stacks: row 1 = headline (full width),
+            row 2 = Today (left) and nav arrows (right). Desktop is one row:
+            Today | headline | nav. Grid-template-areas keeps the markup
+            order stable while letting the layout reflow. */}
+        <div
+          className={[
+            'grid items-center gap-y-2 mb-3',
+            // Mobile: 2 rows, headline spans full width
+            "[grid-template-areas:'headline_headline''today_nav']",
+            '[grid-template-columns:1fr_auto]',
+            // Desktop: 1 row, today | headline | nav
+            "@xl:[grid-template-areas:'today_headline_nav']",
+            '@xl:[grid-template-columns:auto_1fr_auto]',
+            '@xl:gap-x-6',
+          ].join(' ')}
+        >
 
-          {/* Today - bold pill, anchors the left side. min-h hits the iOS 44px
-              tap-target floor since py-2 alone leaves it shy of that. */}
+          {/* Today - bold pill. min-h hits the iOS 44px tap-target floor since
+              py-2 alone leaves it shy of that. */}
           <button
             onClick={goToToday}
             disabled={isOnCurrentMonth}
             aria-label="Jump to current month"
             data-export-hide
-            className="shrink-0 inline-flex items-center min-h-[44px] px-4 @xl:px-5 py-2 rounded-full border-2 border-gray-900 font-display text-[10px] @xl:text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
+            className="[grid-area:today] justify-self-start shrink-0 inline-flex items-center min-h-[44px] px-4 @xl:px-5 py-2 rounded-full border-2 border-gray-900 font-display text-[10px] @xl:text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
           >
             Today
           </button>
 
-          {/* Center - the headline. Month is the hero, year is a quiet companion.
-              Sizes ramp from mobile (text-3xl/text-base) to desktop (4.5rem/2rem)
-              so a 375px row can fit Today + headline + nav without wrapping. */}
-          <div className="relative flex-1 flex justify-center min-w-0">
+          {/* Headline - month is the hero, year is a quiet companion. Sizes
+              ramp from mobile (text-4xl/text-lg) to desktop (4.5rem/2rem). */}
+          <div className="[grid-area:headline] relative flex justify-center min-w-0">
             <h1 className="m-0 font-serif">
               <button
                 type="button"
@@ -252,13 +289,13 @@ export default function CalendarShell({
                 }}
               >
                 <span
-                  className="font-bold truncate text-3xl @xl:text-5xl @3xl:text-[4.5rem]"
+                  className="font-bold truncate text-4xl @xl:text-5xl @3xl:text-[4.5rem]"
                   style={{ color: activeAccent }}
                 >
                   {monthName}
                 </span>
                 <span
-                  className="font-light text-gray-300 group-hover:text-gray-400 transition-colors text-base @xl:text-2xl @3xl:text-[2rem]"
+                  className="font-light text-gray-300 group-hover:text-gray-400 transition-colors text-lg @xl:text-2xl @3xl:text-[2rem]"
                   style={{ letterSpacing: '0.01em' }}
                 >
                   {year}
@@ -280,17 +317,25 @@ export default function CalendarShell({
             )}
 
             {/* Admin-only accent picker trigger - sits to the right of the title.
-                Hidden entirely from non-admins so the marketing surface stays
-                clean for visitors. */}
+                Hidden on mobile (admin power-user feature; the absolute
+                positioning conflicts with the stacked masthead layout). */}
             {isAdmin && (
-              <div data-export-hide className="absolute top-0 right-0 flex items-center gap-2">
+              <div data-export-hide className="hidden @xl:flex absolute top-0 right-0 items-center gap-2">
                 <div style={{ position: 'relative' }}>
                   <button
                     type="button"
-                    onClick={() => setAccentPickerOpen((v) => !v)}
+                    onClick={() => {
+                      if (accentPickerOpen && accentPickerSource === 'inline') {
+                        setAccentPickerOpen(false)
+                        setAccentPickerSource(null)
+                      } else {
+                        setAccentPickerSource('inline')
+                        setAccentPickerOpen(true)
+                      }
+                    }}
                     onMouseDown={(e) => e.stopPropagation()}
                     aria-haspopup="dialog"
-                    aria-expanded={accentPickerOpen}
+                    aria-expanded={accentPickerOpen && accentPickerSource === 'inline'}
                     aria-label="Change month accent color"
                     className="flex items-center gap-1 font-display text-[10px] font-medium border border-dashed rounded px-2 py-0.5 transition-colors"
                     style={{
@@ -305,13 +350,16 @@ export default function CalendarShell({
                     />
                     Accent color
                   </button>
-                  {accentPickerOpen && (
+                  {accentPickerOpen && accentPickerSource === 'inline' && (
                     <AccentColorPicker
                       monthLabel={`${monthName} ${year}`}
                       currentAccent={monthSettings?.accent_color ?? theme.header}
                       onPreview={setLiveAccent}
                       onSave={handleSaveAccent}
-                      onClose={() => setAccentPickerOpen(false)}
+                      onClose={() => {
+                        setAccentPickerOpen(false)
+                        setAccentPickerSource(null)
+                      }}
                       saving={savingAccent}
                     />
                   )}
@@ -330,7 +378,7 @@ export default function CalendarShell({
 
           {/* Nav cluster - circular icon buttons, same border family as Today.
               48x48 hits the Material Design touch-target floor. */}
-          <div data-export-hide className="flex items-center gap-1.5 @xl:gap-2 shrink-0">
+          <div data-export-hide className="[grid-area:nav] justify-self-end flex items-center gap-1.5 @xl:gap-2 shrink-0">
             <button
               onClick={prevMonth}
               aria-label={`Previous month - ${prevMonthName}`}
@@ -395,7 +443,7 @@ export default function CalendarShell({
         {/* Info strip below grid - compact 3 columns */}
         {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin) && (
           <div
-            className="grid grid-cols-1 @xl:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-x-2 border-b-2 border-gray-900"
+            className="grid grid-cols-1 @xl:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-2 border-gray-900 mt-4 @3xl:mt-0 @3xl:border-t-0"
             style={{ backgroundColor: '#fafafa' }}
           >
             {/* Birthdays */}
@@ -526,6 +574,134 @@ export default function CalendarShell({
           })}
         </div>
       </div>
+
+      {/* FAB - admin only, Google Calendar pattern. Tap to open the action
+          sheet (Accent + Export). The "+" rotates 45° to become a "×" while
+          the sheet is open so the same button serves as the dismiss control.
+          data-export-hide keeps it out of the PNG snapshot. */}
+      {isAdmin && (
+        <button
+          type="button"
+          onClick={() => setFabOpen((o) => !o)}
+          aria-label={fabOpen ? 'Close menu' : 'Open menu'}
+          aria-expanded={fabOpen}
+          data-export-hide
+          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full text-white flex items-center justify-center shadow-[0_10px_25px_-5px_rgba(0,0,0,0.3),0_4px_10px_-3px_rgba(0,0,0,0.2)] hover:scale-105 active:scale-95 transition-transform"
+          style={{ backgroundColor: activeAccent }}
+        >
+          <motion.span
+            animate={{ rotate: fabOpen ? 45 : 0 }}
+            transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+            className="flex items-center justify-center"
+          >
+            <Plus size={26} weight="bold" />
+          </motion.span>
+        </button>
+      )}
+
+      {/* FAB action sheet - admin only. Backdrop fades in; sheet slides up
+          from below. Two icon options matching Google Calendar's speed-dial
+          pattern. data-export-hide on both layers in case the FAB is open
+          when an admin triggers an export from elsewhere. */}
+      {isAdmin && (
+        <AnimatePresence>
+          {fabOpen && (
+            <motion.div
+              key="fab-sheet"
+              data-export-hide
+              className="fixed inset-0 z-40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              onClick={() => setFabOpen(false)}
+            >
+              <div className="absolute inset-0 bg-black/30 backdrop-blur-[6px]" />
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                onClick={(e) => e.stopPropagation()}
+                role="dialog"
+                aria-label="Calendar actions"
+                className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-[0_-20px_50px_-10px_rgba(0,0,0,0.25)] pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] px-6"
+              >
+                {/* Drag handle - visual affordance only */}
+                <div className="mx-auto w-10 h-1 rounded-full bg-gray-300 mb-5" />
+
+                <p className="font-display text-[10px] font-bold tracking-[0.18em] uppercase text-gray-500 mb-3">
+                  Actions
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={handleFABAccent}
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-gray-200 hover:border-gray-300 active:scale-95 transition-all"
+                  >
+                    <span
+                      className="w-12 h-12 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: `${activeAccent}1a`, color: activeAccent }}
+                    >
+                      <Palette size={22} weight="bold" />
+                    </span>
+                    <span className="font-display text-[11px] font-semibold text-gray-800 leading-tight text-center">
+                      Accent color
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleFABExport}
+                    disabled={exporting}
+                    className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-gray-200 hover:border-gray-300 active:scale-95 transition-all disabled:opacity-50"
+                  >
+                    <span
+                      className="w-12 h-12 rounded-full flex items-center justify-center"
+                      style={{ backgroundColor: `${activeAccent}1a`, color: activeAccent }}
+                    >
+                      <DownloadSimple size={22} weight="bold" />
+                    </span>
+                    <span className="font-display text-[11px] font-semibold text-gray-800 leading-tight text-center">
+                      {exporting ? 'Exporting…' : 'Export to Discord'}
+                    </span>
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
+
+      {/* Accent picker rendered as a centered modal when opened via the FAB.
+          The inline (desktop) version still renders inside the masthead as
+          a popover - see the conditional in the masthead block. */}
+      {accentPickerOpen && accentPickerSource === 'fab' && (
+        <div
+          className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[6px]"
+          data-export-hide
+          onClick={() => {
+            setAccentPickerOpen(false)
+            setAccentPickerSource(null)
+          }}
+        >
+          <div onClick={(e) => e.stopPropagation()}>
+            <AccentColorPicker
+              monthLabel={`${monthName} ${year}`}
+              currentAccent={monthSettings?.accent_color ?? theme.header}
+              onPreview={setLiveAccent}
+              onSave={handleSaveAccent}
+              onClose={() => {
+                setAccentPickerOpen(false)
+                setAccentPickerSource(null)
+              }}
+              saving={savingAccent}
+              centered
+            />
+          </div>
+        </div>
+      )}
 
       {modalOpen && (
         <EventModal
