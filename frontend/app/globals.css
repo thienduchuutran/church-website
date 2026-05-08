@@ -74,6 +74,16 @@ body {
   outline-offset: 2px;
 }
 
+@keyframes nav-progress {
+  0%   { transform: translateX(-100%); }
+  60%  { transform: translateX(-10%); }
+  100% { transform: translateX(0%); }
+}
+
+.animate-nav-progress {
+  animation: nav-progress 8s cubic-bezier(0.1, 0.4, 0.2, 1) forwards;
+}
+
 @keyframes page-fade-in {
   from {
     opacity: 0;

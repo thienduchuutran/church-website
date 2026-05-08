@@ -5,6 +5,7 @@ import { AuthProvider } from '@/lib/auth'
 import { EditModalProvider } from '@/lib/edit-modal'
 import Navbar from '@/components/ui/Navbar'
 import PageTransition from '@/components/ui/PageTransition'
+import NavigationProgress from '@/components/ui/NavigationProgress'
 
 const inter = Inter({
   variable: '--font-sans',
@@ -59,6 +60,7 @@ export default function RootLayout({
         </a>
         <AuthProvider>
           <EditModalProvider>
+            <NavigationProgress />
             <Navbar />
             <main id="main-content" tabIndex={-1} className="flex-1 scroll-mt-20">
               <PageTransition>{children}</PageTransition>
