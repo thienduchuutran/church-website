@@ -377,7 +377,11 @@ export default function CalendarShell({
           </div>
 
           {/* Nav cluster - circular icon buttons, same border family as Today.
-              48x48 hits the Material Design touch-target floor. */}
+              48x48 hits the Material Design touch-target floor. The admin
+              FAB sits at the right edge, accent-filled instead of outlined,
+              so the row reads as a hierarchy beat: outline → outline → solid.
+              In-flow placement keeps it from obstructing the last week's
+              Saturday cells the way a fixed bottom-right FAB would. */}
           <div data-export-hide className="[grid-area:nav] justify-self-end flex items-center gap-1.5 @xl:gap-2 shrink-0">
             <button
               onClick={prevMonth}
@@ -395,6 +399,92 @@ export default function CalendarShell({
             >
               <CaretRight size={20} weight="bold" />
             </button>
+            {isAdmin && (
+              <div className="relative z-50 ml-0.5 flex @3xl:hidden">
+                {/* FAB itself - floats up (y: -3) when the menu opens, so the
+                    motion reads as "lifting" while the items drop below it. */}
+                <motion.button
+                  type="button"
+                  onClick={() => setFabOpen((o) => !o)}
+                  aria-label={fabOpen ? 'Close menu' : 'Open menu'}
+                  aria-expanded={fabOpen}
+                  animate={{ y: fabOpen ? -4 : 0 }}
+                  transition={{ type: 'spring', stiffness: 340, damping: 20 }}
+                  className="w-12 h-12 flex items-center justify-center rounded-full text-white shadow-[0_4px_12px_-2px_rgba(0,0,0,0.25)] hover:shadow-[0_8px_20px_-3px_rgba(0,0,0,0.35)] active:scale-95 transition-shadow"
+                  style={{ backgroundColor: activeAccent }}
+                >
+                  <motion.span
+                    animate={{ rotate: fabOpen ? 45 : 0 }}
+                    transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+                    className="flex items-center justify-center"
+                  >
+                    <Plus size={22} weight="bold" />
+                  </motion.span>
+                </motion.button>
+
+                {/* Speed-dial items - drop down from the FAB position with
+                    stagger. Each item is a round white circle (icon tinted
+                    with the month accent) plus a dark label pill on the left,
+                    matching Google Calendar's mobile speed-dial pattern. */}
+                <AnimatePresence>
+                  {fabOpen && (
+                    <motion.div
+                      key="fab-menu"
+                      variants={{
+                        open: { transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
+                        closed: { transition: { staggerChildren: 0.04, staggerDirection: -1 } },
+                      }}
+                      initial="closed"
+                      animate="open"
+                      exit="closed"
+                      className="absolute top-full right-0 mt-3 flex flex-col items-end gap-2.5"
+                    >
+                      <motion.div
+                        variants={{
+                          open: { y: 0, opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 380, damping: 24 } },
+                          closed: { y: -16, opacity: 0, scale: 0.5, transition: { duration: 0.15 } },
+                        }}
+                        className="flex items-center gap-2 justify-end"
+                      >
+                        <span className="bg-gray-900 text-white font-display text-[11px] font-medium px-3 py-1.5 rounded-full whitespace-nowrap shadow-md">
+                          Accent color
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleFABAccent}
+                          aria-label="Change accent color"
+                          className="w-12 h-12 rounded-full bg-white shadow-[0_4px_12px_-2px_rgba(0,0,0,0.25)] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+                          style={{ color: activeAccent }}
+                        >
+                          <Palette size={22} weight="bold" />
+                        </button>
+                      </motion.div>
+                      <motion.div
+                        variants={{
+                          open: { y: 0, opacity: 1, scale: 1, transition: { type: 'spring', stiffness: 380, damping: 24 } },
+                          closed: { y: -16, opacity: 0, scale: 0.5, transition: { duration: 0.15 } },
+                        }}
+                        className="flex items-center gap-2 justify-end"
+                      >
+                        <span className="bg-gray-900 text-white font-display text-[11px] font-medium px-3 py-1.5 rounded-full whitespace-nowrap shadow-md">
+                          {exporting ? 'Exporting…' : 'Export to Discord'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleFABExport}
+                          disabled={exporting}
+                          aria-label="Export calendar to Discord"
+                          className="w-12 h-12 rounded-full bg-white shadow-[0_4px_12px_-2px_rgba(0,0,0,0.25)] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform disabled:opacity-50"
+                          style={{ color: activeAccent }}
+                        >
+                          <DownloadSimple size={22} weight="bold" />
+                        </button>
+                      </motion.div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         </div>
 
@@ -575,101 +665,23 @@ export default function CalendarShell({
         </div>
       </div>
 
-      {/* FAB - admin only, Google Calendar pattern. Tap to open the action
-          sheet (Accent + Export). The "+" rotates 45° to become a "×" while
-          the sheet is open so the same button serves as the dismiss control.
-          data-export-hide keeps it out of the PNG snapshot. */}
-      {isAdmin && (
-        <button
-          type="button"
-          onClick={() => setFabOpen((o) => !o)}
-          aria-label={fabOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={fabOpen}
-          data-export-hide
-          className="fixed bottom-6 right-6 z-50 w-14 h-14 rounded-full text-white flex items-center justify-center shadow-[0_10px_25px_-5px_rgba(0,0,0,0.3),0_4px_10px_-3px_rgba(0,0,0,0.2)] hover:scale-105 active:scale-95 transition-transform"
-          style={{ backgroundColor: activeAccent }}
-        >
-          <motion.span
-            animate={{ rotate: fabOpen ? 45 : 0 }}
-            transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
-            className="flex items-center justify-center"
-          >
-            <Plus size={26} weight="bold" />
-          </motion.span>
-        </button>
-      )}
-
-      {/* FAB action sheet - admin only. Backdrop fades in; sheet slides up
-          from below. Two icon options matching Google Calendar's speed-dial
-          pattern. data-export-hide on both layers in case the FAB is open
-          when an admin triggers an export from elsewhere. */}
+      {/* FAB backdrop - dims the page so the dropped speed-dial items pop.
+          Tap anywhere on the dim to close. The items themselves live inside
+          the FAB wrapper in the masthead and are stacked above this backdrop
+          via the wrapper's z-50. */}
       {isAdmin && (
         <AnimatePresence>
           {fabOpen && (
             <motion.div
-              key="fab-sheet"
+              key="fab-backdrop"
               data-export-hide
-              className="fixed inset-0 z-40"
+              className="fixed inset-0 z-40 bg-black/30"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.18 }}
               onClick={() => setFabOpen(false)}
-            >
-              <div className="absolute inset-0 bg-black/30 backdrop-blur-[6px]" />
-              <motion.div
-                initial={{ y: '100%' }}
-                animate={{ y: 0 }}
-                exit={{ y: '100%' }}
-                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-                onClick={(e) => e.stopPropagation()}
-                role="dialog"
-                aria-label="Calendar actions"
-                className="absolute inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-[0_-20px_50px_-10px_rgba(0,0,0,0.25)] pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] px-6"
-              >
-                {/* Drag handle - visual affordance only */}
-                <div className="mx-auto w-10 h-1 rounded-full bg-gray-300 mb-5" />
-
-                <p className="font-display text-[10px] font-bold tracking-[0.18em] uppercase text-gray-500 mb-3">
-                  Actions
-                </p>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={handleFABAccent}
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-gray-200 hover:border-gray-300 active:scale-95 transition-all"
-                  >
-                    <span
-                      className="w-12 h-12 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: `${activeAccent}1a`, color: activeAccent }}
-                    >
-                      <Palette size={22} weight="bold" />
-                    </span>
-                    <span className="font-display text-[11px] font-semibold text-gray-800 leading-tight text-center">
-                      Accent color
-                    </span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleFABExport}
-                    disabled={exporting}
-                    className="flex flex-col items-center gap-2 p-4 rounded-2xl border border-gray-200 hover:border-gray-300 active:scale-95 transition-all disabled:opacity-50"
-                  >
-                    <span
-                      className="w-12 h-12 rounded-full flex items-center justify-center"
-                      style={{ backgroundColor: `${activeAccent}1a`, color: activeAccent }}
-                    >
-                      <DownloadSimple size={22} weight="bold" />
-                    </span>
-                    <span className="font-display text-[11px] font-semibold text-gray-800 leading-tight text-center">
-                      {exporting ? 'Exporting…' : 'Export to Discord'}
-                    </span>
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
+            />
           )}
         </AnimatePresence>
       )}
@@ -679,7 +691,7 @@ export default function CalendarShell({
           a popover - see the conditional in the masthead block. */}
       {accentPickerOpen && accentPickerSource === 'fab' && (
         <div
-          className="fixed inset-0 z-50 bg-black/30 backdrop-blur-[6px]"
+          className="fixed inset-0 z-50 bg-black/30"
           data-export-hide
           onClick={() => {
             setAccentPickerOpen(false)
