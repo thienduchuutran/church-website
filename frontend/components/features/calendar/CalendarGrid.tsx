@@ -188,11 +188,12 @@ export default function CalendarGrid({
             const isToday = day === todayDay
             const dateStr = formatDate(day)
             const isClickable = isAdmin || dayEvents.length > 0
-            // Cap visible bars at 3 - any more crowds a 60px-tall cell. The
-            // remainder surfaces as "+N" so the day still indicates "lots
-            // happening" at a glance.
-            const visibleBars = dayEvents.slice(0, 3)
-            const overflow = dayEvents.length - visibleBars.length
+            // Cap at 2 visible chips - more crowds a 49px-wide cell. Anything
+            // past that surfaces as "+N" and the user taps to see the rest in
+            // the day-events sheet. Truncation is aggressive but readable in
+            // the church's low-volume context (most days have 0-1 events).
+            const visibleEvents = dayEvents.slice(0, 2)
+            const overflow = dayEvents.length - visibleEvents.length
 
             return (
               <button
@@ -202,7 +203,7 @@ export default function CalendarGrid({
                 disabled={!isClickable}
                 aria-label={`${day} - ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
                 className={[
-                  'border-r border-b border-gray-200 min-h-[60px] px-1 pt-1 pb-1.5 flex flex-col items-stretch gap-1 bg-white text-left',
+                  'border-r border-b border-gray-200 min-h-[78px] px-0.5 pt-1 pb-1 flex flex-col items-stretch gap-1 bg-white text-left',
                   isClickable ? 'active:bg-gray-100 transition-colors' : 'cursor-default',
                 ].join(' ')}
               >
@@ -223,23 +224,31 @@ export default function CalendarGrid({
                   )}
                 </div>
 
-                {/* Event bars - thin and colored, no text. Title lives in
-                    the day-events modal that opens on tap. */}
-                {visibleBars.length > 0 && (
-                  <div className="flex flex-col gap-[2px] mt-auto">
-                    {visibleBars.map((e) => {
+                {/* Event chips - tiny version of the desktop chip. Same color
+                    palette, same left-border accent, just text-[9px] and
+                    truncated. The day-events sheet still opens on tap for
+                    the full title + notes. */}
+                {visibleEvents.length > 0 && (
+                  <div className="flex flex-col gap-[2px] mt-auto min-w-0">
+                    {visibleEvents.map((e) => {
                       const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
                       return (
                         <div
                           key={e.id}
-                          className="h-[3px] rounded-sm w-full"
-                          style={{ backgroundColor: colors.dot }}
-                        />
+                          className="rounded-[2px] px-1 py-[1px] font-display text-[9px] font-semibold leading-tight truncate"
+                          style={{
+                            backgroundColor: colors.bg,
+                            borderLeft: `2px solid ${colors.dot}`,
+                            color: colors.text,
+                          }}
+                        >
+                          {e.title}
+                        </div>
                       )
                     })}
                     {overflow > 0 && (
-                      <span className="font-sans text-[9px] text-gray-500 leading-none mt-0.5">
-                        +{overflow}
+                      <span className="font-sans text-[9px] text-gray-500 leading-none mt-0.5 px-1">
+                        +{overflow} more
                       </span>
                     )}
                   </div>
