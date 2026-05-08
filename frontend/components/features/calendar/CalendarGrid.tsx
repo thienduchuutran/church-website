@@ -172,14 +172,16 @@ export default function CalendarGrid({
           ))}
         </div>
 
-        {/* Cells */}
-        <div className="grid grid-cols-7 border-t border-l border-gray-200 rounded-sm overflow-hidden">
+        {/* Cells - borderless, Google-Calendar style. Whitespace alone
+            separates the columns; users locate the right day visually
+            from the day-of-week strip above. */}
+        <div className="grid grid-cols-7">
           {cells.map((day, idx) => {
             if (day === null) {
               return (
                 <div
                   key={`empty-${idx}`}
-                  className="border-r border-b border-gray-200 min-h-[60px] bg-gray-50/40"
+                  className="min-h-[78px]"
                 />
               )
             }
@@ -203,8 +205,8 @@ export default function CalendarGrid({
                 disabled={!isClickable}
                 aria-label={`${day} - ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
                 className={[
-                  'border-r border-b border-gray-200 min-h-[78px] px-0.5 pt-1 pb-1 flex flex-col items-stretch gap-1 bg-white text-left',
-                  isClickable ? 'active:bg-gray-100 transition-colors' : 'cursor-default',
+                  'min-h-[78px] px-0.5 pt-1 pb-1 flex flex-col items-stretch gap-1 bg-white text-left',
+                  isClickable ? 'rounded active:bg-gray-100 transition-colors' : 'cursor-default',
                 ].join(' ')}
               >
                 {/* Day number row - centered. Today gets a filled accent
