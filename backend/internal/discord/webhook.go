@@ -6,11 +6,35 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 )
 
+// Identity defaults applied per-message so the same webhook URL can post under
+// any name/avatar without re-provisioning the Discord-side webhook.
+const (
+	defaultUsername  = "Duc"
+	defaultAvatarURL = "https://cdn.discordapp.com/avatars/1018271669938307102/2aca3d1181e6643b78d9401b25582e48.webp"
+)
+
+// Discord rejects messages over 2000 codepoints; truncating with an ellipsis
+// degrades gracefully instead of dropping the notification entirely.
+const (
+	maxContentLength = 2000
+	truncationSuffix = "..."
+)
+
+// httpClient bounds the wait on Discord's webhook endpoint. The caller in
+// service/posts.go fires SendToDiscord in a detached goroutine, so without a
+// timeout a hung Discord request would leak the goroutine for the lifetime of
+// the process.
+var httpClient = &http.Client{Timeout: 10 * time.Second}
+
+// Embed is the rich-card payload Discord renders inside a colored container.
+// Retained for post types not yet migrated to plain `content` (bible_study,
+// playlist, gallery_album).
 type Embed struct {
 	Title       string      `json:"title"`
 	Description string      `json:"description,omitempty"`
@@ -24,8 +48,14 @@ type EmbedFooter struct {
 	Text string `json:"text"`
 }
 
+// Payload is the Discord webhook request body. Username and AvatarURL apply to
+// every message; Content (plain text) and Embeds (rich card) are mutually
+// exclusive in practice - omitempty hides the unused field from the JSON.
 type Payload struct {
-	Embeds []Embed `json:"embeds"`
+	Username  string  `json:"username"`
+	AvatarURL string  `json:"avatar_url"`
+	Content   string  `json:"content,omitempty"`
+	Embeds    []Embed `json:"embeds,omitempty"`
 }
 
 var webhookEnvKeys = map[model.PostType]string{
@@ -37,8 +67,6 @@ var webhookEnvKeys = map[model.PostType]string{
 }
 
 var colorByType = map[model.PostType]int{
-	model.PostTypeEvent:        5793266,  // #5865F2 blurple
-	model.PostTypeAnnouncement: 5763719,  // #57F287 green
 	model.PostTypeBibleStudy:   16711516, // #FEE75C yellow
 	model.PostTypePlaylist:     1948500,  // #1DB954 Spotify green
 	model.PostTypeGalleryAlbum: 15418270, // #EB459E pink
@@ -56,15 +84,12 @@ func SendToDiscord(post model.Post) error {
 		return fmt.Errorf("environment variable %s is not set", envKey)
 	}
 
-	embed := buildEmbed(post)
-	payload := Payload{Embeds: []Embed{embed}}
-
-	body, err := json.Marshal(payload)
+	body, err := json.Marshal(buildPayload(post))
 	if err != nil {
 		return fmt.Errorf("failed to marshal discord payload: %w", err)
 	}
 
-	resp, err := http.Post(webhookURL, "application/json", bytes.NewReader(body))
+	resp, err := httpClient.Post(webhookURL, "application/json", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("failed to send discord webhook: %w", err)
 	}
@@ -73,10 +98,65 @@ func SendToDiscord(post model.Post) error {
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("discord webhook returned status %d", resp.StatusCode)
 	}
-
 	return nil
 }
 
+// buildPayload routes by post type because the two formats are not equivalent:
+// flat content reads as a normal message in-channel; embeds add a card border
+// that's the right affordance for link-driven types (bible_study, playlist,
+// gallery_album) but visual noise for announcements and events.
+func buildPayload(post model.Post) Payload {
+	p := Payload{
+		Username:  envOrDefault("DISCORD_WEBHOOK_USERNAME", defaultUsername),
+		AvatarURL: envOrDefault("DISCORD_WEBHOOK_AVATAR_URL", defaultAvatarURL),
+	}
+
+	switch post.Type {
+	case model.PostTypeAnnouncement, model.PostTypeEvent:
+		p.Content = truncate(buildTitleBodyContent(post), maxContentLength)
+	default:
+		p.Embeds = []Embed{buildEmbed(post)}
+	}
+	return p
+}
+
+// buildTitleBodyContent writes the body verbatim (no escaping, no rewrap) so
+// line breaks the admin typed survive into the Discord message.
+func buildTitleBodyContent(post model.Post) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "**%s**", post.Title)
+	if post.Body != nil && *post.Body != "" {
+		b.WriteString("\n\n")
+		b.WriteString(*post.Body)
+	}
+	return b.String()
+}
+
+// envOrDefault keeps the optional identity vars truly optional - admins can
+// rotate username/avatar via the systemd env file, but a fresh deploy without
+// those vars set still produces a usable message.
+func envOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
+}
+
+// truncate counts codepoints rather than bytes because Discord enforces its
+// 2000-character cap on codepoints; a byte-based check would over-truncate
+// strings that contain multi-byte runes like "📅" (4 bytes, 1 character).
+func truncate(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
+		return s
+	}
+	suffix := []rune(truncationSuffix)
+	return string(runes[:maxRunes-len(suffix)]) + truncationSuffix
+}
+
+// buildEmbed handles the post types still on rich cards. Kept until those
+// types are migrated, so the switch in buildPayload doesn't have to fan out
+// inline.
 func buildEmbed(post model.Post) Embed {
 	embed := Embed{
 		Color:     colorByType[post.Type],
@@ -84,26 +164,6 @@ func buildEmbed(post model.Post) Embed {
 	}
 
 	switch post.Type {
-	case model.PostTypeEvent:
-		embed.Title = post.Title
-		if post.Body != nil {
-			embed.Description = *post.Body
-		} else {
-			embed.Description = "(No description \u2014 check website for details)"
-		}
-		footer := "Posted by admin"
-		if post.EventDate != nil {
-			footer = fmt.Sprintf("\U0001f4c5 %s \u2022 %s", post.EventDate.Format("January 2, 2006"), footer)
-		}
-		embed.Footer = EmbedFooter{Text: footer}
-
-	case model.PostTypeAnnouncement:
-		embed.Title = "\U0001f4e2 " + post.Title
-		if post.Body != nil {
-			embed.Description = *post.Body
-		}
-		embed.Footer = EmbedFooter{Text: "Posted on website"}
-
 	case model.PostTypeBibleStudy:
 		embed.Title = "\U0001f4d6 " + post.Title
 		embed.Description = "Friday Bible study materials are posted."
