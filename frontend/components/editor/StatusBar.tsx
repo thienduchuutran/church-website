@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import type { Editor } from '@tiptap/react'
+import { useEditorState, type Editor } from '@tiptap/react'
 import styles from './RichBodyEditor.module.css'
 
 type SaveStatus = 'saved' | 'saving' | 'unsaved'
@@ -29,10 +29,18 @@ export function StatusBar({ editor }: { editor: Editor | null }) {
     }
   }, [editor])
 
+  const counts = useEditorState({
+    editor,
+    selector: (ctx) => ({
+      chars: ctx.editor?.storage.characterCount?.characters?.() ?? 0,
+      words: ctx.editor?.storage.characterCount?.words?.() ?? 0,
+    }),
+  })
+
   if (!editor) return null
 
-  const chars = (editor.storage.characterCount?.characters as (() => number) | undefined)?.() ?? 0
-  const words = (editor.storage.characterCount?.words as (() => number) | undefined)?.() ?? 0
+  const chars = counts?.chars ?? 0
+  const words = counts?.words ?? 0
   const readMin = Math.max(1, Math.ceil(words / 200))
 
   return (
