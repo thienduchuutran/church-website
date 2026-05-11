@@ -114,7 +114,7 @@ export function BubbleToolbar({ editor }: { editor: Editor | null }) {
   return (
     <BubbleMenu
       editor={editor}
-      tippyOptions={{ duration: 100, placement: 'top' }}
+      options={{ placement: 'top' }}
       shouldShow={({ state, from, to }) => from !== to}
     >
       <div className={styles.bubblePill} role="toolbar" aria-label="Text formatting">

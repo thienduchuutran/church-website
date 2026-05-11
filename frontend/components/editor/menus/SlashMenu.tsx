@@ -111,7 +111,7 @@ export function SlashMenu({ editor }: { editor: Editor | null }) {
   return (
     <FloatingMenu
       editor={editor}
-      tippyOptions={{ duration: 100, placement: 'bottom-start', maxWidth: 300 }}
+      options={{ placement: 'bottom-start' }}
       shouldShow={({ state }) => {
         const { $from } = state.selection
         if ($from.parent.type.name !== 'paragraph') return false
