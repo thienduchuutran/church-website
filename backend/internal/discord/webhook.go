@@ -120,14 +120,15 @@ func buildPayload(post model.Post) Payload {
 	return p
 }
 
-// buildTitleBodyContent writes the body verbatim (no escaping, no rewrap) so
-// line breaks the admin typed survive into the Discord message.
+// buildTitleBodyContent serializes the post to Discord markdown. The body is
+// stored as Tiptap HTML; HTMLToDiscordMarkdown converts it to plain markdown
+// so Discord renders it correctly instead of showing raw HTML tags.
 func buildTitleBodyContent(post model.Post) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%s**", post.Title)
 	if post.Body != nil && *post.Body != "" {
-		b.WriteString("\n\n")
-		b.WriteString(*post.Body)
+		b.WriteString("\n")
+		b.WriteString(HTMLToDiscordMarkdown(*post.Body))
 	}
 	return b.String()
 }

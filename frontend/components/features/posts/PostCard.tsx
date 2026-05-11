@@ -2,6 +2,7 @@ import Image from 'next/image'
 import type { Post } from '@/lib/types'
 import ReactionBar from './ReactionBar'
 import AdminControls from '@/components/features/admin/AdminControls'
+import { RichContent } from '@/components/editor/RichContent'
 
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
   event: {
@@ -72,7 +73,7 @@ export default function PostCard({
       <div className="px-4 pb-3 sm:px-5 sm:pb-4">
         <h3 className="mb-1 font-serif text-lg font-semibold leading-snug text-foreground sm:text-xl">{post.title}</h3>
         {post.body && (
-          <p className="whitespace-pre-line font-sans text-sm leading-relaxed text-muted">{post.body}</p>
+          <RichContent html={post.body} className="font-sans text-sm leading-relaxed text-muted" />
         )}
       </div>
 

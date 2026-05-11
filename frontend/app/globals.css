@@ -157,3 +157,41 @@ body {
 .animate-confirm-in {
   animation: confirm-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
+
+/* ─── Rich content read styles (mirrors editor content area) ─── */
+.rich-content { font-size: 15px; line-height: 1.75; }
+.rich-content h1 { font-family: var(--font-serif); font-size: 24px; font-weight: 700; margin: 14px 0 6px; line-height: 1.3; }
+.rich-content h2 { font-family: var(--font-serif); font-size: 18px; font-weight: 600; margin: 10px 0 4px; line-height: 1.3; }
+.rich-content h3 { font-size: 15px; font-weight: 600; margin: 8px 0 3px; }
+.rich-content p  { margin: 3px 0; }
+.rich-content ul, .rich-content ol { padding-left: 20px; margin: 4px 0; }
+.rich-content li { margin: 2px 0; }
+.rich-content blockquote {
+  border-left: 3px solid var(--primary);
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+  padding: 8px 14px;
+  border-radius: 0 8px 8px 0;
+  font-style: italic;
+  color: var(--muted);
+  margin: 8px 0;
+}
+.rich-content pre { background: #1a1408; color: #e8d8c0; padding: 12px 14px; border-radius: 8px; font-size: 12px; overflow-x: auto; margin: 8px 0; }
+.rich-content code { background: #f2ede8; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.rich-content pre code { background: transparent; padding: 0; }
+.rich-content hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+.rich-content a { color: var(--primary); text-decoration: underline; }
+.rich-content mark { padding: 1px 2px; border-radius: 3px; }
+/* Callout blocks in read view */
+.rich-content [data-callout] {
+  display: flex;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  margin: 8px 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.rich-content [data-callout-variant="announcement"] { background: #f5ede8; border-left: 3px solid #c4663c; }
+.rich-content [data-callout-variant="prayer"]       { background: #eef3eb; border-left: 3px solid #4a7a5c; }
+.rich-content [data-callout-variant="scripture"]    { background: #faf3e6; border-left: 3px solid #c49a3c; }
+.rich-content [data-callout-variant="callout"]      { background: #f0eeff; border-left: 3px solid #8b75d4; }

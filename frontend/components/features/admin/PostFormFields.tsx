@@ -5,6 +5,7 @@ import {
   POST_TYPE_LABELS,
   type PostFormState,
 } from '@/lib/post-types'
+import { RichBodyEditor } from '@/components/editor/RichBodyEditor'
 
 const INPUT_CLASS =
   'block w-full rounded-lg border border-border bg-surface px-4 py-2.5 font-sans text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none'
@@ -49,15 +50,12 @@ export default function PostFormFields({
 
       {has('body') && (
         <div>
-          <label htmlFor="body" className="mb-1 block font-display text-sm font-medium text-foreground">
+          <label className="mb-1 block font-display text-sm font-medium text-foreground">
             Body
           </label>
-          <textarea
-            id="body"
+          <RichBodyEditor
             value={state.body}
-            onChange={(e) => onChange({ ...state, body: e.target.value })}
-            rows={5}
-            className={INPUT_CLASS}
+            onChange={(html) => onChange({ ...state, body: html })}
             placeholder="Write your content here..."
           />
         </div>
