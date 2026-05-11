@@ -31,7 +31,7 @@ export default function CalendarPageClient({ initialYear, initialMonth }: Calend
   }, [exporting, year, month])
 
   return (
-    <div className="mx-auto px-4 py-3 sm:px-6 lg:px-8 flex flex-col items-center">
+    <div className="@container mx-auto px-4 py-3 sm:px-6 lg:px-8 flex flex-col items-center">
       {/*
         Live page is fluid (capped at 1100px on wide screens). The 1100px is
         the printed-calendar aspect ratio (~1100 × 840) and is re-applied

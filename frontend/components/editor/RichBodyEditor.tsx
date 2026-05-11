@@ -82,7 +82,7 @@ export function RichBodyEditor({
     const current = editor.getHTML()
     if (current !== value) {
       isExternalUpdate.current = true
-      editor.commands.setContent(value, false)
+      editor.commands.setContent(value, { emitUpdate: false })
       isExternalUpdate.current = false
     }
     // Only run when value changes from outside, not on every editor update
