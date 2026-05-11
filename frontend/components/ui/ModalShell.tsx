@@ -22,6 +22,7 @@ export default function ModalShell({
   const [closing, setClosing] = useState(false)
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mouseDownOnBackdrop = useRef(false)
 
   useEffect(() => {
     return () => {
@@ -48,7 +49,8 @@ export default function ModalShell({
   return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[10px] backdrop-saturate-150 ${closing ? 'apple-backdrop-out' : 'apple-backdrop-in'}`}
-      onClick={handleClose}
+      onMouseDown={(e) => { mouseDownOnBackdrop.current = e.target === e.currentTarget }}
+      onClick={() => { if (mouseDownOnBackdrop.current) handleClose() }}
     >
       <div
         className={`relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-surface p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45),0_10px_30px_-10px_rgba(0,0,0,0.25)] ring-1 ring-black/5 will-change-transform sm:p-8 ${closing ? 'apple-sheet-out' : 'apple-sheet-in'}`}
