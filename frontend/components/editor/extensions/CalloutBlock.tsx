@@ -2,15 +2,10 @@
 
 import React from 'react'
 import { Node, mergeAttributes } from '@tiptap/core'
-import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent } from '@tiptap/react'
+import { ReactNodeViewRenderer, NodeViewWrapper, NodeViewContent, type NodeViewProps } from '@tiptap/react'
 import { CALLOUT_VARIANTS, type CalloutVariant } from '../constants'
 
-interface CalloutNodeViewProps {
-  node: { attrs: { variant: string } }
-  deleteNode: () => void
-}
-
-function CalloutNodeView({ node, deleteNode }: CalloutNodeViewProps) {
+function CalloutNodeView({ node, deleteNode }: NodeViewProps) {
   const variant = (node.attrs.variant as CalloutVariant) in CALLOUT_VARIANTS
     ? (node.attrs.variant as CalloutVariant)
     : 'announcement'
