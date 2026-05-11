@@ -29,7 +29,7 @@ function CalloutNodeView({ node, deleteNode }: CalloutNodeViewProps) {
         <div className="callout-label" style={{ color: config.color }}>
           {config.label}
         </div>
-        <NodeViewContent as="p" className="callout-text" />
+        <NodeViewContent className="callout-text" />
       </div>
       <button
         className="callout-delete-btn"
