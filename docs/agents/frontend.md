@@ -75,7 +75,7 @@ frontend/
 
 ## Data fetching
 
-**Supabase is auth-only.** All application data - posts, images, page content, calendar, reactions - lives in AWS RDS and is reached through the Go backend. The frontend must **never** call `supabase.from(...)` for app data; doing so reads from the wrong database (the legacy Supabase Postgres) and creates a split-brain where writes and reads disagree. See `docs/agents/known-quirks.md` → "Posts created on production don't show up in the UI" for the original outage this caused.
+**Supabase is auth-only from the frontend's perspective.** All application data - posts, images, page content, calendar, reactions - is reached through the Go backend on Render. Internally the Go backend talks to Supabase Postgres (same Supabase project that handles auth, but a different surface), but the frontend must **never** call `supabase.from(...)` for app data; doing so bypasses the backend's validation, rate-limiting, and presigned-URL generation, and historically caused a split-brain outage. See `docs/agents/known-quirks.md` → "Posts created on production don't show up in the UI" for the canonical example.
 
 ### Two layers
 
@@ -146,12 +146,20 @@ Anatomy: date badge → title → body text → optional image(s) → optional l
 
 ---
 
-## Environment variables (`.env.local`)
+## Environment variables
+
+For local development, `frontend/.env.local` (gitignored):
 ```
-NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=...          # safe to expose, RLS enforces permissions
-NEXT_PUBLIC_API_URL=http://localhost:8080  # Go backend URL (prod: https://your-app.fly.dev)
+NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=...                              # safe to expose, RLS enforces permissions
+NEXT_PUBLIC_API_URL=http://localhost:8080                      # local Go backend
 ```
+
+For production, the same three vars live in **Vercel dashboard → Settings → Environment Variables** with the production values:
+```
+NEXT_PUBLIC_API_URL=https://church-website-ff5w.onrender.com   # Render-hosted Go backend
+```
+
 Never put the Supabase service role key in the frontend. Never.
 
 ---

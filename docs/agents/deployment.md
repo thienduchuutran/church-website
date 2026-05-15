@@ -2,246 +2,200 @@
 
 ## Architecture overview
 ```
-GitHub (monorepo) → GitHub Actions CI/CD
-                          │
-                    push to master
-                          │
-              ┌───────────▼───────────┐
-              │  GitHub-hosted runner  │
-              │  - go build (linux)    │
-              │  - npm run build       │
-              └───────────┬───────────┘
-                          │  SCP artifacts
-                          ▼
-              ┌─────────────────────────┐
-              │   EC2 (us-east-1)       │
-              │   Ubuntu, Elastic IP    │
-              │   vgomne.ddns.net       │
-              │                         │
-              │  Nginx (port 443/80)    │
-              │    /api/* → :8080       │
-              │    /*     → :3000       │
-              │                         │
-              │  church-backend.service │  ← Go binary
-              │  church-frontend.service│  ← Next.js
-              └─────────────────────────┘
+GitHub (monorepo)
+   │
+   │ push to master
+   │
+   ├──────────────────────────┬───────────────────────────┐
+   │                          │                           │
+   ▼                          ▼                           ▼
+Render auto-build       Vercel auto-build         (no third deploy target)
+(Docker, Go binary)     (Next.js, edge-cached)
+   │                          │
+   ▼                          ▼
+church-website-ff5w     church-website-neon
+.onrender.com           .vercel.app
+   │                          │
+   │                          │ frontend calls /api/v1/* on the Render URL
+   │ ◄────────────────────────┘ (cross-origin, CORS allows Vercel origin)
+   │
+   ├──→ Supabase Postgres   (session pooler, sslmode=require)
+   └──→ Cloudflare R2       (S3-compatible, custom endpoint, static keys)
+
+Auth layer: Supabase Auth (Google OAuth) → JWT → JWKS-verified by Go backend
 ```
+
+There are no servers under our control. Every component is a managed service on a free or near-free tier. There is no Nginx, no systemd, no SSH, no SCP, no Elastic IP, no `.env` file on any server disk.
 
 ---
 
-## EC2 instance
+## Render (Go backend)
 
-- **Region**: us-east-1 (Northern Virginia)
-- **Domain**: `vgomne.ddns.net` (DDNS - points at the Elastic IP)
-- **Elastic IP**: static, survives stop/restart
-- **Security Group inbound rules**:
-  | Port | Source | Purpose |
-  |------|--------|---------|
-  | 22 (SSH) | your IP only | Admin SSH access |
-  | 80 (HTTP) | 0.0.0.0/0 | Certbot HTTP challenge + redirect |
-  | 443 (HTTPS) | 0.0.0.0/0 | Public web traffic |
+- **URL**: `https://church-website-ff5w.onrender.com`
+- **Service type**: Web Service (Docker)
+- **Repo**: `thienduchuutran/church-website`, branch `master`, root directory inferred from Dockerfile (project root)
+- **Plan**: Free tier (spins down after 15 min of inactivity, cold start ~50 s)
+- **Warm-keeper**: external HTTP ping every few minutes via `cron-job.org` hitting `/api/v1/health`. Without this, the first visitor after a quiet period waits for the cold start.
 
-- **SSH access**: `ssh -i <key.pem> ubuntu@<elastic-ip>`
+### How deploys work
+1. Push to `master` on GitHub.
+2. Render detects the push (it has a webhook from GitHub).
+3. Render runs the Dockerfile build inside its own builder.
+4. On success, Render swaps the container; on failure, the previous version keeps serving.
+5. Visible in the Render dashboard → Events tab.
+
+### Environment variables (Render dashboard → Environment)
+Set via the Render dashboard, never in code. Mark anything with credentials as "Secret" so it's hidden in logs.
+
+```
+PORT                          (Render injects this automatically; do not set manually)
+DATABASE_URL                  postgresql://postgres.<ref>:<password>@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+SUPABASE_URL                  https://<ref>.supabase.co
+SUPABASE_JWT_SECRET           <Supabase JWT secret>            [Secret]
+S3_BUCKET                     church-uploads-prod
+S3_REGION                     auto
+AWS_REGION                    auto
+S3_ENDPOINT                   https://<r2-account-id>.r2.cloudflarestorage.com
+AWS_ACCESS_KEY_ID             <R2 access key>                  [Secret]
+AWS_SECRET_ACCESS_KEY         <R2 secret access key>           [Secret]
+FRONTEND_ORIGIN               https://church-website-neon.vercel.app
+DISCORD_WEBHOOK_EVENTS        https://discord.com/api/webhooks/...   [Secret]
+DISCORD_WEBHOOK_ANNOUNCEMENTS https://...                            [Secret]
+DISCORD_WEBHOOK_BIBLE_STUDIES https://...                            [Secret]
+DISCORD_WEBHOOK_PLAYLISTS     https://...                            [Secret]
+DISCORD_WEBHOOK_GALLERY       https://...                            [Secret]
+DISCORD_WEBHOOK_USERNAME      Duc
+DISCORD_WEBHOOK_AVATAR_URL    https://cdn.discordapp.com/avatars/...
+```
+
+> **`DATABASE_URL` uses single `%40` for the `@` in the password** (URL encoding). Render does not have systemd's specifier quirk - do not double the `%` here.
+
+### Viewing logs / manual deploy
+- **Logs**: Render dashboard → service → Logs tab. Streams in real time. Filterable by severity.
+- **Manual redeploy**: dashboard → "Manual Deploy" button (top right) → "Deploy latest commit". Useful when you've changed env vars and want the new ones to take effect immediately (Render normally auto-redeploys on env var change anyway).
+- **Rollback**: Events tab → click a previous green deploy → "Rollback to this deploy".
 
 ---
 
-## Nginx (`/etc/nginx/sites-available/church-website`)
+## Vercel (Next.js frontend)
 
-Nginx sits in front of both apps and handles SSL termination.
+- **URL**: `https://church-website-neon.vercel.app`
+- **Project type**: Auto-detected Next.js
+- **Repo**: `thienduchuutran/church-website`, branch `master`, **Root Directory = `frontend`**
+- **Plan**: Free (Hobby) tier
 
-```nginx
-server {
-    listen 443 ssl;
-    server_name vgomne.ddns.net;
+### How deploys work
+1. Push to `master` on GitHub.
+2. Vercel detects the push and starts a build inside its own infrastructure.
+3. Build runs `npm install` (reads `frontend/.npmrc` which sets `legacy-peer-deps=true`) then `next build`.
+4. On success, the new build is promoted to production at the Vercel URL.
+5. Every other branch / PR also gets its own preview URL automatically.
 
-    ssl_certificate     /etc/letsencrypt/live/vgomne.ddns.net/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/vgomne.ddns.net/privkey.pem;
-
-    location /api/ {
-        proxy_pass http://localhost:8080;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-
-server {
-    listen 80;
-    server_name vgomne.ddns.net;
-    return 301 https://$host$request_uri;
-}
+### Environment variables (Vercel dashboard → Settings → Environment Variables)
+```
+NEXT_PUBLIC_SUPABASE_URL       https://<ref>.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY  <anon key>                  (safe to expose - RLS enforces)
+NEXT_PUBLIC_API_URL            https://church-website-ff5w.onrender.com
 ```
 
-Reload after config changes: `sudo nginx -t && sudo systemctl reload nginx`
+The frontend uses `NEXT_PUBLIC_API_URL` to build all `/api/v1/...` request URLs - it is the single switch that points the frontend at the backend. Changing it requires a redeploy.
+
+### `frontend/.npmrc`
+```
+legacy-peer-deps=true
+```
+This file exists because some libraries (notably `@emoji-mart/react`) have not updated their peer-dep declarations for React 19. Without it, `npm install` fails with `ERESOLVE`.
 
 ---
 
-## systemd services
+## Supabase (database + auth)
 
-Both apps are registered as system services - they auto-start on boot and restart on crash.
+- **Project ref**: `glcnqlffktqxaizdverk`
+- **Region**: `aws-us-east-1`
+- **Connection from Render**: session pooler at `aws-1-us-east-1.pooler.supabase.com:5432`, NOT the direct connection (which is IPv6-only and unreachable from many platforms).
+- **Auth**: Supabase Auth handles Google OAuth, issues ES256-signed JWTs verified by the Go backend via JWKS. See `docs/agents/auth.md`.
+- **Storage**: not used. Files live in R2, not Supabase Storage.
 
-### Go backend (`/etc/systemd/system/church-backend.service`)
-```ini
-[Unit]
-Description=Church Website Go Backend
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/church-website/backend
-ExecStart=/home/ubuntu/church-website/backend/server
-Restart=always
-RestartSec=5
-Environment=PORT=8080
-Environment=DATABASE_URL=postgresql://postgres:<password>@<rds-endpoint>:5432/postgres
-Environment=SUPABASE_URL=https://your-project-id.supabase.co
-Environment=DISCORD_WEBHOOK_EVENTS=https://...
-Environment=DISCORD_WEBHOOK_ANNOUNCEMENTS=https://...
-Environment=DISCORD_WEBHOOK_BIBLE_STUDIES=https://...
-Environment=DISCORD_WEBHOOK_PLAYLISTS=https://...
-Environment=DISCORD_WEBHOOK_GALLERY=https://...
-Environment=FRONTEND_ORIGIN=https://vgomne.ddns.net
-Environment=AWS_REGION=us-east-1
-Environment=S3_BUCKET=church-uploads-prod-058264284549-us-east-1-an
-
-[Install]
-WantedBy=multi-user.target
-```
-
-### Next.js frontend (`/etc/systemd/system/church-frontend.service`)
-```ini
-[Unit]
-Description=Church Website Next.js Frontend
-After=network.target
-
-[Service]
-Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/church-website/frontend
-ExecStart=/usr/bin/npm start
-Restart=always
-RestartSec=5
-Environment=PORT=3000
-Environment=NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-Environment=NEXT_PUBLIC_SUPABASE_ANON_KEY=...
-Environment=NEXT_PUBLIC_API_URL=https://vgomne.ddns.net
-
-[Install]
-WantedBy=multi-user.target
-```
-
-> **All secrets live in the systemd service files, not in `.env` files on disk.**
-> Edit with: `sudo systemctl edit --full church-backend` then `sudo systemctl daemon-reload && sudo systemctl restart church-backend`
+### Supabase Auth URL Configuration
+Authentication → URL Configuration must contain the frontend URL so OAuth redirects work:
+- **Site URL**: `https://church-website-neon.vercel.app`
+- **Redirect URLs**: same value (or include any custom domain too)
 
 ---
 
-## SSL/HTTPS - Let's Encrypt (Certbot)
+## Cloudflare R2 (file storage)
 
-Certificates are obtained and auto-renewed via Certbot.
+- **Bucket**: `church-uploads-prod`
+- **Endpoint**: `https://<account-id>.r2.cloudflarestorage.com` (set as `S3_ENDPOINT` on Render)
+- **Auth**: static access key + secret stored in Render env (R2 has no IAM roles)
+- **Path style**: required - the Go code sets `o.UsePathStyle = true` when `S3_ENDPOINT` is non-empty. R2 does not honor virtual-hosted-style URLs.
+
+### How the Go backend talks to R2
+The `aws-sdk-go-v2` library accepts a custom `BaseEndpoint`. See `backend/internal/storage/s3.go` - when `endpoint != ""`, the client is configured for R2; when empty, it falls back to default AWS S3 resolution. The same upload/download/presign code paths work against either.
+
+---
+
+## CI/CD - GitHub Actions (legacy, can be removed)
+
+`.github/workflows/deploy.yml` exists from the pre-migration era when artifacts were SCP'd to EC2. It still triggers on push but is effectively a no-op now - **Render and Vercel handle deploys independently via their own GitHub integrations**. The workflow can be deleted at convenience; leaving it does no harm but adds noise to GitHub Actions runs.
+
+---
+
+## Local development
+
+Local dev does not touch Render or Vercel - it runs the apps directly on your laptop.
+
+### Backend (Go)
 ```bash
-sudo certbot --nginx -d vgomne.ddns.net
-```
-Auto-renewal is handled by a systemd timer (`certbot.timer`). Certificates last 90 days.
-
----
-
-## CI/CD - GitHub Actions
-
-**Workflow file**: `.github/workflows/deploy.yml`
-
-**What it does on every push to `master`:**
-1. Cross-compiles Go binary for Linux (`GOOS=linux GOARCH=amd64`)
-2. Builds Next.js production bundle with env vars injected at build time
-3. SCPs compiled Go binary to EC2
-4. SCPs Next.js `.next/` build output to EC2
-5. SSHs into EC2 and restarts both systemd services
-6. Confirms both services are active
-
-**GitHub Secrets required** (Settings → Secrets → Actions):
-| Secret | Value |
-|--------|-------|
-| `EC2_HOST` | Elastic IP address |
-| `EC2_USER` | `ubuntu` |
-| `EC2_SSH_KEY` | Private key PEM content |
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key |
-| `NEXT_PUBLIC_API_URL` | `https://vgomne.ddns.net` |
-
-> **Why cross-compile on the runner?** Building on EC2 (especially Next.js) freezes a 1GB RAM instance due to OOM. The GitHub runner has 7GB RAM and compiles cleanly; only the finished artifacts are copied to the server.
-
----
-
-## Viewing logs
-
-```bash
-# Go backend logs
-sudo journalctl -u church-backend -f
-
-# Next.js frontend logs
-sudo journalctl -u church-frontend -f
-
-# Nginx access/error logs
-sudo tail -f /var/log/nginx/access.log
-sudo tail -f /var/log/nginx/error.log
-```
-
----
-
-## Manual deploy (without CI/CD)
-
-```bash
-# Build Go binary locally (macOS/Windows cross-compile for Linux)
 cd backend
-GOOS=linux GOARCH=amd64 go build -o server ./cmd/server
-
-# SCP to EC2
-scp -i <key.pem> server ubuntu@<elastic-ip>:/home/ubuntu/church-website/backend/
-
-# SSH in and restart
-ssh -i <key.pem> ubuntu@<elastic-ip>
-sudo systemctl restart church-backend
-sudo systemctl status church-backend
+go run ./cmd/server
 ```
+Reads `backend/.env` via `godotenv`. Connects to whatever `DATABASE_URL` you have there (typically the local Docker Postgres on port 5433, see repo-root `docker-compose.yml`).
 
----
-
-## Environment variables - where each one lives
-
-| Variable | Frontend systemd env | Backend systemd env | GitHub Secret (build-time) |
-|---|---|---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | ✅ | | ✅ |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | ✅ | | ✅ |
-| `NEXT_PUBLIC_API_URL` | ✅ | | ✅ |
-| `DATABASE_URL` | | ✅ | | RDS endpoint - private, only reachable from EC2 |
-| `SUPABASE_URL` | | ✅ | | Used only for JWKS key fetch (auth), not DB |
-| `DISCORD_WEBHOOK_*` (all 5) | | ✅ | |
-| `FRONTEND_ORIGIN` | | ✅ | |
-| `PORT` | ✅ (3000) | ✅ (8080) | |
-| `AWS_REGION` | | ✅ | |
-| `S3_BUCKET` | | ✅ | |
-
----
-
-## Swap space (OOM fix)
-
-EC2 has 1GB RAM. Next.js TypeScript compilation exceeds this and OOM-kills the process.
-Swap space is provisioned on the EC2 disk as virtual memory overflow.
-
+### Frontend (Next.js)
 ```bash
-# Check current swap
-free -h
-
-# Add 2GB swap if not present
-sudo fallocate -l 2G /swapfile
-sudo chmod 600 /swapfile
-sudo mkswap /swapfile
-sudo swapon /swapfile
-# Make permanent:
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+cd frontend
+npm install
+npm run dev
 ```
+Reads `frontend/.env.local`. `NEXT_PUBLIC_API_URL=http://localhost:8080` points the dev frontend at your local Go backend.
+
+### Local DB
+```bash
+docker compose up -d
+```
+Starts the local Postgres at `localhost:5433`. The seed schema can be applied with `psql "$DATABASE_URL" -f scripts/rds-schema.sql` (the filename is historical - it's standard plain-Postgres SQL).
+
+---
+
+## Custom domain (optional)
+
+Currently the canonical URL is `church-website-neon.vercel.app`. To use a custom domain like `vgomne.ddns.net`:
+
+1. **DNS** (in No-IP or whatever DDNS hosts the name): set the A record to Vercel's anycast IP `76.76.21.21`.
+2. **Vercel**: Project Settings → Domains → Add `vgomne.ddns.net`. Vercel verifies via DNS and issues a Let's Encrypt cert.
+3. **CORS**: update Render's `FRONTEND_ORIGIN` env var to the new origin.
+4. **Supabase Auth URL Configuration**: add the new origin to Site URL + Redirect URLs.
+5. **Optional, slicker**: add `frontend/vercel.json` with a rewrite that proxies `/api/*` to Render. Then change Vercel's `NEXT_PUBLIC_API_URL` to the custom domain itself. Result: API calls look same-origin from the browser, no CORS needed.
+
+```json
+{
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "https://church-website-ff5w.onrender.com/api/:path*" }
+  ]
+}
+```
+
+---
+
+## Cost summary
+
+| Service | Plan | Monthly cost |
+|---|---|---|
+| Render (Go backend) | Free | $0 |
+| Vercel (Next.js frontend) | Hobby | $0 |
+| Supabase (Postgres + Auth) | Free | $0 |
+| Cloudflare R2 (storage) | Free tier (under 10 GB) | $0 |
+| cron-job.org (keep-warm) | Free | $0 |
+| GitHub (repo + Actions) | Free | $0 |
+| **Total** | | **$0/month** |

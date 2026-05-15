@@ -21,7 +21,7 @@ HTTP Request
      ↓
   repository/    ← raw pgx SQL queries, no logic, just data in/out
      ↓
-  AWS RDS PostgreSQL
+  Supabase Postgres (via session pooler)
 ```
 
 **Rule:** A handler must never import `repository`. A repository must never import `service`. Dependencies only flow downward.
@@ -57,7 +57,7 @@ backend/
 │   ├── discord/
 │   │   └── webhook.go          ← SendToDiscord(channelType, message)
 │   └── storage/
-│       └── s3.go               ← S3Client: UploadFile, DeleteFile, PresignedURL (uses EC2 IAM role)
+│       └── s3.go               ← S3Client: UploadFile, DeleteFile, PresignedURL (talks to Cloudflare R2 via custom BaseEndpoint; same code can target AWS S3 when S3_ENDPOINT is empty)
 ├── pkg/database/
 │   └── postgres.go             ← pgx connection pool, returns *pgxpool.Pool
 ├── .env
@@ -183,22 +183,26 @@ Never leak internal error messages or stack traces to the client. Log them serve
 
 ## Environment variables
 
-All secrets live in the systemd service file on EC2 - there is no `.env` file on the server.
-For local development, create `backend/.env` (never commit it).
+In production all env vars live in **Render's dashboard** (Settings → Environment). There is no `.env` file on the Render container disk.
+For local development, create `backend/.env` (gitignored, never committed).
 
 ```
-PORT=8080
-DATABASE_URL=postgresql://...           # RDS connection string
-SUPABASE_URL=https://your-project-id.supabase.co  # used for JWKS endpoint (auth still via Supabase)
-SUPABASE_JWT_SECRET=...                 # Supabase JWT secret (fallback for HS256; ES256 uses JWKS)
+PORT=8080                                          # Render injects automatically in prod; set explicitly for local dev
+DATABASE_URL=postgresql://...                      # Supabase session pooler URL with ?sslmode=require
+SUPABASE_URL=https://<ref>.supabase.co             # used for JWKS endpoint (auth verification)
+SUPABASE_JWT_SECRET=...                            # Supabase JWT secret (fallback for HS256; ES256 uses JWKS)
 DISCORD_WEBHOOK_EVENTS=https://...
 DISCORD_WEBHOOK_ANNOUNCEMENTS=https://...
 DISCORD_WEBHOOK_BIBLE_STUDIES=https://...
 DISCORD_WEBHOOK_PLAYLISTS=https://...
 DISCORD_WEBHOOK_GALLERY=https://...
-FRONTEND_ORIGIN=https://vgomne.ddns.net
-AWS_REGION=us-east-1
-S3_BUCKET=church-uploads-prod-058264284549-us-east-1-an
+FRONTEND_ORIGIN=https://church-website-neon.vercel.app
+S3_BUCKET=church-uploads-prod                      # R2 bucket name
+S3_REGION=auto                                     # R2 has no regions
+AWS_REGION=auto                                    # R2 has no regions
+S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com  # set for R2; leave empty to use AWS S3
+AWS_ACCESS_KEY_ID=...                              # R2 access key (R2 has no IAM roles, static creds required)
+AWS_SECRET_ACCESS_KEY=...                          # R2 secret access key
 ```
 
 ---
@@ -220,6 +224,7 @@ This is required because old flow using `[]byte(SUPABASE_JWT_SECRET)` only worke
 github.com/go-chi/chi/v5        ← router
 github.com/jackc/pgx/v5         ← Postgres driver
 github.com/jackc/pgx/v5/pgxpool ← connection pooling
-github.com/aws/aws-sdk-go-v2    ← S3 uploads via EC2 IAM role
+github.com/aws/aws-sdk-go-v2    ← S3-compatible uploads (Cloudflare R2 via custom BaseEndpoint)
+github.com/golang-migrate/migrate/v4 ← schema migrations applied on startup
 github.com/joho/godotenv        ← load .env for local dev only
 ```

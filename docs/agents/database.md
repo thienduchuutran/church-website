@@ -1,12 +1,12 @@
 # docs/agents/database.md - Database Reference
 
 ## Engine
-AWS RDS PostgreSQL (`church-db`, db.t4g.micro, us-east-1).
-The Go backend connects via `pgx` using a single database user.
+Supabase Postgres (project `glcnqlffktqxaizdverk`, region `aws-us-east-1`).
+The Go backend connects via `pgx` through Supabase's **session pooler**:
+`postgresql://postgres.<ref>:<password>@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require`.
 The frontend never touches the database directly - all reads and writes go through the Go backend.
 
-RDS and EC2 communicate privately over port 5432 via auto-created security groups
-(`rds-ec2-1` on the RDS instance, `ec2-rds-1` on the EC2 instance). RDS is not publicly accessible.
+The session pooler (not the transaction pooler on port 6543, and not the direct connection which is IPv6-only) is the right choice for `pgxpool`'s long-lived connections from Render. SSL is required.
 
 ---
 
@@ -168,7 +168,7 @@ create table calendar_month_settings (
 posts       ──< post_images   (one post has many images)
 posts       ──< reactions     (one post has many reactions)
 ```
-`admin_id` on posts and calendar_events stores the Supabase Auth user UUID (JWT sub claim). No FK because `auth.users` lives in Supabase, not RDS.
+`admin_id` on posts and calendar_events stores the Supabase Auth user UUID (JWT `sub` claim). No FK on this column - Supabase Auth's `auth.users` table is in a different schema managed by Supabase, and we deliberately do not couple the application schema to it. See `docs/agents/known-quirks.md` → "Posting fails with `posts_admin_id_fkey`" for the time someone added the FK by mistake and broke writes.
 
 ---
 
@@ -195,42 +195,35 @@ See `docs/agents/database.md` → "RLS proposal" section for a plan to add DB-le
 
 ---
 
-## S3 file storage
-- **Bucket**: `church-uploads-prod-058264284549-us-east-1-an`
-- **Region**: us-east-1 (same as EC2 and RDS - no cross-region latency)
-- **Access**: fully private. No public URLs. Access via IAM role attached to EC2.
-- **Path convention**: `{post_id}/{filename}` - groups all images for a post together.
-- **Go layer**: `backend/internal/storage/s3.go` - `UploadFile`, `DeleteFile`, `PresignedURL`.
-- Admin uploads go through the Go backend (`POST /api/v1/posts/:id/images`), not directly to S3 from the browser.
+## R2 file storage
+- **Bucket**: `church-uploads-prod` (Cloudflare R2, S3-compatible API)
+- **Endpoint**: `https://<account-id>.r2.cloudflarestorage.com` (set as `S3_ENDPOINT` on Render)
+- **Region**: `auto` - R2 has no regions; this placeholder satisfies the AWS SDK
+- **Access**: fully private. No public URLs. Access via static R2 access key + secret stored in Render env. R2 does not have IAM roles.
+- **Path convention**: `{post_id}/{filename}` for images, `videos/hero/{id}.mp4` for hero videos.
+- **Go layer**: `backend/internal/storage/s3.go` - `UploadFile`, `DeleteFile`, `PresignedURL`. The same code works against AWS S3 or R2; the only difference is the `endpoint` parameter passed to `NewS3Client`.
+- **Path-style URLs required**: when `endpoint != ""`, the code sets `o.UsePathStyle = true` on the SDK client. R2 does not honor virtual-hosted-style URLs.
+- Admin uploads go through the Go backend (`POST /api/v1/posts/:id/images`), not directly to R2 from the browser.
 
 ---
 
 ## Migration files
-Schema changes go in `supabase/migrations/` as `YYYYMMDDHHMMSS_description.sql`.
+The Go backend embeds SQL migrations in `backend/migrations/` and applies them on startup via `golang-migrate`. The migrator is idempotent - on each boot it consults `schema_migrations` and applies any new entries.
 
-> **Note:** The original Supabase migration files are incompatible with plain RDS Postgres -
-> they used `auth.jwt()`, the `authenticated` role, and Supabase-specific RLS syntax.
-> The current RDS schema was created manually with clean plain-Postgres SQL.
-> New migrations should use standard PostgreSQL only (no Supabase extensions).
+Migration files use plain PostgreSQL only (no Supabase RLS / `auth.jwt()` extensions). The schema runs identically against local Docker Postgres, the former RDS instance, and the current Supabase project.
 
-To apply a migration manually:
+To apply a migration manually outside the app (rare):
 ```bash
-psql "$DATABASE_URL" -f supabase/migrations/YYYYMMDDHHMMSS_description.sql
+psql "$DATABASE_URL" -f backend/migrations/<file>.up.sql
 ```
 
 ---
 
-## Connecting to RDS manually (for debugging)
+## Connecting to Supabase manually (for debugging)
+Supabase is publicly reachable. From your laptop:
 ```bash
-# From EC2 (psql installed via apt)
-psql "$DATABASE_URL"
+psql "postgresql://postgres.<ref>:<password>@aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require"
+```
+The connection string is available in the Supabase dashboard under **Project Settings → Database → Connection string → Session pooler**.
 
-# Or with explicit params
-psql -h <rds-endpoint> -U <db-user> -d <db-name>
-```
-RDS is only reachable from inside the EC2 security group - you cannot connect directly from your laptop.
-To connect from your laptop: SSH tunnel through EC2.
-```bash
-ssh -i <key.pem> -L 5432:<rds-endpoint>:5432 ubuntu@<elastic-ip> -N &
-psql -h localhost -U <db-user> -d <db-name>
-```
+For browser-based work, the Supabase dashboard ships its own SQL editor (Project → SQL Editor) which authenticates via your dashboard session - no password needed.

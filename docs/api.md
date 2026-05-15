@@ -1,6 +1,6 @@
 # API Reference
 
-Base URL: `http://localhost:8080` (dev) / `https://<render-app>.onrender.com` (prod)  
+Base URL: `http://localhost:8080` (dev) / `https://church-website-ff5w.onrender.com` (prod)  
 All routes are prefixed `/api/v1/`.  
 All request and response bodies are `application/json`.  
 Errors always return `{ "error": "human-readable message" }`.
@@ -213,7 +213,7 @@ Delete a post and its images.
 ---
 
 ### `POST /api/v1/posts/:id/images`
-Upload an image file and attach it to a post. The file is stored in S3; only the S3 key is saved in the database. Use `GET /api/v1/posts/:id` to retrieve presigned download URLs.
+Upload an image file and attach it to a post. The file is stored in Cloudflare R2 via the S3-compatible API; only the object key is saved in the database. Use `GET /api/v1/posts/:id` to retrieve presigned download URLs.
 
 **Request** - `multipart/form-data`  
 | Field | Type | Required | Description |
@@ -228,7 +228,7 @@ Store this key if needed. To display the image, fetch the post - the backend gen
 
 **Response `400`** - missing file or unsupported content type  
 **Response `401` / `403`** - unauthenticated or not an admin  
-**Response `500`** - S3 or database failure
+**Response `500`** - object storage or database failure
 
 ---
 
@@ -273,11 +273,11 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
   "id": "uuid",
   "post_id": "uuid",
   "storage_key": "images/posts/<post-id>/1714000000000.jpg",
-  "storage_url": "https://<bucket>.s3.<region>.amazonaws.com/images/posts/<post-id>/1714000000000.jpg?X-Amz-...",
+  "storage_url": "https://<account-id>.r2.cloudflarestorage.com/church-uploads-prod/images/posts/<post-id>/1714000000000.jpg?X-Amz-...",
   "display_order": 0
 }
 ```
-`storage_key` is the canonical S3 object key. `storage_url` is a freshly-presigned download URL (≈1 hour TTL) regenerated on every list/get response. Always render images from `storage_url`; never store it long-term - it expires. `storage_url` is omitted when the backend was started without S3 credentials.
+`storage_key` is the canonical object key (same format whether the bytes live in AWS S3 or Cloudflare R2). `storage_url` is a freshly-presigned download URL (≈1 hour TTL) regenerated on every list/get response. Always render images from `storage_url`; never store it long-term - it expires. `storage_url` is omitted when the backend was started without object-storage credentials.
 
 ### ReactionCount
 ```json

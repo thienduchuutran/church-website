@@ -7,32 +7,37 @@ Admins log in via Google (Supabase Auth) to create, edit, and delete posts.
 Each post auto-fires a Discord webhook to the matching channel.
 
 ## Tech stack
-- **Frontend**: Next.js (App Router) → EC2 + Nginx + systemd (served at `vgomne.ddns.net`)
-- **Backend**: Go (`chi` router, handler/service/repository pattern) → EC2 + systemd
-- **Database**: AWS RDS PostgreSQL (`church-db`, db.t4g.micro, us-east-1)
-- **Auth**: Supabase Auth - Google OAuth + JWKS-verified JWT (**still in use**, not migrated)
-- **File Storage**: AWS S3 (`church-uploads-prod-058264284549-us-east-1-an`, us-east-1)
-- **Reverse proxy**: Nginx on EC2 - routes `/api/*` → Go on port 8080, everything else → Next.js on port 3000
-- **CI/CD**: GitHub Actions - cross-compiles Go binary for Linux, builds Next.js, SCPs artifacts to EC2, SSHs in and restarts systemd services
+- **Frontend**: Next.js (App Router) → Vercel (`church-website-neon.vercel.app`, auto-deploys from `master`)
+- **Backend**: Go (`chi` router, handler/service/repository pattern) → Render (`church-website-ff5w.onrender.com`, auto-deploys from `master`, Docker build)
+- **Database**: Supabase Postgres (project `glcnqlffktqxaizdverk`, accessed via session pooler at `aws-1-us-east-1.pooler.supabase.com:5432`)
+- **Auth**: Supabase Auth - Google OAuth + JWKS-verified JWT (same project as the database)
+- **File Storage**: Cloudflare R2 (`church-uploads-prod` bucket, S3-compatible API), credentials kept in Render env
+- **CI/CD**: Push to `master` triggers parallel auto-deploys on Render (backend) and Vercel (frontend). No build server, no SSH, no SCP.
 
 ## Infrastructure overview
-All services run on a single EC2 instance (us-east-1, Northern Virginia) with a static Elastic IP.
-Nginx sits in front of both apps and handles SSL termination (Let's Encrypt via Certbot).
-Both Go and Next.js are registered as systemd services - they auto-start on boot and self-restart on crash.
-RDS and EC2 talk privately over port 5432 via auto-created security groups (`rds-ec2-1` on RDS, `ec2-rds-1` on EC2).
-S3 bucket is fully private (no public access); access is controlled by IAM policies.
-All secrets live in systemd service environment files - no `.env` file on disk.
+Everything is hosted on managed serverless platforms - no servers to maintain, no AWS bill.
+Render manages the Go backend container (HTTPS, restarts, scaling) and is kept warm by an external cron-job.org ping.
+Vercel manages the Next.js frontend (edge-cached, automatic HTTPS, preview deploys per branch).
+Supabase Postgres lives in `aws-us-east-1` and is reached through the session pooler (port 5432).
+Cloudflare R2 has S3-compatible APIs - the Go backend uses `aws-sdk-go-v2` with a custom `BaseEndpoint` to talk to it instead of AWS S3.
+Secrets live in Render's environment variable settings (backend) and Vercel's environment settings (frontend) - no `.env` file on any server disk.
 
 ```
-Internet → Nginx (EC2, port 443/80)
-              ├── /api/*  → Go backend  (port 8080, systemd: church-backend)
-              └── /*      → Next.js     (port 3000, systemd: church-frontend)
-                                │
-                    ┌───────────┴────────────┐
-                    AWS RDS PostgreSQL      AWS S3
-                    (private, port 5432)    (private, IAM-controlled)
+Internet
+   │
+   ├── church-website-neon.vercel.app  → Next.js frontend on Vercel edge
+   │                                       │
+   │                                       └── /api/v1/* calls
+   │                                            │
+   └── church-website-ff5w.onrender.com  ←──────┘ (cross-origin via CORS)
+              │
+              ▼
+        Go backend (Render Docker container)
+              │
+              ├──→ Supabase Postgres   (session pooler, port 5432)
+              └──→ Cloudflare R2       (S3-compatible API, presigned URLs)
 
-Auth layer: Supabase Auth (Google OAuth) → JWT → verified locally via JWKS
+Auth layer: Supabase Auth (Google OAuth) → JWT → verified by Go backend via JWKS
 ```
 
 ## Monorepo layout
@@ -67,12 +72,12 @@ cd backend && go run ./cmd/server
 
 | If the user asks about...                                 | Read this file first                    |
 |-----------------------------------------------------------|-----------------------------------------|
-| Database tables, columns, types, migrations, S3 storage   | `docs/agents/database.md`              |
+| Database tables, columns, types, migrations, R2 storage   | `docs/agents/database.md`              |
 | Go backend: routes, handlers, services, repositories      | `docs/agents/backend.md`               |
 | Next.js frontend: pages, components, lib, styling         | `docs/agents/frontend.md`              |
 | Google login, Supabase Auth, JWT, admin whitelist         | `docs/agents/auth.md`                  |
 | Discord webhooks, channel mapping, webhook payload format | `docs/agents/discord.md`               |
-| Hosting, deployment, EC2, Nginx, systemd, CI/CD          | `docs/agents/deployment.md`            |
+| Hosting, deployment, Render, Vercel, R2, CI/CD          | `docs/agents/deployment.md`            |
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
 | Posts/events/announcements not showing up after a write   | `docs/agents/known-quirks.md` ("Posts created on production don't show up in the UI") |
 | FK violation on `posts_admin_id_fkey` or similar          | `docs/agents/known-quirks.md` ("Posting fails with `posts_admin_id_fkey`...") |

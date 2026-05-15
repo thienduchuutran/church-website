@@ -1,7 +1,28 @@
 # progress.md - System Growth & Resume Notes
 
 ## Project Context
-church-website: a Next.js frontend + Go backend + Supabase data/auth/storage app for church management.
+church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
+
+## 2026-05-15 - Full AWS exodus to serverless ($0/month infrastructure)
+
+Migrated the entire stack off AWS while keeping the live site reachable throughout. End state: zero AWS resources, zero monthly bill, same product. Each step was independently reversible.
+
+1. **Database (RDS → Supabase Postgres).** Took a `pg_dump --no-owner --no-acl --schema=public -Fc` of the RDS instance from EC2, used `pg_restore --clean --if-exists` to replace the legacy Supabase project's `public` schema. Used the session pooler at `aws-1-us-east-1.pooler.supabase.com:5432` because Supabase's direct connection is IPv6-only and EC2 lacks IPv6. Cut over by editing `DATABASE_URL` in the systemd service file, then `daemon-reload && restart`. Discovered a rogue `/home/ubuntu/church-website/backend/.env` was overriding the systemd value via godotenv's fallback - renamed it `.env.bak-migration`. Also learned systemd treats `%` as a specifier prefix, so the URL-encoded `%40` (for the `@` in the password) had to be doubled to `%%40` on systemd; Render later took the same URL with a single `%40` because it doesn't have that quirk.
+2. **Object storage (S3 → Cloudflare R2).** Added an `endpoint string` parameter to `storage.NewS3Client` in `backend/internal/storage/s3.go`. When `endpoint != ""`, the SDK gets a custom `BaseEndpoint` plus `UsePathStyle = true` - that combination redirects all PutObject/DeleteObject/PresignGetObject calls to R2 while keeping the existing function signatures. Set `S3_ENDPOINT`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and bucket name in production env vars. One-time data migration: `aws s3 sync` from RDS-era EC2's IAM role into `/tmp/`, then upload from `/tmp/` to R2 using a separate `--profile r2 --endpoint-url <r2-endpoint>` (one set of credentials per `sync` call meant a two-step copy was simpler than rclone). 30 MB total, 5 hero mp4s.
+3. **Backend (EC2 + systemd → Render).** Render auto-deploys from `master` via Docker. Copied all env vars from the EC2 systemd file to Render's dashboard (note: single `%40` here, not `%%40`). External cron-job.org ping keeps the free instance warm; without it, first request after 15 min of inactivity waits ~50 s for cold start.
+4. **Frontend (EC2 + Nginx → Vercel).** Vercel auto-detects Next.js, builds from `frontend/` subdirectory. Hit `ERESOLVE` peer-dep conflict because `@emoji-mart/react` declares React 16/17/18 but we run 19. Fixed with `frontend/.npmrc` containing `legacy-peer-deps=true` - same flag GitHub Actions already used. Updated Render's `FRONTEND_ORIGIN` to the Vercel URL for CORS, and Supabase Auth's URL Configuration so OAuth callbacks work from the new origin.
+5. **AWS cleanup.** Deleted RDS (after final snapshot). Emptied + deleted the S3 bucket. Revoked the IAM user access keys. Terminated EC2. Released the Elastic IP (the silent ~$3.50/month trap that AWS charges for unattached EIPs). Removed the `ChurchEC2S3Role` IAM role and custom security groups.
+6. **DNS** stayed on No-IP's free `vgomne.ddns.net` pointing at the now-defunct Elastic IP. Custom domain on Vercel is available as a future polish (A record to `76.76.21.21` + optional `vercel.json` rewrite to proxy `/api/*` to Render, eliminating CORS) but was deferred to keep the migration focused on cost.
+
+### Lessons / architectural notes (resume bullets)
+- **Serverless cutover patterns:** built each new platform alongside the old one, verified equivalence, then flipped one config line at the boundary. Total downtime: zero.
+- **Single source of truth for environment variables matters:** the rogue EC2 `.env` overriding systemd taught me that "have config in two places" is how you get hours of mysterious bugs. godotenv's gap-filling behavior is convenient until it's invisible.
+- **S3-compatible APIs are real:** the same `aws-sdk-go-v2` code drives both AWS S3 and Cloudflare R2 with one boolean flag (`UsePathStyle`) and one URL override (`BaseEndpoint`). No rewrites required when changing providers.
+- **systemd specifier escaping:** `%` is reserved in `Environment=` directives; doubled `%%` produces a literal `%`. URL-encoded passwords are the classic gotcha.
+
+### Cost impact
+- Before: ~$22/month (EC2 t4g.micro + RDS db.t4g.micro + S3 + EBS + occasional EIP). ~$264/year.
+- After: $0/month. All services on free tiers comfortably within their quotas for a pre-launch church site.
 
 ## 2026-04-27 - `$impeccable document` (DESIGN.md + DESIGN.json)
 
