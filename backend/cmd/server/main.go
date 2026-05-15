@@ -116,8 +116,9 @@ func main() {
 		var s3Client *storage.S3Client
 		s3Bucket := os.Getenv("S3_BUCKET")
 		s3Region := os.Getenv("S3_REGION")
+		s3Endpoint := os.Getenv("S3_ENDPOINT")
 		if s3Bucket != "" && s3Region != "" {
-			c, err := storage.NewS3Client(s3Bucket, s3Region)
+			c, err := storage.NewS3Client(s3Bucket, s3Region, s3Endpoint)
 			if err != nil {
 				log.Fatalf("failed to init S3 client: %v", err)
 			}

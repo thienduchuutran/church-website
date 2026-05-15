@@ -17,8 +17,12 @@ type S3Client struct {
     region     string
 }
 
-func NewS3Client(bucketName, region string) (*S3Client, error) {
-    // Automatically uses the EC2 IAM role - no keys needed
+// NewS3Client builds a client that talks to any S3-compatible object store.
+// Pass endpoint="" for AWS S3 (uses EC2 IAM role or env credentials).
+// Pass endpoint="https://<acc>.r2.cloudflarestorage.com" for Cloudflare R2 -
+// R2 requires path-style addressing because it does not honor S3-style
+// virtual-hosted subdomains like bucket.endpoint/key.
+func NewS3Client(bucketName, region, endpoint string) (*S3Client, error) {
     cfg, err := config.LoadDefaultConfig(context.TODO(),
         config.WithRegion(region),
     )
@@ -26,8 +30,15 @@ func NewS3Client(bucketName, region string) (*S3Client, error) {
         return nil, fmt.Errorf("failed to load AWS config: %w", err)
     }
 
+    client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+        if endpoint != "" {
+            o.BaseEndpoint = aws.String(endpoint)
+            o.UsePathStyle = true
+        }
+    })
+
     return &S3Client{
-        client:     s3.NewFromConfig(cfg),
+        client:     client,
         bucketName: bucketName,
         region:     region,
     }, nil
