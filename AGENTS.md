@@ -12,6 +12,7 @@ Each post auto-fires a Discord webhook to the matching channel.
 - **Database**: Supabase Postgres (project `glcnqlffktqxaizdverk`, accessed via session pooler at `aws-1-us-east-1.pooler.supabase.com:5432`)
 - **Auth**: Supabase Auth - Google OAuth + JWKS-verified JWT (same project as the database)
 - **File Storage**: Cloudflare R2 (`church-uploads-prod` bucket, S3-compatible API), credentials kept in Render env
+- **Migrations**: `backend/migrations/*.up.sql` (golang-migrate v4, embedded into the Go binary), auto-applied on backend startup. The `supabase/migrations/` folder holds the original Supabase-era files from before the RDS detour; it is not the source of truth and is not re-applied.
 - **CI/CD**: Push to `master` triggers parallel auto-deploys on Render (backend) and Vercel (frontend). No build server, no SSH, no SCP.
 
 ## Infrastructure overview

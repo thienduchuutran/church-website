@@ -99,7 +99,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | PATCH | `/api/v1/posts/:id` | Edit a post |
 | DELETE | `/api/v1/posts/:id` | Delete a post |
 | PUT | `/api/v1/pages/:slug` | Upsert sections for a static page |
-| POST | `/api/v1/posts/:id/images` | Upload an image to S3 and attach it to a post. Returns `{ key }`. |
+| POST | `/api/v1/posts/:id/images` | Upload an image to Cloudflare R2 and attach it to a post. Returns `{ key }`. |
 | POST | `/api/v1/calendar/events` | Create a calendar event |
 | PATCH | `/api/v1/calendar/events/:id` | Edit a calendar event |
 | DELETE | `/api/v1/calendar/events/:id` | Delete a calendar event |

@@ -164,7 +164,11 @@ Reads `frontend/.env.local`. `NEXT_PUBLIC_API_URL=http://localhost:8080` points 
 ```bash
 docker compose up -d
 ```
-Starts the local Postgres at `localhost:5433`. The seed schema can be applied with `psql "$DATABASE_URL" -f scripts/rds-schema.sql` (the filename is historical - it's standard plain-Postgres SQL).
+Starts the local Postgres at `localhost:5433` (see repo-root `docker-compose.yml`). Point `DATABASE_URL` in `backend/.env` at it.
+
+You don't need to apply the schema by hand. When `go run ./cmd/server` starts, `runMigrations` reads the embedded `backend/migrations/*.up.sql` files and brings the local DB up to date. See [database.md](database.md) for migration authoring rules.
+
+> The legacy `psql "$DATABASE_URL" -f scripts/rds-schema.sql` bootstrap is no longer required and not recommended - it predates the embedded migration runner and can drift from `backend/migrations/000001_initial_schema.up.sql`.
 
 ---
 

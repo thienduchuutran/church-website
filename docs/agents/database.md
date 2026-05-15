@@ -63,13 +63,13 @@ Images attached to any post.
 create table post_images (
   id            uuid primary key default gen_random_uuid(),
   post_id       uuid not null references posts(id) on delete cascade,
-  storage_key   text not null,       -- S3 object key, e.g. "{post_id}/{filename}"
+  storage_key   text not null,       -- R2 object key, e.g. "images/posts/{post_id}/{unixnano}.jpg"
   display_order int default 0,
   created_at    timestamptz default now()
 );
 ```
-> `storage_key` is the S3 object key, not a full URL. The Go backend constructs the presigned URL on demand.
-> Bucket: `church-uploads-prod-058264284549-us-east-1-an` (us-east-1, private, IAM-controlled).
+> `storage_key` is the R2 object key, not a full URL. The Go backend mints a fresh presigned URL on every read.
+> Bucket: `church-uploads-prod` on Cloudflare R2 (private, accessed via static R2 keys stored in Render env).
 
 ---
 
@@ -208,14 +208,33 @@ See `docs/agents/database.md` → "RLS proposal" section for a plan to add DB-le
 ---
 
 ## Migration files
-The Go backend embeds SQL migrations in `backend/migrations/` and applies them on startup via `golang-migrate`. The migrator is idempotent - on each boot it consults `schema_migrations` and applies any new entries.
+Schema changes live in `backend/migrations/` as numbered `<NNNNNN>_<description>.up.sql` / `.down.sql` pairs. This folder is the **source of truth**; the files are embedded into the Go binary via `embed.go` and applied on backend startup by `runMigrations` in `backend/cmd/server/main.go` using `github.com/golang-migrate/migrate/v4`. golang-migrate tracks applied migrations in `public.schema_migrations`.
 
-Migration files use plain PostgreSQL only (no Supabase RLS / `auth.jwt()` extensions). The schema runs identically against local Docker Postgres, the former RDS instance, and the current Supabase project.
-
-To apply a migration manually outside the app (rare):
-```bash
-psql "$DATABASE_URL" -f backend/migrations/<file>.up.sql
+Current files:
 ```
+backend/migrations/
+├── 000001_initial_schema.up.sql        ← all tables, enums, indexes
+├── 000001_initial_schema.down.sql
+├── 000002_hero_video_visibility.up.sql ← alter hero_videos add column is_visible
+├── 000002_hero_video_visibility.down.sql
+└── embed.go                            ← exposes the SQL files as embed.FS to main.go
+```
+
+### Adding a new migration
+1. Create both files in `backend/migrations/`:
+   - `000003_<short_description>.up.sql` - the change.
+   - `000003_<short_description>.down.sql` - the inverse, so `migrate down` works in dev.
+2. Write plain PostgreSQL only. Avoid Supabase-specific syntax (`auth.jwt()`, `auth.users` FKs, RLS policies). The rationale: `runMigrations` runs as part of Go startup against any `DATABASE_URL`, including local Docker Postgres which has no `auth.users` schema. Authorization is enforced at the application layer via `RequireAdmin` middleware in Go, not at the DB layer.
+3. Commit and push. On the next backend deploy, golang-migrate sees the new version in `embed.FS`, compares against `public.schema_migrations`, and runs the up-migration. `migrate.ErrNoChange` is treated as success on subsequent boots.
+
+### One-off SQL outside the migration system
+For exploratory queries, reading data, or true emergency hotfixes use the Supabase dashboard SQL editor (Project → SQL Editor). If a hotfix changes the schema, follow up immediately with a normal `backend/migrations/` file so the next fresh database (local dev, staging) reaches the same state.
+
+### `supabase/migrations/` is not used
+The `supabase/migrations/` folder holds five files (`001_*` through `20260506_*`) from the original Supabase project setup, before the RDS detour. They carry "LEGACY" headers from when the database was on plain Postgres; the headers are factually outdated now that Supabase is back in front, but the operative instruction (`do not re-apply`) still stands - most of the tables they create are also created by `backend/migrations/000001_initial_schema.up.sql`, so re-applying would conflict. Treat the folder as historical record only.
+
+### Other historical files
+- `scripts/rds-schema.sql` - one-shot bootstrap snapshot from the RDS era. Not authoritative; use `backend/migrations/000001_initial_schema.up.sql` for the canonical schema picture.
 
 ---
 

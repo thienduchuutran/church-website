@@ -265,7 +265,7 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
   "reactions": []
 }
 ```
-`admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose - see `scripts/rds-schema.sql` and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.
+`admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose - see [`backend/migrations/000001_initial_schema.up.sql`](../backend/migrations/000001_initial_schema.up.sql) and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.
 
 ### PostImage
 ```json

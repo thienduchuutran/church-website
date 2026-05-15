@@ -1,5 +1,8 @@
--- LEGACY: applied when DB was on Supabase. DB is now plain Postgres (Docker/RDS).
--- Source of truth is scripts/rds-schema.sql. Do not re-apply.
+-- HISTORICAL: from the original Supabase project setup. The canonical schema now
+-- lives in backend/migrations/ (golang-migrate, applied on backend startup). Do not
+-- re-apply this file - the calendar tables are also created by 000001 in that
+-- folder, with the deliberate omission of the auth.users FK on admin_id present
+-- below (see docs/agents/known-quirks.md "Posting fails with posts_admin_id_fkey").
 --
 -- Interactive calendar: day-level events and month-level sidebar notes.
 

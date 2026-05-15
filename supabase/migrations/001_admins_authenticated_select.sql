@@ -1,5 +1,7 @@
--- LEGACY: applied when DB was on Supabase. DB is now plain Postgres (Docker/RDS).
--- Source of truth is scripts/rds-schema.sql. Do not re-apply.
+-- HISTORICAL: from the original Supabase project setup. The canonical schema now
+-- lives in backend/migrations/ (golang-migrate, applied on backend startup). Do not
+-- re-apply this file - the admins table it targets is created by 000001 in that
+-- folder, and the RLS policy below was preserved through the RDS detour by pg_dump.
 --
 -- Allow signed-in users to read only their own admins row (frontend whitelist check in lib/auth.tsx).
 -- With RLS enabled and zero policies, the Data API returns no rows for anon/authenticated.
