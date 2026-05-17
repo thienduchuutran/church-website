@@ -6,6 +6,7 @@ import {
   type PostFormState,
 } from '@/lib/post-types'
 import { RichBodyEditor } from '@/components/editor/RichBodyEditor'
+import TagSelector from '@/components/features/gallery/TagSelector'
 
 const INPUT_CLASS =
   'block w-full rounded-lg border border-border bg-surface px-4 py-2.5 font-sans text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none'
@@ -14,10 +15,12 @@ export default function PostFormFields({
   section,
   state,
   onChange,
+  postId,
 }: {
   section: string
   state: PostFormState
   onChange: (next: PostFormState) => void
+  postId?: string
 }) {
   const fields = POST_TYPE_FIELDS[section]
   if (!fields) {
@@ -30,6 +33,7 @@ export default function PostFormFields({
 
   const label = POST_TYPE_LABELS[section] ?? section
   const has = (f: 'body' | 'event_date' | 'external_link') => fields.includes(f)
+  const isGalleryAlbum = section === 'gallery_album'
 
   return (
     <>
@@ -89,6 +93,16 @@ export default function PostFormFields({
             onChange={(e) => onChange({ ...state, externalLink: e.target.value })}
             className={INPUT_CLASS}
             placeholder="https://..."
+          />
+        </div>
+      )}
+
+      {isGalleryAlbum && postId && (
+        <div>
+          <TagSelector
+            postId={postId}
+            selectedTagIds={state.tagIds}
+            onTagsChange={(tagIds) => onChange({ ...state, tagIds })}
           />
         </div>
       )}

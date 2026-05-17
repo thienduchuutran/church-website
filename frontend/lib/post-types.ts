@@ -7,6 +7,7 @@ export interface PostFormState {
   body: string
   eventDate: string
   externalLink: string
+  tagIds: string[]
 }
 
 export const EMPTY_POST_FORM: PostFormState = {
@@ -14,6 +15,7 @@ export const EMPTY_POST_FORM: PostFormState = {
   body: '',
   eventDate: '',
   externalLink: '',
+  tagIds: [],
 }
 
 export const POST_TYPE_FIELDS: Record<string, ('body' | 'event_date' | 'external_link')[]> = {
@@ -46,6 +48,7 @@ export function postToFormState(post: Post): PostFormState {
     body: post.body ?? '',
     eventDate: post.event_date ? isoToDatetimeLocal(post.event_date) : '',
     externalLink: post.external_link ?? '',
+    tagIds: post.tags?.map(t => t.id) ?? [],
   }
 }
 

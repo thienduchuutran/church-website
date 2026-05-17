@@ -54,7 +54,7 @@ export default function CreatePostForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <PostFormFields section={section} state={state} onChange={setState} />
+      <PostFormFields section={section} state={state} onChange={setState} postId={undefined} />
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-700">
           {error}

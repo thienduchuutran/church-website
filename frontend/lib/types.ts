@@ -5,6 +5,12 @@ export type PostType =
   | 'playlist'
   | 'gallery_album'
 
+export interface Tag {
+  id: string
+  name: string
+  created_at: string
+}
+
 export interface Post {
   id: string
   type: PostType
@@ -18,6 +24,8 @@ export interface Post {
   // Backend fills `images` from a join on post_images and presigns each storage_url
   // on the fly. The field is omitted (not empty array) when the post has no images.
   images?: PostImage[]
+  // Backend populates tags only for gallery_album posts
+  tags?: Tag[]
 }
 
 export interface PostImage {

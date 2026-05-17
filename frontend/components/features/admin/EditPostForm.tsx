@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/auth'
-import { updatePost } from '@/lib/posts'
+import { updatePost, replaceTags } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import {
   postToFormState,
@@ -36,6 +36,10 @@ export default function EditPostForm({
     setError(null)
     try {
       await updatePost(post.id, toPostPayload(post.type, state), session.access_token)
+      // Save tags for gallery albums
+      if (post.type === 'gallery_album') {
+        await replaceTags(post.id, state.tagIds, session.access_token)
+      }
       router.refresh()
       onSaved?.()
       onSuccess()
@@ -47,7 +51,7 @@ export default function EditPostForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
-      <PostFormFields section={post.type} state={state} onChange={setState} />
+      <PostFormFields section={post.type} state={state} onChange={setState} postId={post.id} />
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 font-sans text-sm text-red-700">
           {error}

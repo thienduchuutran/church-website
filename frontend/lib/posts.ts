@@ -1,7 +1,8 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from './api'
-import type { Post, PostType } from './types'
+import type { Post, PostType, Tag } from './types'
 
 const POSTS_BASE = '/api/v1/posts'
+const TAGS_BASE = '/api/v1/tags'
 
 export interface PostPayload {
   type: PostType
@@ -46,4 +47,12 @@ export async function updatePost(
 
 export async function deletePost(id: string, token: string): Promise<void> {
   await apiDelete(`${POSTS_BASE}/${id}`, token)
+}
+
+export async function listTags(): Promise<Tag[]> {
+  return ((await apiGet(TAGS_BASE)) as Tag[]) ?? []
+}
+
+export async function replaceTags(postId: string, tagIds: string[], token: string): Promise<void> {
+  await apiPost(`${POSTS_BASE}/${postId}/tags`, { tag_ids: tagIds }, token)
 }
