@@ -193,7 +193,10 @@ export default function BulkUploader({
     if (pendingFiles.length === 0) return
 
     pendingFiles.forEach(f => {
-      queueRef.current.push(f.id)
+      // Only add to queue if not already there to prevent duplicate uploads
+      if (!queueRef.current.includes(f.id)) {
+        queueRef.current.push(f.id)
+      }
     })
     processQueue()
   }, [files])
