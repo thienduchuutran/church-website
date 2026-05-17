@@ -107,7 +107,13 @@ export default function AdminPage() {
           Create New Post
         </h2>
         <div className="flex flex-wrap gap-2">
-          {POST_TYPES.map(({ type, label }) => (
+          <Link
+            href="/admin/gallery/new"
+            className="rounded-lg border border-border bg-surface px-4 py-2 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
+          >
+            + Album
+          </Link>
+          {POST_TYPES.filter(({ type }) => type !== 'gallery_album').map(({ type, label }) => (
             <Link
               key={type}
               href={`/admin/${type}`}
@@ -125,11 +131,10 @@ export default function AdminPage() {
           <button
             type="button"
             onClick={() => setFilter(null)}
-            className={`rounded-full px-3 py-1 font-display text-xs font-medium transition-colors ${
-              filter === null
+            className={`rounded-full px-3 py-1 font-display text-xs font-medium transition-colors ${filter === null
                 ? 'bg-primary text-white'
                 : 'bg-surface text-muted hover:bg-primary/5'
-            }`}
+              }`}
           >
             All
           </button>
@@ -138,11 +143,10 @@ export default function AdminPage() {
               key={type}
               type="button"
               onClick={() => setFilter(type)}
-              className={`rounded-full px-3 py-1 font-display text-xs font-medium transition-colors ${
-                filter === type
+              className={`rounded-full px-3 py-1 font-display text-xs font-medium transition-colors ${filter === type
                   ? 'bg-primary text-white'
                   : 'bg-surface text-muted hover:bg-primary/5'
-              }`}
+                }`}
             >
               {label}
             </button>

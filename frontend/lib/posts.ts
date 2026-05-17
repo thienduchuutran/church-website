@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPatch, apiPost } from './api'
+import { apiDelete, apiGet, apiPatch, apiPost, apiPostMultipart } from './api'
 import type { Post, PostType, Tag } from './types'
 
 const POSTS_BASE = '/api/v1/posts'
@@ -55,4 +55,14 @@ export async function listTags(): Promise<Tag[]> {
 
 export async function replaceTags(postId: string, tagIds: string[], token: string): Promise<void> {
   await apiPost(`${POSTS_BASE}/${postId}/tags`, { tag_ids: tagIds }, token)
+}
+
+export interface ImageUploadResponse {
+  key: string
+}
+
+export async function uploadImage(postId: string, file: File, token: string): Promise<ImageUploadResponse> {
+  const formData = new FormData()
+  formData.append('image', file)
+  return (await apiPostMultipart(`${POSTS_BASE}/${postId}/images`, formData, token)) as ImageUploadResponse
 }
