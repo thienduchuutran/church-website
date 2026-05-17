@@ -47,10 +47,7 @@ export default function AlbumGrid({ albums, isLoading }: AlbumGridProps) {
             <button
               key={album.id}
               type="button"
-              onClick={() => {
-                console.log(`Clicking album "${album.title}" with ${album.images?.length || 0} images`)
-                setSelectedAlbum(album)
-              }}
+              onClick={() => setSelectedAlbum(album)}
               className="group relative aspect-square overflow-hidden rounded-lg bg-border transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
               {/* Cover image */}

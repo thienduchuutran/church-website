@@ -98,7 +98,6 @@ export default function CreateAlbumPage() {
   }
 
   function handleUploadComplete(storageKeys: string[]) {
-    console.log(`Upload completed: ${storageKeys.length} images with keys:`, storageKeys)
     // After upload completes, redirect back to admin dashboard
     router.push('/admin')
   }

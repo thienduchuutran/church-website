@@ -21,11 +21,6 @@ export default function GalleryContent() {
           tags: selectedTagId ? [selectedTagId] : undefined,
         })
 
-        console.log('Albums loaded:', data.length, 'total albums')
-        data.forEach((album, idx) => {
-          console.log(`Album ${idx}: "${album.title}" - ${album.images?.length || 0} images`)
-        })
-
         setAlbums(data)
       } catch (err) {
         console.error('Failed to load albums:', err)
