@@ -15,12 +15,14 @@ export interface PostPayload {
 interface ListOptions {
   type?: string
   limit?: number
+  tags?: string[]
 }
 
-function buildListPath({ type, limit }: ListOptions = {}): string {
+function buildListPath({ type, limit, tags }: ListOptions = {}): string {
   const params = new URLSearchParams()
   if (type) params.set('type', type)
   if (limit !== undefined) params.set('limit', String(limit))
+  if (tags && tags.length > 0) params.set('tags', tags.join(','))
   const qs = params.toString()
   return qs ? `${POSTS_BASE}?${qs}` : POSTS_BASE
 }

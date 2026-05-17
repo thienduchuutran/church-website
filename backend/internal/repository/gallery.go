@@ -57,3 +57,15 @@ func (r *GalleryRepository) GetImagesByPostIDs(ctx context.Context, postIDs []st
 	}
 	return out, rows.Err()
 }
+
+// GetMaxDisplayOrder returns the highest display_order value for a post,
+// or 0 if the post has no images. Used to assign the next display order
+// when adding images sequentially.
+func (r *GalleryRepository) GetMaxDisplayOrder(ctx context.Context, postID string) (int, error) {
+	var maxOrder int
+	err := r.pool.QueryRow(ctx,
+		`SELECT COALESCE(MAX(display_order), 0) FROM post_images WHERE post_id = $1`,
+		postID,
+	).Scan(&maxOrder)
+	return maxOrder, err
+}

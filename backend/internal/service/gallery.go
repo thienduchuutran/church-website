@@ -23,6 +23,7 @@ type ImageStore interface {
 // GalleryRepository is the subset of repository.GalleryRepository this service needs.
 type GalleryRepository interface {
 	InsertPostImage(ctx context.Context, img *model.PostImage) error
+	GetMaxDisplayOrder(ctx context.Context, postID string) (int, error)
 }
 
 type GalleryService struct {
@@ -60,10 +61,18 @@ func (s *GalleryService) AddImageToPost(
 		return nil, fmt.Errorf("s3 upload: %w", err)
 	}
 
+	maxOrder, err := s.repo.GetMaxDisplayOrder(ctx, postID)
+	if err != nil {
+		if cleanupErr := s.store.DeleteFile(ctx, key); cleanupErr != nil {
+			log.Printf("AddImageToPost: failed to clean up s3 key %s after get max order error: %v", key, cleanupErr)
+		}
+		return nil, fmt.Errorf("get max display order: %w", err)
+	}
+
 	img := &model.PostImage{
 		PostID:       postID,
 		StorageKey:   key,
-		DisplayOrder: 0,
+		DisplayOrder: maxOrder + 1,
 	}
 
 	if err := s.repo.InsertPostImage(ctx, img); err != nil {
