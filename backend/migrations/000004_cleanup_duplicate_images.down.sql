@@ -1,3 +1,0 @@
--- Down migration: This cleanup is not reversible since the duplicate records
--- are lost during deletion. This migration only goes forward.
--- To restore, you would need to re-upload the images.

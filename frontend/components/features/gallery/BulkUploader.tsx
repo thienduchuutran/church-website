@@ -35,18 +35,17 @@ export default function BulkUploader({
   const inputRef = useRef<HTMLInputElement>(null)
   const dragZoneRef = useRef<HTMLDivElement>(null)
   const [files, setFiles] = useState<UploadFile[]>([])
-  const [uploading, setUploading] = useState(false)
-  const [completedCount, setCompletedCount] = useState(0)
-  const [totalCount, setTotalCount] = useState(0)
+  const [hasStartedUploading, setHasStartedUploading] = useState(false)
 
-  // Track concurrent uploads
   const uploadingCountRef = useRef(0)
   const queueRef = useRef<string[]>([])
 
-  // Prevent navigation while uploading
   useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {
-      if (uploading && files.some(f => f.status === 'uploading' || f.status === 'pending')) {
+      const inFlight = files.some(
+        f => f.status === 'uploading' || (hasStartedUploading && f.status === 'pending')
+      )
+      if (inFlight) {
         e.preventDefault()
         e.returnValue = ''
       }
@@ -54,7 +53,7 @@ export default function BulkUploader({
 
     window.addEventListener('beforeunload', handleBeforeUnload)
     return () => window.removeEventListener('beforeunload', handleBeforeUnload)
-  }, [uploading, files])
+  }, [hasStartedUploading, files])
 
   function validateFiles(fileList: FileList): UploadFile[] {
     const validated: UploadFile[] = []
@@ -90,12 +89,14 @@ export default function BulkUploader({
     if (newFiles.length === 0) return
 
     setFiles(prev => [...prev, ...newFiles])
-    setUploading(true)
-    setTotalCount(prev => prev + newFiles.length)
 
     if (inputRef.current) {
       inputRef.current.value = ''
     }
+  }
+
+  function handleStartUpload() {
+    setHasStartedUploading(true)
   }
 
   function handleDragOver(e: React.DragEvent<HTMLDivElement>) {
@@ -138,7 +139,6 @@ export default function BulkUploader({
             : f
         )
       )
-      setCompletedCount(prev => prev + 1)
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : 'Upload failed'
       setFiles(prev =>
@@ -158,11 +158,6 @@ export default function BulkUploader({
       uploadingCountRef.current += 1
       uploadFile(fileId)
     }
-
-    const allDone = files.every(f => f.status !== 'pending' && f.status !== 'uploading')
-    if (allDone && queueRef.current.length === 0) {
-      setUploading(false)
-    }
   }
 
   function handleRetry(fileId: string) {
@@ -171,8 +166,8 @@ export default function BulkUploader({
         f.id === fileId ? { ...f, status: 'pending', progress: 0, error: undefined } : f
       )
     )
+    setHasStartedUploading(true)
     queueRef.current.push(fileId)
-    setUploading(true)
     processQueue()
   }
 
@@ -187,22 +182,23 @@ export default function BulkUploader({
     onComplete(keys)
   }
 
-  // Initialize upload queue when files change
   useEffect(() => {
+    if (!hasStartedUploading) return
+
     const pendingFiles = files.filter(f => f.status === 'pending')
     if (pendingFiles.length === 0) return
 
     pendingFiles.forEach(f => {
-      // Only add to queue if not already there to prevent duplicate uploads
       if (!queueRef.current.includes(f.id)) {
         queueRef.current.push(f.id)
       }
     })
     processQueue()
-  }, [files])
+  }, [files, hasStartedUploading])
 
   const doneCount = files.filter(f => f.status === 'done').length
   const failedCount = files.filter(f => f.status === 'failed').length
+  const pendingCount = files.filter(f => f.status === 'pending').length
   const allDone = files.length > 0 && files.every(f => f.status === 'done' || f.status === 'failed')
 
   return (
@@ -227,7 +223,9 @@ export default function BulkUploader({
       {files.length > 0 && (
         <div className="text-center">
           <p className="font-display text-lg font-semibold text-foreground">
-            {doneCount} / {files.length} uploaded
+            {hasStartedUploading
+              ? `${doneCount} / ${files.length} uploaded`
+              : `${files.length} ${files.length === 1 ? 'photo' : 'photos'} ready`}
           </p>
           {failedCount > 0 && (
             <p className="font-sans text-sm text-red-600">
@@ -361,8 +359,7 @@ export default function BulkUploader({
               type="button"
               onClick={() => {
                 setFiles([])
-                setCompletedCount(0)
-                setTotalCount(0)
+                setHasStartedUploading(false)
                 queueRef.current = []
               }}
               className="rounded-lg border border-primary bg-surface px-5 py-2.5 font-display text-sm font-medium text-primary transition-colors hover:bg-primary/5"
@@ -373,8 +370,19 @@ export default function BulkUploader({
         </div>
       )}
 
-      {/* Finish button (if some files succeeded) */}
-      {!allDone && doneCount > 0 && (
+      {/* Upload button - shown before the first commit, while files are still staging */}
+      {!hasStartedUploading && pendingCount > 0 && (
+        <button
+          type="button"
+          onClick={handleStartUpload}
+          className="w-full rounded-lg bg-accent px-5 py-2.5 font-display text-sm font-medium text-white transition-colors hover:bg-accent-light"
+        >
+          Upload {pendingCount} {pendingCount === 1 ? 'photo' : 'photos'}
+        </button>
+      )}
+
+      {/* Finish button (if some files succeeded and nothing left to upload) */}
+      {!allDone && doneCount > 0 && pendingCount === 0 && (
         <button
           type="button"
           onClick={handleFinish}
