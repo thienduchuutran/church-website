@@ -35,20 +35,37 @@ export default function AlbumViewer({ album, onClose }: AlbumViewerProps) {
 
     let cancelled = false
 
-    import('photoswipe').then(({ default: PhotoSwipe }) => {
-      // Bail if the component unmounted (or re-ran under StrictMode) before
-      // the dynamic import resolved. Without this, the modal pops up after
-      // the user has already navigated away.
+    const run = async () => {
+      // Probe each photo's real pixel dimensions before opening PhotoSwipe.
+      // Why: PhotoSwipe uses (width, height) to size the slide and drive zoom
+      // math. Previously we hardcoded 1600x1200, so portrait and non-4:3
+      // landscape photos got stretched into the wrong box. Browsers cache
+      // these loads, so PhotoSwipe reuses them when it renders each slide.
+      const dataSource = await Promise.all(
+        images.map(
+          img =>
+            new Promise<{ src: string; width: number; height: number; alt: string }>(resolve => {
+              const probe = new window.Image()
+              probe.onload = () =>
+                resolve({
+                  src: img.storage_url,
+                  width: probe.naturalWidth || 1600,
+                  height: probe.naturalHeight || 1200,
+                  alt: album.title,
+                })
+              probe.onerror = () =>
+                resolve({ src: img.storage_url, width: 1600, height: 1200, alt: album.title })
+              probe.src = img.storage_url
+            })
+        )
+      )
+
+      if (cancelled) return
+
+      const { default: PhotoSwipe } = await import('photoswipe')
       if (cancelled) return
 
       try {
-        const dataSource = images.map(img => ({
-          src: img.storage_url,
-          width: 1600,
-          height: 1200,
-          alt: album.title,
-        }))
-
         const pswp = new PhotoSwipe({
           dataSource,
           index: 0,
@@ -59,8 +76,9 @@ export default function AlbumViewer({ album, onClose }: AlbumViewerProps) {
           showHideAnimationType: 'fade',
           bgOpacity: 0.95,
           initialZoomLevel: 'fit',
-          secondaryZoomLevel: 1.5,
-          maxZoomLevel: 3,
+          secondaryZoomLevel: 'fill',
+          maxZoomLevel: 4,
+          imageClickAction: 'zoom',
         })
 
         pswp.on('destroy', onClose)
@@ -70,7 +88,9 @@ export default function AlbumViewer({ album, onClose }: AlbumViewerProps) {
         console.error('PhotoSwipe initialization failed:', err)
         onClose()
       }
-    }).catch(err => {
+    }
+
+    run().catch(err => {
       if (cancelled) return
       console.error('Failed to load PhotoSwipe:', err)
       onClose()
