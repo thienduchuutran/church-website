@@ -27,6 +27,16 @@ type URLPresigner interface {
 	PresignedURL(ctx context.Context, key string, expiry time.Duration) (string, error)
 }
 
+// PublicURLBuilder returns a permanent direct URL for objects living in a
+// public bucket/prefix. Used for gallery_album images so the frontend gets
+// stable, CDN-cacheable URLs instead of URLs that rotate every hour.
+// Separate from URLPresigner because hero_video and non-gallery posts still
+// need presigning - the two responsibilities should not be conflated in any
+// single interface.
+type PublicURLBuilder interface {
+	PublicURL(key string) string
+}
+
 // presignTTL is how long each presigned URL stays valid. It needs to outlive
 // Next.js's revalidate window (60s) by a comfortable margin so the URL doesn't
 // expire mid-render or right after the page finishes streaming. One hour is a
@@ -35,16 +45,18 @@ type URLPresigner interface {
 const presignTTL = 1 * time.Hour
 
 type PostService struct {
-	posts     *repository.PostRepository
-	images    PostImageRepo // optional - nil-safe; when nil, posts are returned without images
-	presigner URLPresigner  // optional - nil-safe; when nil, images carry only storage_key
+	posts      *repository.PostRepository
+	images     PostImageRepo    // optional - nil-safe; when nil, posts are returned without images
+	presigner  URLPresigner     // optional - nil-safe; when nil, non-gallery images carry only storage_key
+	publicURLs PublicURLBuilder // optional - nil-safe; when nil, gallery images fall back to presigning
 }
 
-// NewPostService builds a post service. Both `images` and `presigner` may be nil
-// - the service degrades gracefully so the API still serves text-only posts on
-// environments where S3 is not configured.
-func NewPostService(posts *repository.PostRepository, images PostImageRepo, presigner URLPresigner) *PostService {
-	return &PostService{posts: posts, images: images, presigner: presigner}
+// NewPostService builds a post service. `images`, `presigner`, and `publicURLs`
+// may each be nil - the service degrades gracefully so the API still serves
+// text-only posts on environments where S3 is not configured, and falls back
+// to presigning for gallery images when the public bucket URL is not set.
+func NewPostService(posts *repository.PostRepository, images PostImageRepo, presigner URLPresigner, publicURLs PublicURLBuilder) *PostService {
+	return &PostService{posts: posts, images: images, presigner: presigner, publicURLs: publicURLs}
 }
 
 // Create validates the request, persists the post, and fires a Discord notification.
@@ -112,10 +124,12 @@ func (s *PostService) Delete(ctx context.Context, id string) error {
 	return s.posts.DeletePost(ctx, id)
 }
 
-// attachImages fills Post.Images for each post in-place, presigning URLs when
-// a presigner is available. It batches by post id so listing N posts costs one
-// SELECT instead of N. Safe to call when the gallery repo or presigner are nil
-// - those branches skip enrichment without erroring.
+// attachImages fills Post.Images for each post in-place. Gallery_album images
+// get permanent public URLs (the gallery R2 prefix is public, so no presigning
+// is needed and the frontend can cache them via Cloudflare's CDN). Every other
+// post type gets a short-lived presigned URL. Both paths fall back gracefully
+// when their respective dependencies are nil. Batches by post id so listing N
+// posts costs one SELECT instead of N.
 func (s *PostService) attachImages(ctx context.Context, posts []model.Post) error {
 	if s.images == nil || len(posts) == 0 {
 		return nil
@@ -133,8 +147,17 @@ func (s *PostService) attachImages(ctx context.Context, posts []model.Post) erro
 
 	for i := range posts {
 		imgs := imagesByPost[posts[i].ID]
-		if s.presigner != nil {
-			for j := range imgs {
+		isGallery := posts[i].Type == model.PostTypeGalleryAlbum
+		for j := range imgs {
+			if isGallery && s.publicURLs != nil {
+				if url := s.publicURLs.PublicURL(imgs[j].StorageKey); url != "" {
+					imgs[j].StorageURL = url
+					continue
+				}
+				// Public URL unavailable (R2_PUBLIC_URL not set) - fall through
+				// to presigning so the image still renders.
+			}
+			if s.presigner != nil {
 				url, err := s.presigner.PresignedURL(ctx, imgs[j].StorageKey, presignTTL)
 				if err != nil {
 					// One failed presign should not blank out the whole feed -

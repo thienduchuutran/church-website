@@ -117,8 +117,9 @@ func main() {
 		s3Bucket := os.Getenv("S3_BUCKET")
 		s3Region := os.Getenv("S3_REGION")
 		s3Endpoint := os.Getenv("S3_ENDPOINT")
+		r2PublicURL := os.Getenv("R2_PUBLIC_URL")
 		if s3Bucket != "" && s3Region != "" {
-			c, err := storage.NewS3Client(s3Bucket, s3Region, s3Endpoint)
+			c, err := storage.NewS3Client(s3Bucket, s3Region, s3Endpoint, r2PublicURL)
 			if err != nil {
 				log.Fatalf("failed to init S3 client: %v", err)
 			}
@@ -127,16 +128,22 @@ func main() {
 			galleryHandler = handler.NewGalleryHandler(gallerySvc)
 		}
 
-		// PostService takes a presigner so it can attach short-lived `storage_url`
-		// values to each PostImage on the way out. The presigner is wrapped in a
-		// real interface variable rather than the concrete pointer - passing a
-		// typed nil *S3Client directly would create a non-nil interface holding a
-		// nil pointer, defeating the service's nil check.
+		// PostService takes a presigner (for non-gallery images) and a public
+		// URL builder (for gallery_album images, which live in a public R2
+		// prefix). Both are wrapped in real interface variables rather than the
+		// concrete pointer - passing a typed nil *S3Client directly would create
+		// a non-nil interface holding a nil pointer, defeating the service's
+		// nil check. The public URL builder is only wired when R2_PUBLIC_URL is
+		// set; otherwise gallery images fall back to presigned URLs.
 		var presigner service.URLPresigner
+		var publicURLs service.PublicURLBuilder
 		if s3Client != nil {
 			presigner = s3Client
+			if r2PublicURL != "" {
+				publicURLs = s3Client
+			}
 		}
-		postSvc := service.NewPostService(postRepo, galleryRepo, presigner)
+		postSvc := service.NewPostService(postRepo, galleryRepo, presigner, publicURLs)
 		postHandler = handler.NewPostHandler(postSvc)
 
 		reactionRepo := repository.NewReactionRepository(dbPool)
