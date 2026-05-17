@@ -11,6 +11,8 @@ export interface AlbumViewerProps {
 export default function AlbumViewer({ album, onClose }: AlbumViewerProps) {
   const pswpRef = useRef<any>(null)
 
+  console.log(`AlbumViewer rendering: "${album.title}" with ${album.images?.length || 0} images`)
+
   useEffect(() => {
     // Load PhotoSwipe CSS
     const link = document.createElement('link')
