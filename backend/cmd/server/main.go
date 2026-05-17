@@ -97,6 +97,7 @@ func main() {
 	healthHandler := handler.NewHealthHandler()
 
 	var postHandler *handler.PostHandler
+	var tagHandler *handler.TagHandler
 	var reactionHandler *handler.ReactionHandler
 	var pageHandler *handler.PageHandler
 	var galleryHandler *handler.GalleryHandler
@@ -145,6 +146,13 @@ func main() {
 		}
 		postSvc := service.NewPostService(postRepo, galleryRepo, presigner, publicURLs)
 		postHandler = handler.NewPostHandler(postSvc)
+
+		// Tag service and handler. Wired into PostService so gallery albums
+		// are hydrated with their tags on read.
+		tagRepo := repository.NewTagRepository(dbPool)
+		tagSvc := service.NewTagService(tagRepo)
+		tagHandler = handler.NewTagHandler(tagSvc)
+		postSvc.SetTagRepository(tagRepo)
 
 		reactionRepo := repository.NewReactionRepository(dbPool)
 		reactionSvc := service.NewReactionService(reactionRepo)
@@ -226,6 +234,21 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Put("/pages/{slug}", pageHandler.Update)
+			})
+		}
+
+		// Tags:
+		//   PUBLIC (no auth, intentional): GET /tags
+		//     Anyone can list all available tags to filter the gallery.
+		//   ADMIN-ONLY: POST/DELETE operations for tag management.
+		if tagHandler != nil {
+			r.Get("/tags", tagHandler.List)
+
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Post("/tags", tagHandler.Create)
+				r.Post("/posts/{id}/tags", tagHandler.Replace)
+				r.Delete("/posts/{id}/tags/{tag_id}", tagHandler.Remove)
 			})
 		}
 

@@ -26,16 +26,17 @@ Liveness check.
 ---
 
 ### `GET /api/v1/posts`
-List posts. Supports optional filtering.
+List posts. Supports optional filtering by type and/or tags.
 
 **Query params**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
 | `type` | string | - | Filter by post type: `event`, `announcement`, `bible_study`, `playlist`, `gallery_album` |
+| `tags` | string | - | Filter gallery_album posts by tag ID (comma-separated UUIDs). Uses OR logic - returns albums with ANY of the selected tags. Ignored when `type` is not `gallery_album`. |
 | `limit` | int | 20 | Max results. Server caps at 100. |
 | `offset` | int | 0 | Pagination offset |
 
-**Response `200`** - array of Post objects (see [Models](#models)). Each post's `images` field is populated when the post has uploaded images, with a fresh presigned `storage_url` on every request.
+**Response `200`** - array of Post objects (see [Models](#models)). Each post's `images` field is populated when the post has uploaded images. Gallery album posts include a `tags` array with the tags applied to that album. Non-gallery posts have an empty `tags` array.
 
 ---
 
@@ -142,6 +143,13 @@ Returns all editable sections for a static page (e.g. `about`, `connect`).
 
 ---
 
+### `GET /api/v1/tags`
+List all available tags for filtering gallery albums.
+
+**Response `200`** - array of Tag objects (see [Models](#models)), ordered by name.
+
+---
+
 ## Admin endpoints (JWT required)
 
 All admin routes require a valid Supabase JWT in the `Authorization: Bearer <token>` header, and the token's email must exist in the `admins` table.
@@ -232,6 +240,48 @@ Store this key if needed. To display the image, fetch the post - the backend gen
 
 ---
 
+### `POST /api/v1/tags`
+Create a new tag (label) for gallery albums.
+
+**Request body**
+```json
+{ "name": "worship" }
+```
+`name` must be non-empty and unique across all tags.
+
+**Response `201`** - created Tag object (see [Models](#models))  
+**Response `400`** - validation error (missing name)  
+**Response `401` / `403`** - unauthenticated or not an admin  
+**Response `409`** - tag name already exists
+
+---
+
+### `POST /api/v1/posts/:id/tags`
+Replace all tags on a gallery album post. Deletes the existing set and inserts the new one.
+
+**Request body**
+```json
+{ "tag_ids": ["tag-uuid-1", "tag-uuid-2"] }
+```
+Pass an empty array to remove all tags. Tag IDs must be valid tag UUIDs.
+
+**Response `204`** - no body  
+**Response `400`** - validation error (malformed tag IDs)  
+**Response `401` / `403`** - unauthenticated or not an admin  
+**Response `500`** - database error
+
+---
+
+### `DELETE /api/v1/posts/:id/tags/:tag_id`
+Remove a single tag from a gallery album post.
+
+**Response `204`** - no body  
+**Response `401` / `403`** - unauthenticated or not an admin  
+**Response `404`** - tag not assigned to post  
+**Response `500`** - database error
+
+---
+
 ### `PUT /api/v1/calendar/months/:year/:month/settings`
 Upsert the per-month styling row. Currently a single field (`accent_color`); the row also stores the `admin_id` of the most recent editor for audit. The accent tints the day-of-week header, month title, and "today" marker on every visitor's view of that month.
 
@@ -262,10 +312,12 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
   "created_at": "2026-04-01T00:00:00Z",
   "updated_at": "2026-04-01T00:00:00Z",
   "images": [],
-  "reactions": []
+  "reactions": [],
+  "tags": []
 }
 ```
-`admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose - see [`backend/migrations/000001_initial_schema.up.sql`](../backend/migrations/000001_initial_schema.up.sql) and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.
+`admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose - see [`backend/migrations/000001_initial_schema.up.sql`](../backend/migrations/000001_initial_schema.up.sql) and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.  
+`tags` is populated only for `gallery_album` posts; other post types have an empty array.
 
 ### PostImage
 ```json
@@ -291,6 +343,16 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
   "my_reaction": "👍"
 }
 ```
+
+### Tag
+```json
+{
+  "id": "uuid",
+  "name": "worship",
+  "created_at": "2026-04-01T00:00:00Z"
+}
+```
+Tags are reusable labels created by admins and can be applied to multiple gallery album posts. The `created_at` field shows when the tag was first created.
 
 ### CalendarMonthSettings
 ```json

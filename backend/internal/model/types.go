@@ -15,6 +15,9 @@ var hexColorRegexp = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 // ErrNotFound is returned when a requested resource does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ErrAlreadyExists is returned when a unique constraint is violated.
+var ErrAlreadyExists = errors.New("already exists")
+
 type PostType string
 
 const (
@@ -24,6 +27,14 @@ const (
 	PostTypePlaylist     PostType = "playlist"
 	PostTypeGalleryAlbum PostType = "gallery_album"
 )
+
+// Tag represents a reusable label for gallery albums.
+type Tag struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	CreatedBy *string   `json:"created_by,omitempty"`
+}
 
 type Post struct {
 	ID           string          `json:"id"`
@@ -37,6 +48,7 @@ type Post struct {
 	UpdatedAt    time.Time       `json:"updated_at"`
 	Images       []PostImage     `json:"images,omitempty"`
 	Reactions    []ReactionCount `json:"reactions,omitempty"`
+	Tags         []Tag           `json:"tags,omitempty"`
 }
 
 type PostImage struct {
@@ -316,4 +328,21 @@ type PageContent struct {
 // UpdatePageRequest is the request body for PUT /api/v1/pages/:slug.
 type UpdatePageRequest struct {
 	Sections map[string]string `json:"sections"`
+}
+
+// --- Request types for tags ---
+
+type CreateTagRequest struct {
+	Name string `json:"name"`
+}
+
+func (r *CreateTagRequest) Validate() error {
+	if r.Name == "" {
+		return errors.New("name is required")
+	}
+	return nil
+}
+
+type ReplaceTagsRequest struct {
+	TagIDs []string `json:"tag_ids"`
 }

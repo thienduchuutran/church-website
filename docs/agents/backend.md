@@ -35,16 +35,19 @@ backend/
 ├── internal/
 │   ├── handler/
 │   │   ├── posts.go            ← GET /posts, POST /posts, PATCH /posts/:id, DELETE /posts/:id
+│   │   ├── tag.go              ← GET /tags, POST /tags, POST/DELETE /posts/{id}/tags
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
 │   │   └── pages.go            ← GET /pages/:slug, PUT /pages/:slug
 │   ├── service/
-│   │   ├── posts.go            ← CreatePost (saves to DB + fires Discord webhook)
+│   │   ├── posts.go            ← CreatePost (saves to DB + fires Discord webhook), List + Get with tag hydration
+│   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
 │   │   └── pages.go            ← GetPageContent, UpdatePageContent
 │   ├── repository/
-│   │   ├── posts.go            ← InsertPost, GetPosts, GetPostByID, UpdatePost, DeletePost
+│   │   ├── posts.go            ← InsertPost, GetPosts (with tag filtering), GetPostByID, UpdatePost, DeletePost
+│   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
 │   │   ├── reactions.go        ← UpsertReaction, GetReactionCounts, DeleteReaction
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
 │   │   └── pages.go            ← GetSections, UpsertSections
@@ -81,8 +84,9 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/health` | Liveness check |
-| GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?limit=20` (cap 100), `?offset=0`. Each item includes presigned `images[*].storage_url`. |
-| GET | `/api/v1/posts/:id` | Single post with images and reaction counts |
+| GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?tags=uuid1,uuid2` (filter gallery_albums by tag), `?limit=20` (cap 100), `?offset=0`. Each item includes presigned `images[*].storage_url`. Gallery posts include `tags` array. |
+| GET | `/api/v1/posts/:id` | Single post with images, reaction counts, and tags (if gallery_album) |
+| GET | `/api/v1/tags` | List all tags ordered by name |
 | GET | `/api/v1/reactions/:post_id` | Returns `ReactionSummary` - per-emoji counts + caller's reaction. Optional `?fingerprint=<fp>` query param; when omitted `my_reaction` is null. |
 | POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
@@ -100,6 +104,9 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | DELETE | `/api/v1/posts/:id` | Delete a post |
 | PUT | `/api/v1/pages/:slug` | Upsert sections for a static page |
 | POST | `/api/v1/posts/:id/images` | Upload an image to Cloudflare R2 and attach it to a post. Returns `{ key }`. |
+| POST | `/api/v1/tags` | Create a new tag (label) for gallery albums |
+| POST | `/api/v1/posts/:id/tags` | Replace all tags on a gallery album |
+| DELETE | `/api/v1/posts/:id/tags/:tag_id` | Remove a single tag from a gallery album |
 | POST | `/api/v1/calendar/events` | Create a calendar event |
 | PATCH | `/api/v1/calendar/events/:id` | Edit a calendar event |
 | DELETE | `/api/v1/calendar/events/:id` | Delete a calendar event |

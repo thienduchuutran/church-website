@@ -49,14 +49,22 @@ type PostService struct {
 	images     PostImageRepo    // optional - nil-safe; when nil, posts are returned without images
 	presigner  URLPresigner     // optional - nil-safe; when nil, non-gallery images carry only storage_key
 	publicURLs PublicURLBuilder // optional - nil-safe; when nil, gallery images fall back to presigning
+	tags       *repository.TagRepository // optional - nil-safe; when nil, gallery posts have no tags
 }
 
-// NewPostService builds a post service. `images`, `presigner`, and `publicURLs`
+// NewPostService builds a post service. `images`, `presigner`, `publicURLs`, and `tags`
 // may each be nil - the service degrades gracefully so the API still serves
 // text-only posts on environments where S3 is not configured, and falls back
 // to presigning for gallery images when the public bucket URL is not set.
 func NewPostService(posts *repository.PostRepository, images PostImageRepo, presigner URLPresigner, publicURLs PublicURLBuilder) *PostService {
 	return &PostService{posts: posts, images: images, presigner: presigner, publicURLs: publicURLs}
+}
+
+// SetTagRepository wires the tag repository into the post service. This is a separate method
+// because tags are loaded lazily in attachTags - the service degrades gracefully if no
+// tag repository is set (gallery posts just have no Tags field populated).
+func (s *PostService) SetTagRepository(tags *repository.TagRepository) {
+	s.tags = tags
 }
 
 // Create validates the request, persists the post, and fires a Discord notification.
@@ -87,8 +95,8 @@ func (s *PostService) Create(ctx context.Context, req model.CreatePostRequest, u
 	return post, nil
 }
 
-func (s *PostService) List(ctx context.Context, postType *model.PostType, limit, offset int) ([]model.Post, error) {
-	posts, err := s.posts.GetPosts(ctx, postType, limit, offset)
+func (s *PostService) List(ctx context.Context, postType *model.PostType, tagIDs []string, limit, offset int) ([]model.Post, error) {
+	posts, err := s.posts.GetPosts(ctx, postType, tagIDs, limit, offset)
 	if err != nil {
 		return nil, err
 	}
@@ -96,6 +104,9 @@ func (s *PostService) List(ctx context.Context, postType *model.PostType, limit,
 		// Image enrichment is best-effort: if it fails we still return posts so
 		// text content stays visible. The error is logged for observability.
 		log.Printf("attachImages: %v", err)
+	}
+	if err := s.attachTags(ctx, posts); err != nil {
+		log.Printf("attachTags: %v", err)
 	}
 	return posts, nil
 }
@@ -105,14 +116,17 @@ func (s *PostService) Get(ctx context.Context, id string) (*model.Post, error) {
 	if err != nil {
 		return nil, err
 	}
-	// attachImages mutates the slice in-place; pass a length-1 slice and copy the
-	// populated Images field back onto the pointer the caller is holding.
+	// attachImages and attachTags mutate the slice in-place; pass a length-1 slice and copy the
+	// populated fields back onto the pointer the caller is holding.
 	enriched := []model.Post{*post}
 	if err := s.attachImages(ctx, enriched); err != nil {
 		log.Printf("attachImages: %v", err)
-		return post, nil
+	}
+	if err := s.attachTags(ctx, enriched); err != nil {
+		log.Printf("attachTags: %v", err)
 	}
 	post.Images = enriched[0].Images
+	post.Tags = enriched[0].Tags
 	return post, nil
 }
 
@@ -170,6 +184,28 @@ func (s *PostService) attachImages(ctx context.Context, posts []model.Post) erro
 			}
 		}
 		posts[i].Images = imgs
+	}
+	return nil
+}
+
+// attachTags fills Post.Tags for gallery_album posts in-place. Non-gallery posts
+// are left with empty Tags. Safe to call when the tag repo is nil - those posts
+// just stay without tags.
+func (s *PostService) attachTags(ctx context.Context, posts []model.Post) error {
+	if s.tags == nil || len(posts) == 0 {
+		return nil
+	}
+
+	for i := range posts {
+		if posts[i].Type != model.PostTypeGalleryAlbum {
+			continue
+		}
+		tags, err := s.tags.GetTagsByPostID(ctx, posts[i].ID)
+		if err != nil {
+			log.Printf("get tags for post %s: %v", posts[i].ID, err)
+			continue
+		}
+		posts[i].Tags = tags
 	}
 	return nil
 }

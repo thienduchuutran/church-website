@@ -28,19 +28,28 @@ func (r *PostRepository) InsertPost(ctx context.Context, post *model.Post) error
 	).Scan(&post.ID, &post.CreatedAt, &post.UpdatedAt)
 }
 
-// GetPosts returns a paginated list of posts, optionally filtered by type.
-func (r *PostRepository) GetPosts(ctx context.Context, postType *model.PostType, limit, offset int) ([]model.Post, error) {
-	query := `SELECT id, type, title, body, event_date, external_link, admin_id, created_at, updated_at FROM posts`
+// GetPosts returns a paginated list of posts, optionally filtered by type and/or tags.
+// If tagIDs is non-empty, only gallery_album posts with any of those tags are returned (OR logic).
+// If tagIDs is empty, the tag filter is ignored and all posts match (untagged albums still appear).
+func (r *PostRepository) GetPosts(ctx context.Context, postType *model.PostType, tagIDs []string, limit, offset int) ([]model.Post, error) {
+	query := `SELECT DISTINCT p.id, p.type, p.title, p.body, p.event_date, p.external_link, p.admin_id, p.created_at, p.updated_at
+	          FROM posts p`
 	args := []any{}
 	argIdx := 1
 
-	if postType != nil {
-		query += fmt.Sprintf(" WHERE type = $%d", argIdx)
+	if len(tagIDs) > 0 {
+		query += `
+		 LEFT JOIN post_tags pt ON p.id = pt.post_id
+		 WHERE p.type = $1 AND pt.tag_id = ANY($2)`
+		args = append(args, model.PostTypeGalleryAlbum, tagIDs)
+		argIdx = 3
+	} else if postType != nil {
+		query += fmt.Sprintf(" WHERE p.type = $%d", argIdx)
 		args = append(args, *postType)
 		argIdx++
 	}
 
-	query += " ORDER BY created_at DESC"
+	query += " ORDER BY p.created_at DESC"
 	query += fmt.Sprintf(" LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, limit, offset)
 

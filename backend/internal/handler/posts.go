@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -39,9 +40,10 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, post)
 }
 
-// List handles GET /api/v1/posts?type=event&limit=20&offset=0.
+// List handles GET /api/v1/posts?type=event&limit=20&offset=0&tags=uuid1,uuid2.
 // Defaults match docs/api.md: limit=20, offset=0. The hard cap of 100 stops a
 // caller from accidentally pulling the entire table in one request.
+// If tags is provided, only gallery_album posts with any of those tags are returned.
 func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 
@@ -49,6 +51,11 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 	if t := q.Get("type"); t != "" {
 		pt := model.PostType(t)
 		postType = &pt
+	}
+
+	var tagIDs []string
+	if tags := q.Get("tags"); tags != "" {
+		tagIDs = strings.Split(tags, ",")
 	}
 
 	limit := 20
@@ -68,7 +75,7 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	posts, err := h.svc.List(r.Context(), postType, limit, offset)
+	posts, err := h.svc.List(r.Context(), postType, tagIDs, limit, offset)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
