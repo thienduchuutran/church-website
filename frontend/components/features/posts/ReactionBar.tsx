@@ -76,8 +76,13 @@ export default function ReactionBar({
       })
   }, [postId, showReactions])
 
-  // Dismiss the picker when the user taps outside or scrolls.
+  // Dismiss the picker when the user taps outside.
   // On mobile there is no hover-out event, so this is the only way to close it.
+  // Note: we deliberately do NOT close on scroll - the picker is absolutely
+  // positioned inside the post card, so it scrolls together with the page.
+  // Closing on scroll would also fire during the drag-to-select gesture (the
+  // browser produces tiny scrolls as the finger moves upward to the bar) and
+  // kill the picker before the user can pick anything.
   useEffect(() => {
     if (!pickerOpen) return
     const onDocPointerDown = (e: PointerEvent) => {
@@ -86,15 +91,28 @@ export default function ReactionBar({
         setHoveredEmoji(null)
       }
     }
-    const onScroll = () => {
-      setPickerOpen(false)
-      setHoveredEmoji(null)
-    }
     document.addEventListener('pointerdown', onDocPointerDown, true)
-    window.addEventListener('scroll', onScroll, { passive: true })
     return () => {
       document.removeEventListener('pointerdown', onDocPointerDown, true)
-      window.removeEventListener('scroll', onScroll)
+    }
+  }, [pickerOpen])
+
+  // While the long-press drag is active, block the underlying touchmove from
+  // scrolling the page. We do this here (non-passive listener + preventDefault)
+  // because touch-action is evaluated at touchstart and cannot be changed
+  // mid-gesture on iOS - so CSS alone cannot stop scroll once the drag starts.
+  // Gated on longPressFiredRef so hover-opened pickers on desktop don't lock
+  // the page.
+  useEffect(() => {
+    if (!pickerOpen) return
+    const onTouchMove = (e: TouchEvent) => {
+      if (longPressFiredRef.current) {
+        e.preventDefault()
+      }
+    }
+    document.addEventListener('touchmove', onTouchMove, { passive: false })
+    return () => {
+      document.removeEventListener('touchmove', onTouchMove)
     }
   }, [pickerOpen])
 
