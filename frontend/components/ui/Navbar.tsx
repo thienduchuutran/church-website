@@ -204,10 +204,11 @@ export default function Navbar() {
             </ul>
 
             <div className="flex items-center gap-2">
-              {/* Social icons sit at the start of the right cluster on desktop only.
-                  Hidden on mobile because the stretch-zone ergonomics are poor and
-                  the mobile footer is the primary "follow us" surface. */}
-              <div className="hidden items-center border-r border-border pr-2 md:flex">
+              {/* Social icons sit at the start of the right cluster on every breakpoint.
+                  On mobile they land just before the hamburger - we trade a small amount
+                  of thumb-zone friction for constant legitimacy signaling, which a
+                  pre-launch church benefits from more than a conversion funnel would. */}
+              <div className="flex items-center border-r border-border pr-2">
                 <SocialIconBar variant="header" />
               </div>
               <Link

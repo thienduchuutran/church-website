@@ -45,8 +45,8 @@ Renders the church's social media follow icons (YouTube, Facebook, Instagram) in
 - Wrapped in `<nav aria-label="Social media">` so assistive tech treats it as a distinct landmark.
 
 **Placement:**
-- Navbar (desktop only, hidden on mobile via `md:flex` wrapper) - the mobile header drops these to preserve thumb-zone real estate; the footer covers mobile.
-- Layout footer (desktop + mobile) - centered above the copyright line.
+- Navbar (desktop + mobile) - sits just before the hamburger on mobile and just before the Connect CTA on desktop, separated by a right border. The mobile placement is a deliberate trade: a small amount of thumb-zone friction in exchange for constant legitimacy signaling, which a pre-launch church benefits from more than a conversion funnel would.
+- Layout footer (desktop + mobile) - centered above the copyright line; the primary "follow us" surface.
 
 **Editing URLs:** Update `frontend/lib/social.ts` only. To remove a platform, delete its entry from `SOCIAL_LINKS`. Do not include an icon for an inactive account - a link to a dormant profile damages credibility.
 
