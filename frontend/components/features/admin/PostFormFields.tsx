@@ -41,6 +41,13 @@ export default function PostFormFields({
   const has = (f: 'body' | 'event_date' | 'external_link') => fields.includes(f)
   const isGalleryAlbum = section === 'gallery_album'
 
+  // Split eventDate ("YYYY-MM-DDTHH:mm") into halves so we can render two
+  // smaller native pickers instead of one datetime-local. Smaller iOS
+  // overlays = less modal scroll shift on dismiss.
+  const dateParts = state.eventDate.split('T')
+  const dateOnly = dateParts[0] ?? ''
+  const timeOnly = (dateParts[1] ?? '').slice(0, 5)
+
   return (
     <>
       <div>
@@ -76,14 +83,29 @@ export default function PostFormFields({
           <label htmlFor="eventDate" className="mb-1 block font-display text-sm font-medium text-foreground">
             Event Date *
           </label>
-          <input
-            id="eventDate"
-            type="datetime-local"
-            required
-            value={state.eventDate}
-            onChange={(e) => onChange({ ...state, eventDate: e.target.value })}
-            className={INPUT_CLASS}
-          />
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              id="eventDate"
+              type="date"
+              required
+              value={dateOnly}
+              onChange={(e) =>
+                onChange({ ...state, eventDate: `${e.target.value}T${timeOnly}` })
+              }
+              className={INPUT_CLASS}
+            />
+            <input
+              id="eventTime"
+              type="time"
+              required
+              value={timeOnly}
+              onChange={(e) =>
+                onChange({ ...state, eventDate: `${dateOnly}T${e.target.value}` })
+              }
+              className={INPUT_CLASS}
+              aria-label="Event time"
+            />
+          </div>
         </div>
       )}
 
