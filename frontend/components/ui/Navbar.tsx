@@ -146,6 +146,15 @@ export default function Navbar() {
                     key={item.label}
                     ref={(el) => setDropdownRef(item.label, el)}
                     className="relative"
+                    onMouseEnter={() => setDesktopDropdown(item.label)}
+                    onMouseLeave={(e) => {
+                      // Don't close on mouse-leave if keyboard focus is currently inside
+                      // the dropdown - the onBlur handler owns closing for keyboard users.
+                      // This prevents the dropdown from snapping shut while a user is
+                      // tabbing through child links and their mouse drifts away.
+                      if (e.currentTarget.contains(document.activeElement)) return
+                      setDesktopDropdown(null)
+                    }}
                     onBlur={(e) => {
                       const next = e.relatedTarget as Node | null
                       if (next && e.currentTarget.contains(next)) return
