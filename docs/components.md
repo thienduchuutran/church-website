@@ -81,6 +81,13 @@ Anonymous emoji reaction picker shown at the bottom of each `PostCard`.
 3. Writes go through `apiPostAnon` (upsert) and `apiDeleteAnon` (remove), both hitting the Go backend - never Supabase directly.
 4. State updates are optimistic: counts and `myReaction` update immediately, with a `pending` lock to prevent double-submit.
 
+**Picker gesture (Facebook-style)**
+The picker bar is opened by two paths, unified through Pointer Events so we don't fork mouse vs touch code:
+- **Desktop (mouse):** hover over the trigger opens the picker. Gated on `pointerType === 'mouse'` so touch-emitted synthetic hovers don't trigger it.
+- **Mobile (touch / pen):** a 350ms long-press on the trigger opens the picker with a light haptic (`navigator.vibrate(12)`). If the finger moves > 10px before the timer fires it counts as a scroll and the long-press is cancelled. Once open, `setPointerCapture` keeps move/up events flowing while the finger drags up onto the picker bar, and `document.elementFromPoint` is used in `onPointerMove` to find which emoji is under the finger - that one scales up and lifts via `-translate-y-2 scale-150` for a live preview. Releasing over an emoji selects it; releasing off the bar leaves it open for tap-pick. The post-long-press synthetic click is swallowed via a `longPressFiredRef` flag so the default Like doesn't double-fire.
+- **Short tap:** falls through to `handleTriggerClick`, which toggles the current reaction (default 👍).
+- **Dismissal:** `pointerdown` outside the container or any window `scroll` closes the picker. iOS callout suppression (`-webkit-touch-callout`, `user-select: none`, `WebkitTapHighlightColor: transparent`, `touch-action: manipulation` on trigger, `touch-action: none` on the picker bar) prevents the long-press from triggering the iOS "copy/look up" menu or accidental page panning during drag. Emoji buttons are 44px on mobile (`h-11 w-11`) and 36px on desktop (`sm:h-9 sm:w-9`).
+
 **Allowed emojis:** `👍` `❤️` `🙏` `😂`  
 **Client component:** yes
 
