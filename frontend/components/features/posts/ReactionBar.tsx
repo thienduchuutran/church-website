@@ -116,6 +116,15 @@ export default function ReactionBar({
     }
   }, [pickerOpen])
 
+  // Tactile feedback when the finger moves over a new emoji - mimics the iOS
+  // scroll-wheel "tick" and matches Facebook's per-target haptic. Only fires
+  // for an actual emoji (not when the finger leaves the bar) so we don't get a
+  // confusing buzz on the way out.
+  useEffect(() => {
+    if (!hoveredEmoji) return
+    try { navigator.vibrate?.(5) } catch { /* unsupported - silent fallback */ }
+  }, [hoveredEmoji])
+
   // Walk up from the element at the pointer's coordinates to find the nearest
   // emoji button. Returns null when the finger is between buttons or off the bar.
   function emojiAtPoint(x: number, y: number): string | null {
@@ -261,16 +270,24 @@ export default function ReactionBar({
           }`}
         >
           {/* Inner pill: visible styling + slide-up animation. touch-action: none keeps
-              the page from scrolling while the user is dragging across emojis. */}
+              the page from scrolling while the user is dragging across emojis.
+              The cubic-bezier on open is a "back-out" curve - the bar pops slightly past
+              its resting position and settles, the visual cue Facebook uses to make the
+              picker feel sprung rather than slid. */}
           <div
             role="toolbar"
             aria-label="Reaction picker"
-            className={`flex gap-1 rounded-full border border-border bg-surface px-2 py-1.5 shadow-lg transition-all duration-200 ${
+            className={`flex gap-1.5 rounded-full border border-border bg-surface px-3 py-2.5 shadow-2xl transition-all duration-300 ${
               pickerOpen
                 ? 'translate-y-0 scale-100 opacity-100'
-                : 'translate-y-2 scale-90 opacity-0'
+                : 'translate-y-3 scale-90 opacity-0'
             }`}
-            style={{ touchAction: 'none' }}
+            style={{
+              touchAction: 'none',
+              transitionTimingFunction: pickerOpen
+                ? 'cubic-bezier(0.34, 1.56, 0.64, 1)'
+                : 'cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
           >
             {EMOJIS.map((emoji, i) => {
               const isMine = myReaction === emoji
@@ -283,10 +300,11 @@ export default function ReactionBar({
                   title={EMOJI_LABEL[emoji]}
                   aria-label={EMOJI_LABEL[emoji]}
                   onClick={() => handleReact(emoji)}
-                  // Bigger tap target on mobile (44px / Apple HIG minimum), original
-                  // 36px on desktop where mouse precision is higher.
-                  className={`flex h-11 w-11 select-none items-center justify-center rounded-full font-display text-2xl transition-transform duration-150 focus:outline-none sm:h-9 sm:w-9 sm:text-xl ${
-                    isHovered ? '-translate-y-2 scale-150' : 'hover:scale-125 active:scale-95'
+                  // Bigger tap target on mobile (56px) for a Facebook-like feel - the
+                  // glyph is big enough to read at arm's length. Desktop steps down to
+                  // 44px so the bar isn't oversized on a wide screen.
+                  className={`flex h-14 w-14 select-none items-center justify-center rounded-full font-display text-3xl transition-transform duration-200 focus:outline-none sm:h-11 sm:w-11 sm:text-2xl ${
+                    isHovered ? '-translate-y-6 scale-[1.7]' : 'hover:scale-125 active:scale-95'
                   } ${isMine ? 'bg-primary/15' : 'hover:bg-muted/20'}`}
                   style={{
                     touchAction: 'none',
@@ -294,6 +312,9 @@ export default function ReactionBar({
                     WebkitTouchCallout: 'none',
                     WebkitTapHighlightColor: 'transparent',
                     transitionDelay: pickerOpen ? `${i * 25}ms` : '0ms',
+                    // Same spring curve as the bar - the emoji overshoots its lifted
+                    // position slightly and settles, giving the icon physical "mass".
+                    transitionTimingFunction: 'cubic-bezier(0.34, 1.56, 0.64, 1)',
                   }}
                 >
                   {/* Text node wrapped so it can't be hit by the iOS selection magnifier - touches "fall through" to the button. */}
