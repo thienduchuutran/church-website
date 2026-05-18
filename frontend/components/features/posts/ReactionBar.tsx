@@ -267,15 +267,25 @@ export default function ReactionBar({
                   onClick={() => handleReact(emoji)}
                   // Bigger tap target on mobile (44px / Apple HIG minimum), original
                   // 36px on desktop where mouse precision is higher.
-                  className={`flex h-11 w-11 select-none items-center justify-center rounded-full font-display text-2xl transition-transform duration-150 sm:h-9 sm:w-9 sm:text-xl ${
+                  className={`flex h-11 w-11 select-none items-center justify-center rounded-full font-display text-2xl transition-transform duration-150 focus:outline-none sm:h-9 sm:w-9 sm:text-xl ${
                     isHovered ? '-translate-y-2 scale-150' : 'hover:scale-125 active:scale-95'
                   } ${isMine ? 'bg-primary/15' : 'hover:bg-muted/20'}`}
                   style={{
                     touchAction: 'none',
+                    WebkitUserSelect: 'none',
+                    WebkitTouchCallout: 'none',
+                    WebkitTapHighlightColor: 'transparent',
                     transitionDelay: pickerOpen ? `${i * 25}ms` : '0ms',
                   }}
                 >
-                  {emoji}
+                  {/* Text node wrapped so it can't be hit by the iOS selection magnifier - touches "fall through" to the button. */}
+                  <span
+                    aria-hidden
+                    className="pointer-events-none select-none"
+                    style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+                  >
+                    {emoji}
+                  </span>
                 </button>
               )
             })}
@@ -295,7 +305,7 @@ export default function ReactionBar({
           // since long-press is our gesture.
           onContextMenu={(e) => e.preventDefault()}
           disabled={pending}
-          className={`flex select-none items-center gap-1.5 rounded-full border px-4 py-1.5 font-display text-sm font-medium transition-colors disabled:opacity-50 ${
+          className={`flex select-none items-center gap-1.5 rounded-full border px-4 py-1.5 font-display text-sm font-medium transition-colors focus:outline-none disabled:opacity-50 ${
             myReaction
               ? 'border-primary/40 bg-primary/10 text-primary'
               : 'border-border text-muted hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
@@ -307,7 +317,19 @@ export default function ReactionBar({
             WebkitTapHighlightColor: 'transparent',
           }}
         >
-          <span className="text-base leading-none">{myReaction ?? '👍'}</span>
+          {/*
+            The emoji text is wrapped in a non-hittable span so iOS doesn't grab it
+            as selectable text. Without pointer-events: none here, a long-press on
+            the emoji glyph itself triggers iOS Safari's selection magnifier and
+            our long-press timer never gets a chance to fire.
+          */}
+          <span
+            aria-hidden
+            className="pointer-events-none select-none text-base leading-none"
+            style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' }}
+          >
+            {myReaction ?? '👍'}
+          </span>
         </button>
       </div>
 
