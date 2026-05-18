@@ -29,6 +29,31 @@ Wraps page content and replays a CSS fade-in animation on every route change.
 
 ---
 
+### `SocialIconBar`
+Renders the church's social media follow icons (YouTube, Facebook, Instagram) in strategic priority order. Single source of truth lives in `lib/social.ts`; placement consistency is guaranteed by reusing this component in both the navbar and the footer.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `variant` | `'header' \| 'footer'` | `'footer'` | `header` uses 20px icons with tight spacing for the navbar; `footer` uses 24px icons with more breathing room |
+| `className` | `string` | `''` | Optional extra classes applied to the outer `<nav>` for layout control |
+
+**Behavior:**
+- Each link opens in a new tab with `rel="noopener noreferrer"` (prevents `window.opener` tab-hijack).
+- 44x44 outer hit area on every link to satisfy WCAG 2.1 touch target.
+- Default color is `text-muted` (monochrome at rest, matches body chrome); hover/focus transitions to the platform's brand color via a per-link `--brand-color` CSS variable.
+- Wrapped in `<nav aria-label="Social media">` so assistive tech treats it as a distinct landmark.
+
+**Placement:**
+- Navbar (desktop only, hidden on mobile via `md:flex` wrapper) - the mobile header drops these to preserve thumb-zone real estate; the footer covers mobile.
+- Layout footer (desktop + mobile) - centered above the copyright line.
+
+**Editing URLs:** Update `frontend/lib/social.ts` only. To remove a platform, delete its entry from `SOCIAL_LINKS`. Do not include an icon for an inactive account - a link to a dormant profile damages credibility.
+
+**Client component:** no (pure server component, no state or browser APIs)
+
+---
+
 ## Feature components (`components/features/`)
 
 May contain business logic, API calls, and local state.

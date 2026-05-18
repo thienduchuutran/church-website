@@ -33,7 +33,8 @@ frontend/
 │   │   ├── Input.tsx
 │   │   ├── Modal.tsx
 │   │   ├── Navbar.tsx
-│   │   └── PageTransition.tsx          ← Fade-in wrapper; used in layout.tsx
+│   │   ├── PageTransition.tsx          ← Fade-in wrapper; used in layout.tsx
+│   │   └── SocialIconBar.tsx           ← Social follow icons; reused in Navbar (desktop) + footer
 │   └── features/                       ← Feature-specific, may contain business logic
 │       ├── posts/
 │       │   ├── PostCard.tsx            ← The "Facebook-style" post card
@@ -56,6 +57,7 @@ frontend/
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
 │   ├── posts.ts                        ← Post API service (list/get/create/update/delete)
+│   ├── social.ts                       ← SOCIAL_LINKS constant (YouTube/Facebook/Instagram URLs)
 │   └── supabase.ts                     ← Supabase client (auth + direct public reads)
 ├── public/
 ├── .env.local

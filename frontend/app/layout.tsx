@@ -6,6 +6,7 @@ import { EditModalProvider } from '@/lib/edit-modal'
 import Navbar from '@/components/ui/Navbar'
 import PageTransition from '@/components/ui/PageTransition'
 import NavigationProgress from '@/components/ui/NavigationProgress'
+import SocialIconBar from '@/components/ui/SocialIconBar'
 
 const inter = Inter({
   variable: '--font-sans',
@@ -66,8 +67,11 @@ export default function RootLayout({
               <PageTransition>{children}</PageTransition>
             </main>
             <footer className="border-t border-border py-8">
-              <div className="mx-auto max-w-6xl px-4 text-center text-sm text-muted sm:px-6 lg:px-8">
-                © {new Date().getFullYear()} VGOMNE. All rights reserved.
+              <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 sm:px-6 lg:px-8">
+                <SocialIconBar variant="footer" />
+                <p className="text-center text-sm text-muted">
+                  © {new Date().getFullYear()} VGOMNE. All rights reserved.
+                </p>
               </div>
             </footer>
           </EditModalProvider>

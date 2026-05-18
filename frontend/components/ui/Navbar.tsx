@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState, useEffect, useRef, useCallback, startTransition } from 'react'
 import { useAuth } from '@/lib/auth'
+import SocialIconBar from '@/components/ui/SocialIconBar'
 
 type NavLink = { kind: 'link'; href: string; label: string }
 type NavDropdown = { kind: 'dropdown'; label: string; children: { href: string; label: string }[] }
@@ -203,6 +204,12 @@ export default function Navbar() {
             </ul>
 
             <div className="flex items-center gap-2">
+              {/* Social icons sit at the start of the right cluster on desktop only.
+                  Hidden on mobile because the stretch-zone ergonomics are poor and
+                  the mobile footer is the primary "follow us" surface. */}
+              <div className="hidden items-center border-r border-border pr-2 md:flex">
+                <SocialIconBar variant="header" />
+              </div>
               <Link
                 href={connectHref}
                 className={`hidden min-h-11 items-center justify-center rounded-lg px-3 font-display text-sm font-semibold transition-colors md:inline-flex ${pathname === connectHref
