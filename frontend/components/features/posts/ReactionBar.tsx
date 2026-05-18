@@ -51,6 +51,7 @@ export default function ReactionBar({
 
   const containerRef = useRef<HTMLDivElement>(null)
   const triggerRef = useRef<HTMLButtonElement>(null)
+  const pickerRef = useRef<HTMLDivElement>(null)
 
   // Refs (not state) for transient gesture data so handler identity doesn't change and we don't trigger re-renders mid-gesture.
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -125,13 +126,41 @@ export default function ReactionBar({
     try { navigator.vibrate?.(5) } catch { /* unsupported - silent fallback */ }
   }, [hoveredEmoji])
 
-  // Walk up from the element at the pointer's coordinates to find the nearest
-  // emoji button. Returns null when the finger is between buttons or off the bar.
+  // Map a pointer position to an emoji using an extended hit zone, the way
+  // Facebook does it. Two things make this non-trivial:
+  //
+  // 1. The vertical zone has to extend well ABOVE the bar (~120px). When the
+  //    finger drags up onto the picker, the lifted emoji rises by ~24px and
+  //    the user's natural hand position drifts even higher. Restricting hit
+  //    detection to the bar's literal rect would make the hover state drop
+  //    out the moment the finger drifts off the pill - which is exactly the
+  //    bug we are fixing.
+  //
+  // 2. We can't hit-test against each emoji's getBoundingClientRect, because
+  //    the currently-hovered emoji is scaled 1.7x and translate-y'd -24px -
+  //    its rect no longer matches its resting position, so detection would
+  //    oscillate as the rect changes mid-hover. Instead we divide the bar
+  //    into equal-width X zones - one per emoji - which is stable.
   function emojiAtPoint(x: number, y: number): string | null {
-    const el = document.elementFromPoint(x, y) as HTMLElement | null
-    if (!el) return null
-    const btn = el.closest<HTMLElement>('[data-emoji]')
-    return btn?.dataset.emoji ?? null
+    const bar = pickerRef.current
+    if (!bar) return null
+    const barRect = bar.getBoundingClientRect()
+
+    const VERTICAL_EXTEND_UP = 120
+    const VERTICAL_EXTEND_DOWN = 40
+    const HORIZONTAL_EXTEND = 40
+
+    if (y < barRect.top - VERTICAL_EXTEND_UP) return null
+    if (y > barRect.bottom + VERTICAL_EXTEND_DOWN) return null
+    if (x < barRect.left - HORIZONTAL_EXTEND) return null
+    if (x > barRect.right + HORIZONTAL_EXTEND) return null
+
+    // Clamp X to the bar's width so finger drifting just past either end
+    // still resolves to the nearest emoji (matches Facebook's "stickiness").
+    const relativeX = Math.max(0, Math.min(barRect.width - 0.001, x - barRect.left))
+    const zoneWidth = barRect.width / EMOJIS.length
+    const index = Math.floor(relativeX / zoneWidth)
+    return EMOJIS[index] ?? null
   }
 
   function cancelLongPress() {
@@ -275,6 +304,7 @@ export default function ReactionBar({
               its resting position and settles, the visual cue Facebook uses to make the
               picker feel sprung rather than slid. */}
           <div
+            ref={pickerRef}
             role="toolbar"
             aria-label="Reaction picker"
             className={`flex gap-1.5 rounded-full border border-border bg-surface px-3 py-2.5 shadow-2xl transition-all duration-300 ${
