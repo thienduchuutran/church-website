@@ -156,7 +156,7 @@
   outline: none;
 }
 @media (max-width: 639px) {
-  .editorContent { font-size: 14px; padding: 12px 14px; }
+  .editorContent { font-size: 16px; padding: 12px 14px; }
 }
 
 /* ─── Rich content typography ─── */
@@ -257,6 +257,7 @@
   pointer-events: none;
   float: left;
   height: 0;
+  font-size: inherit;
 }
 
 /* ─── Callout blocks ─── */
