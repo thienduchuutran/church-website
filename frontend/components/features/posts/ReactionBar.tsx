@@ -13,6 +13,13 @@ const EMOJI_LABEL: Record<Emoji, string> = {
   '😂': 'Haha',
 }
 
+// Facebook-style long-press gesture tuning.
+// LONG_PRESS_MS: how long the user must hold before the picker opens.
+// MOVE_CANCEL_PX: if the finger moves further than this before the timer fires,
+// treat it as a scroll/jitter gesture and cancel the long-press.
+const LONG_PRESS_MS = 350
+const MOVE_CANCEL_PX = 10
+
 // Returns a stable per-browser UUID stored in localStorage.
 // Called only from event handlers and effects so localStorage is always available.
 function getFingerprint(): string {
@@ -34,11 +41,22 @@ export default function ReactionBar({
 }) {
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [myReaction, setMyReaction] = useState<string | null>(null)
-  // pickerOpen controls the hover popup visibility.
+  // pickerOpen controls picker visibility for both hover (desktop) and long-press (touch) paths.
   const [pickerOpen, setPickerOpen] = useState(false)
+  // hoveredEmoji tracks which emoji the finger is currently over during a drag-to-select,
+  // so we can scale it up and lift it - matching Facebook's live preview.
+  const [hoveredEmoji, setHoveredEmoji] = useState<string | null>(null)
   // pending prevents double-submits while a request is in flight.
   const [pending, setPending] = useState(false)
+
   const containerRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+
+  // Refs (not state) for transient gesture data so handler identity doesn't change and we don't trigger re-renders mid-gesture.
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const longPressFiredRef = useRef(false)
+  const pointerStartRef = useRef<{ x: number; y: number } | null>(null)
+  const pointerTypeRef = useRef<string>('mouse')
 
   useEffect(() => {
     if (!showReactions) return
@@ -58,11 +76,112 @@ export default function ReactionBar({
       })
   }, [postId, showReactions])
 
+  // Dismiss the picker when the user taps outside or scrolls.
+  // On mobile there is no hover-out event, so this is the only way to close it.
+  useEffect(() => {
+    if (!pickerOpen) return
+    const onDocPointerDown = (e: PointerEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setPickerOpen(false)
+        setHoveredEmoji(null)
+      }
+    }
+    const onScroll = () => {
+      setPickerOpen(false)
+      setHoveredEmoji(null)
+    }
+    document.addEventListener('pointerdown', onDocPointerDown, true)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      document.removeEventListener('pointerdown', onDocPointerDown, true)
+      window.removeEventListener('scroll', onScroll)
+    }
+  }, [pickerOpen])
+
+  // Walk up from the element at the pointer's coordinates to find the nearest
+  // emoji button. Returns null when the finger is between buttons or off the bar.
+  function emojiAtPoint(x: number, y: number): string | null {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null
+    if (!el) return null
+    const btn = el.closest<HTMLElement>('[data-emoji]')
+    return btn?.dataset.emoji ?? null
+  }
+
+  function cancelLongPress() {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current)
+      longPressTimerRef.current = null
+    }
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    pointerTypeRef.current = e.pointerType
+    // Mouse already has hover - the long-press path is for touch/pen only.
+    if (e.pointerType === 'mouse') return
+
+    pointerStartRef.current = { x: e.clientX, y: e.clientY }
+    longPressFiredRef.current = false
+    cancelLongPress()
+    longPressTimerRef.current = setTimeout(() => {
+      longPressFiredRef.current = true
+      setPickerOpen(true)
+      // Light haptic to acknowledge the gesture - matches Facebook/iOS conventions.
+      try { navigator.vibrate?.(12) } catch { /* unsupported - silent fallback */ }
+      // Capture the pointer so move/up events keep firing on this button even after
+      // the finger drifts off it onto the picker bar above.
+      try { triggerRef.current?.setPointerCapture(e.pointerId) } catch { /* ignore */ }
+    }, LONG_PRESS_MS)
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.pointerType === 'mouse') return
+    const start = pointerStartRef.current
+    if (!start) return
+
+    if (!longPressFiredRef.current) {
+      // Picker hasn't opened yet - if the finger moves too far, the user is
+      // scrolling, not long-pressing. Cancel the timer so we don't surprise them.
+      const dx = e.clientX - start.x
+      const dy = e.clientY - start.y
+      if (dx * dx + dy * dy > MOVE_CANCEL_PX * MOVE_CANCEL_PX) {
+        cancelLongPress()
+      }
+      return
+    }
+    // Picker is open and the finger is dragging - update the "hovered" emoji so
+    // the UI lifts and scales it for live preview.
+    setHoveredEmoji(emojiAtPoint(e.clientX, e.clientY))
+  }
+
+  function handlePointerUp(e: React.PointerEvent<HTMLButtonElement>) {
+    cancelLongPress()
+    try { triggerRef.current?.releasePointerCapture(e.pointerId) } catch { /* ignore */ }
+
+    if (longPressFiredRef.current && pointerTypeRef.current !== 'mouse') {
+      // Release-to-select: if the finger is over an emoji, that's the pick.
+      const picked = emojiAtPoint(e.clientX, e.clientY)
+      if (picked) {
+        handleReact(picked)
+        setHoveredEmoji(null)
+      }
+      // Leave longPressFiredRef = true so the synthetic click that fires next
+      // is swallowed by handleTriggerClick instead of toggling the default Like.
+      return
+    }
+  }
+
+  function handlePointerCancel() {
+    cancelLongPress()
+    longPressFiredRef.current = false
+    pointerStartRef.current = null
+  }
+
   async function handleReact(emoji: string) {
     if (pending) return
     const fp = getFingerprint()
     setPending(true)
     setPickerOpen(false)
+    setHoveredEmoji(null)
 
     try {
       if (myReaction === emoji) {
@@ -87,6 +206,16 @@ export default function ReactionBar({
     }
   }
 
+  function handleTriggerClick() {
+    // After a long-press, a synthetic click fires on the trigger. Swallow it so
+    // the user's gesture doesn't get double-counted as a default Like.
+    if (longPressFiredRef.current) {
+      longPressFiredRef.current = false
+      return
+    }
+    handleReact(myReaction ?? '👍')
+  }
+
   if (!showReactions) return null
 
   // Only show the count row for emojis that have at least one reaction.
@@ -94,12 +223,14 @@ export default function ReactionBar({
 
   return (
     <div className="pt-3">
-      {/* Like button + hover picker wrapper */}
+      {/* Like button + picker wrapper - hover (desktop) and long-press (touch) both target this. */}
       <div
         ref={containerRef}
         className="relative inline-block"
-        onMouseEnter={() => setPickerOpen(true)}
-        onMouseLeave={() => setPickerOpen(false)}
+        // Hover path stays for mouse users. Gated on pointerType so touch devices
+        // that emit synthetic mouse events don't accidentally open the picker.
+        onPointerEnter={(e) => { if (e.pointerType === 'mouse') setPickerOpen(true) }}
+        onPointerLeave={(e) => { if (e.pointerType === 'mouse') { setPickerOpen(false); setHoveredEmoji(null) } }}
       >
         {/*
           Outer wrapper: transparent, positioned from bottom-full down to the button top.
@@ -111,47 +242,76 @@ export default function ReactionBar({
             pickerOpen ? 'pointer-events-auto' : 'pointer-events-none'
           }`}
         >
-          {/* Inner pill: visible styling + slide-up animation */}
+          {/* Inner pill: visible styling + slide-up animation. touch-action: none keeps
+              the page from scrolling while the user is dragging across emojis. */}
           <div
             role="toolbar"
             aria-label="Reaction picker"
             className={`flex gap-1 rounded-full border border-border bg-surface px-2 py-1.5 shadow-lg transition-all duration-200 ${
               pickerOpen
-                ? 'translate-y-0 opacity-100'
-                : 'translate-y-2 opacity-0'
+                ? 'translate-y-0 scale-100 opacity-100'
+                : 'translate-y-2 scale-90 opacity-0'
             }`}
+            style={{ touchAction: 'none' }}
           >
-            {EMOJIS.map((emoji) => (
-              <button
-                key={emoji}
-                type="button"
-                title={EMOJI_LABEL[emoji]}
-                onClick={() => handleReact(emoji)}
-                className={`flex h-9 w-9 items-center justify-center rounded-full font-display text-xl transition-transform duration-150 hover:scale-125 active:scale-95 ${myReaction === emoji ? 'bg-primary/15' : 'hover:bg-muted/20'
-                  }`}
-              >
-                {emoji}
-              </button>
-            ))}
+            {EMOJIS.map((emoji, i) => {
+              const isMine = myReaction === emoji
+              const isHovered = hoveredEmoji === emoji
+              return (
+                <button
+                  key={emoji}
+                  type="button"
+                  data-emoji={emoji}
+                  title={EMOJI_LABEL[emoji]}
+                  aria-label={EMOJI_LABEL[emoji]}
+                  onClick={() => handleReact(emoji)}
+                  // Bigger tap target on mobile (44px / Apple HIG minimum), original
+                  // 36px on desktop where mouse precision is higher.
+                  className={`flex h-11 w-11 select-none items-center justify-center rounded-full font-display text-2xl transition-transform duration-150 sm:h-9 sm:w-9 sm:text-xl ${
+                    isHovered ? '-translate-y-2 scale-150' : 'hover:scale-125 active:scale-95'
+                  } ${isMine ? 'bg-primary/15' : 'hover:bg-muted/20'}`}
+                  style={{
+                    touchAction: 'none',
+                    transitionDelay: pickerOpen ? `${i * 25}ms` : '0ms',
+                  }}
+                >
+                  {emoji}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        {/* Primary trigger: shows the current reaction (or default 👍 Like) */}
+        {/* Primary trigger: shows the current reaction (or default 👍 Like). */}
         <button
+          ref={triggerRef}
           type="button"
-          onClick={() => handleReact(myReaction ?? '👍')}
+          onClick={handleTriggerClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
+          // iOS shows a callout menu on long-press by default - suppress it here
+          // since long-press is our gesture.
+          onContextMenu={(e) => e.preventDefault()}
           disabled={pending}
-          className={`flex items-center gap-1.5 rounded-full border px-4 py-1.5 font-display text-sm font-medium transition-colors disabled:opacity-50 ${myReaction
-            ? 'border-primary/40 bg-primary/10 text-primary'
-            : 'border-border text-muted hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
-            }`}
+          className={`flex select-none items-center gap-1.5 rounded-full border px-4 py-1.5 font-display text-sm font-medium transition-colors disabled:opacity-50 ${
+            myReaction
+              ? 'border-primary/40 bg-primary/10 text-primary'
+              : 'border-border text-muted hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
+          }`}
+          style={{
+            touchAction: 'manipulation',
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+            WebkitTapHighlightColor: 'transparent',
+          }}
         >
           <span className="text-base leading-none">{myReaction ?? '👍'}</span>
-          {/* <span>{myLabel}</span> */}
         </button>
       </div>
 
-      {/* Reaction count bubbles - only rendered when there are reactions */}
+      {/* Reaction count bubbles - only rendered when there are reactions. */}
       {activeEmojis.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {activeEmojis.map((emoji) => (
