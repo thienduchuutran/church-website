@@ -156,7 +156,18 @@
   outline: none;
 }
 @media (max-width: 639px) {
-  .editorContent { font-size: 16px; padding: 12px 14px; }
+  /* iOS Safari auto-zooms any focused editable region < 16px.
+     Force the contenteditable AND the paragraphs/lists/etc the cursor
+     actually lands inside to 16px, so the zoom heuristic never trips. */
+  .editorContent,
+  .editorContent p,
+  .editorContent li,
+  .editorContent blockquote,
+  .editorContent span,
+  .editorContent mark {
+    font-size: 16px;
+  }
+  .editorContent { padding: 12px 14px; }
 }
 
 /* ─── Rich content typography ─── */
