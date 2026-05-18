@@ -8,6 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// EnqueueFn is the dependency services accept to fire translation jobs.
+// Using a function type instead of a *pgxpool.Pool keeps services decoupled
+// from the database driver - they have a single side-effect to call, nothing
+// more. main.go builds the concrete closure that wraps the pool and the
+// goroutine launch, so call sites stay one-liners.
+type EnqueueFn func(job TranslationJob)
+
 // EnqueueTranslation appends a job to translation_jobs. Designed to be called
 // fire-and-forget inside a `go` statement from a content handler:
 //

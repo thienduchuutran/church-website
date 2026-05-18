@@ -83,14 +83,35 @@ func main() {
 		defer dbPool.Close()
 	}
 
-	// Translation worker: drains translation_jobs in the background.
-	// Gated on API keys so local dev without GEMINI_API_KEY / ANTHROPIC_API_KEY
-	// stays quiet - jobs still get enqueued by handlers but nothing drains
-	// them until a key is configured and the backend restarts.
-	// The Stop defer is placed after dbPool.Close so it runs first on shutdown:
-	// stop accepting new translate work, then tear down the pool.
-	var translationWorker *translation.Worker
+	// Translation engine wiring.
+	//
+	// enqueueTranslation is the function content services call to fan out a
+	// translation job. It is built whenever the DB pool exists, independent
+	// of whether API keys are present - jobs always enqueue cleanly; whether
+	// they get processed depends on the worker, which only starts when at
+	// least one AI key is configured. The closure launches its own goroutine
+	// with a fresh background context so the calling HTTP request can return
+	// to the client immediately, and a 10s timeout so a stalled DB does not
+	// leak goroutines forever.
+	//
+	// The worker Stop defer is registered after dbPool.Close so it runs
+	// first on shutdown: stop accepting new translate work, then tear down
+	// the pool.
+	var (
+		translationWorker  *translation.Worker
+		enqueueTranslation translation.EnqueueFn
+	)
 	if dbPool != nil {
+		enqueueTranslation = func(job translation.TranslationJob) {
+			go func() {
+				bg, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := translation.EnqueueTranslation(bg, dbPool, job); err != nil {
+					log.Printf("enqueue translation job (table=%s record=%s): %v", job.TableName, job.RecordID, err)
+				}
+			}()
+		}
+
 		geminiKey := os.Getenv("GEMINI_API_KEY")
 		claudeKey := os.Getenv("ANTHROPIC_API_KEY")
 		if geminiKey != "" || claudeKey != "" {
@@ -110,7 +131,7 @@ func main() {
 			defer translationWorker.Stop()
 			log.Printf("translation worker enabled (gemini=%t claude=%t)", geminiKey != "", claudeKey != "")
 		} else {
-			log.Println("translation worker disabled (no GEMINI_API_KEY or ANTHROPIC_API_KEY)")
+			log.Println("translation worker disabled (no GEMINI_API_KEY or ANTHROPIC_API_KEY) - jobs will enqueue but not drain")
 		}
 	}
 
@@ -178,6 +199,9 @@ func main() {
 			}
 		}
 		postSvc := service.NewPostService(postRepo, galleryRepo, presigner, publicURLs)
+		if enqueueTranslation != nil {
+			postSvc.SetTranslationQueue(enqueueTranslation)
+		}
 		postHandler = handler.NewPostHandler(postSvc)
 
 		// Tag service and handler. Wired into PostService so gallery albums

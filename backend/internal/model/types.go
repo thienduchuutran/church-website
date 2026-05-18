@@ -49,6 +49,12 @@ type Post struct {
 	Images       []PostImage     `json:"images,omitempty"`
 	Reactions    []ReactionCount `json:"reactions,omitempty"`
 	Tags         []Tag           `json:"tags,omitempty"`
+	// MachineTranslated is true when the response is in a non-English locale
+	// AND at least one rendered field was served from translations (rather
+	// than the English source) AND that translation has not been human-approved.
+	// The frontend reads this to render the subtle "Bản dịch tự động" badge.
+	// Omitted when the request locale is English (no translation involved).
+	MachineTranslated bool `json:"machine_translated,omitempty"`
 }
 
 type PostImage struct {

@@ -75,7 +75,9 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	posts, err := h.svc.List(r.Context(), postType, tagIDs, limit, offset)
+	locale := q.Get("locale")
+
+	posts, err := h.svc.List(r.Context(), postType, tagIDs, limit, offset, locale)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, err.Error())
 		return
@@ -87,10 +89,12 @@ func (h *PostHandler) List(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, posts)
 }
 
-// Get handles GET /api/v1/posts/{id}.
+// Get handles GET /api/v1/posts/{id}. Accepts ?locale=<code> to request a
+// localized response; missing or "en" returns the English source unchanged.
 func (h *PostHandler) Get(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	post, err := h.svc.Get(r.Context(), id)
+	locale := r.URL.Query().Get("locale")
+	post, err := h.svc.Get(r.Context(), id, locale)
 	if err != nil {
 		if errors.Is(err, model.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "post not found")
