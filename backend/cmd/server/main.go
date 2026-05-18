@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
 	"github.com/thienduchuutran/church-website/backend/internal/service"
 	"github.com/thienduchuutran/church-website/backend/internal/storage"
+	"github.com/thienduchuutran/church-website/backend/internal/translation"
 	"github.com/thienduchuutran/church-website/backend/migrations"
 	"github.com/thienduchuutran/church-website/backend/pkg/database"
 )
@@ -79,6 +81,37 @@ func main() {
 		log.Printf("warning: database connection not initialized (%v)", err)
 	} else {
 		defer dbPool.Close()
+	}
+
+	// Translation worker: drains translation_jobs in the background.
+	// Gated on API keys so local dev without GEMINI_API_KEY / ANTHROPIC_API_KEY
+	// stays quiet - jobs still get enqueued by handlers but nothing drains
+	// them until a key is configured and the backend restarts.
+	// The Stop defer is placed after dbPool.Close so it runs first on shutdown:
+	// stop accepting new translate work, then tear down the pool.
+	var translationWorker *translation.Worker
+	if dbPool != nil {
+		geminiKey := os.Getenv("GEMINI_API_KEY")
+		claudeKey := os.Getenv("ANTHROPIC_API_KEY")
+		if geminiKey != "" || claudeKey != "" {
+			supported := []string{"vi"}
+			if raw := os.Getenv("SUPPORTED_LOCALES"); raw != "" {
+				supported = strings.Split(raw, ",")
+			}
+			interval := 5 * time.Second
+			if raw := os.Getenv("TRANSLATION_WORKER_INTERVAL"); raw != "" {
+				if secs, err := strconv.Atoi(raw); err == nil && secs > 0 {
+					interval = time.Duration(secs) * time.Second
+				}
+			}
+			translator := translation.NewTranslator(dbPool, geminiKey, claudeKey, supported)
+			translationWorker = translation.NewWorker(translator, dbPool, interval)
+			translationWorker.Start(ctx)
+			defer translationWorker.Stop()
+			log.Printf("translation worker enabled (gemini=%t claude=%t)", geminiKey != "", claudeKey != "")
+		} else {
+			log.Println("translation worker disabled (no GEMINI_API_KEY or ANTHROPIC_API_KEY)")
+		}
 	}
 
 	// Initialize JWKS cache and fetch Supabase public keys

@@ -65,7 +65,7 @@ create index on translation_jobs (status, created_at) where status = 'pending';
 -- TODO: replace [CHURCH NAME] with the actual church name before running.
 insert into system_prompts (key, content, version) values (
   'vi_translation',
-  'You are an intepretor and translator for VGOMNE, Vietnamese Gospel Outrach Ministry New England, a Vietnamese-American Christian and
+  'You are an intepretor and translator for VGOMNE, Vietnamese Gospel Outrach Ministry of New England, a Vietnamese-American Christian and
 Missionary Alliance (CMA) congregation in Saugus, Massachusetts.
 
 DIALECT: Southern Vietnamese (Nam Bộ / Saigon register)
