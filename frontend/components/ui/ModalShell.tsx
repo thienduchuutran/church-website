@@ -53,7 +53,7 @@ export default function ModalShell({
       onClick={() => { if (mouseDownOnBackdrop.current) handleClose() }}
     >
       <div
-        className={`relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl bg-surface p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45),0_10px_30px_-10px_rgba(0,0,0,0.25)] ring-1 ring-black/5 will-change-transform sm:p-8 ${closing ? 'apple-sheet-out' : 'apple-sheet-in'}`}
+        className={`relative max-h-[90vh] w-full max-w-2xl overflow-y-auto overscroll-contain scroll-pt-4 rounded-3xl bg-surface p-6 shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45),0_10px_30px_-10px_rgba(0,0,0,0.25)] ring-1 ring-black/5 will-change-transform sm:p-8 ${closing ? 'apple-sheet-out' : 'apple-sheet-in'}`}
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"

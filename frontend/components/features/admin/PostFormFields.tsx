@@ -8,8 +8,14 @@ import {
 import { RichBodyEditor } from '@/components/editor/RichBodyEditor'
 import TagSelector from '@/components/features/gallery/TagSelector'
 
+// touch-manipulation removes iOS's 300ms double-tap delay, which makes the
+// browser less likely to route a "dismiss-picker" tap into a focus event on
+// the wrong neighbouring field. text-base keeps font-size at 16px so iOS
+// never auto-zooms on focus (any input < 16px triggers the zoom heuristic).
+// scroll-mt-24 gives ~6rem of breathing room when iOS scrolls a focused
+// input into view, so the modal doesn't snap fields under the native picker.
 const INPUT_CLASS =
-  'block w-full rounded-lg border border-border bg-surface px-4 py-2.5 font-sans text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none'
+  'block w-full scroll-mt-24 touch-manipulation rounded-lg border border-border bg-surface px-4 py-2.5 font-sans text-base text-foreground placeholder:text-muted focus:border-primary focus:ring-1 focus:ring-primary focus:outline-none'
 
 export default function PostFormFields({
   section,
