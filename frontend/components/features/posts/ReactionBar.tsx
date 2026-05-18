@@ -146,8 +146,8 @@ export default function ReactionBar({
     if (!bar) return null
     const barRect = bar.getBoundingClientRect()
 
-    const VERTICAL_EXTEND_UP = 120
-    const VERTICAL_EXTEND_DOWN = 40
+    const VERTICAL_EXTEND_UP = 70
+    const VERTICAL_EXTEND_DOWN = 120
     const HORIZONTAL_EXTEND = 40
 
     if (y < barRect.top - VERTICAL_EXTEND_UP) return null
@@ -294,9 +294,8 @@ export default function ReactionBar({
           leaves the container while crossing that space - no mouseleave fires mid-transit.
         */}
         <div
-          className={`absolute bottom-full left-0 pb-2 ${
-            pickerOpen ? 'pointer-events-auto' : 'pointer-events-none'
-          }`}
+          className={`absolute bottom-full left-0 pb-2 ${pickerOpen ? 'pointer-events-auto' : 'pointer-events-none'
+            }`}
         >
           {/* Inner pill: visible styling + slide-up animation. touch-action: none keeps
               the page from scrolling while the user is dragging across emojis.
@@ -307,11 +306,10 @@ export default function ReactionBar({
             ref={pickerRef}
             role="toolbar"
             aria-label="Reaction picker"
-            className={`flex gap-1.5 rounded-full border border-border bg-surface px-3 py-2.5 shadow-2xl transition-all duration-300 ${
-              pickerOpen
+            className={`flex gap-1.5 rounded-full border border-border bg-surface px-3 py-2.5 shadow-2xl transition-all duration-300 ${pickerOpen
                 ? 'translate-y-0 scale-100 opacity-100'
                 : 'translate-y-3 scale-90 opacity-0'
-            }`}
+              }`}
             style={{
               touchAction: 'none',
               transitionTimingFunction: pickerOpen
@@ -333,9 +331,8 @@ export default function ReactionBar({
                   // Bigger tap target on mobile (56px) for a Facebook-like feel - the
                   // glyph is big enough to read at arm's length. Desktop steps down to
                   // 44px so the bar isn't oversized on a wide screen.
-                  className={`flex h-14 w-14 select-none items-center justify-center rounded-full font-display text-3xl transition-transform duration-200 focus:outline-none sm:h-11 sm:w-11 sm:text-2xl ${
-                    isHovered ? '-translate-y-6 scale-[1.7]' : 'hover:scale-125 active:scale-95'
-                  } ${isMine ? 'bg-primary/15' : 'hover:bg-muted/20'}`}
+                  className={`flex h-14 w-14 select-none items-center justify-center rounded-full font-display text-3xl transition-transform duration-200 focus:outline-none sm:h-11 sm:w-11 sm:text-2xl ${isHovered ? '-translate-y-6 scale-[1.7]' : 'hover:scale-125 active:scale-95'
+                    } ${isMine ? 'bg-primary/15' : 'hover:bg-muted/20'}`}
                   style={{
                     touchAction: 'none',
                     WebkitUserSelect: 'none',
@@ -374,11 +371,10 @@ export default function ReactionBar({
           // since long-press is our gesture.
           onContextMenu={(e) => e.preventDefault()}
           disabled={pending}
-          className={`flex select-none items-center gap-1.5 rounded-full border px-4 py-1.5 font-display text-sm font-medium transition-colors focus:outline-none disabled:opacity-50 ${
-            myReaction
+          className={`flex select-none items-center gap-1.5 rounded-full border px-4 py-1.5 font-display text-sm font-medium transition-colors focus:outline-none disabled:opacity-50 ${myReaction
               ? 'border-primary/40 bg-primary/10 text-primary'
               : 'border-border text-muted hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
-          }`}
+            }`}
           style={{
             touchAction: 'manipulation',
             WebkitTouchCallout: 'none',
