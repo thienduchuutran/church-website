@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useLocale } from 'next-intl'
 import { CaretLeft, CaretRight, Plus, Palette, DownloadSimple } from '@phosphor-icons/react'
 import { getMonth, upsertMonthSettings } from '@/lib/calendar'
 import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP } from './types'
+import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 import CalendarGrid from './CalendarGrid'
 import CalendarIcon from './CalendarIcon'
 import EventModal from './EventModal'
@@ -113,11 +115,18 @@ export default function CalendarShell({
   const activeAccent = liveAccent ?? monthSettings?.accent_color ?? theme.header
   const activeTheme = { ...theme, header: activeAccent, title: activeAccent }
 
+  // Admin sessions deliberately do NOT pass the locale - admin viewers always
+  // see the English source so the edit modal pre-fills with the canonical
+  // text. Public viewers pass the page locale so translations come back via
+  // the COALESCE join. This is the same rule applied to lib/posts.ts.
+  const locale = useLocale()
+  const requestLocale = isAdmin ? undefined : locale
+
   const fetchMonth = useCallback(async (y: number, m: number) => {
     setLoading(true)
     setError(null)
     try {
-      const data: CalendarMonthResponse = await getMonth(y, m, accessToken)
+      const data: CalendarMonthResponse = await getMonth(y, m, accessToken, requestLocale)
       setEvents(data.events ?? [])
       setMonthNote(data.month_note ?? null)
       setMonthSettings(data.month_settings ?? null)
@@ -127,7 +136,7 @@ export default function CalendarShell({
     } finally {
       setLoading(false)
     }
-  }, [accessToken])
+  }, [accessToken, requestLocale])
 
   // Persist the accent for the currently-viewed month. The picker awaits the
   // returned promise so it can show its own inline error if the PUT fails.
@@ -608,7 +617,14 @@ export default function CalendarShell({
                 )}
               </div>
               {monthNote?.content ? (
-                <p className="font-sans text-[11px] text-gray-600 leading-snug whitespace-pre-wrap line-clamp-3">{monthNote.content}</p>
+                <>
+                  <p className="font-sans text-[11px] text-gray-600 leading-snug whitespace-pre-wrap line-clamp-3">{monthNote.content}</p>
+                  {monthNote.machine_translated && (
+                    <div className="mt-1">
+                      <MachineTranslatedBadge />
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="font-sans text-[11px] text-gray-400 italic">No note this month.</p>
               )}

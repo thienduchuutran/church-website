@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import { getLocale } from 'next-intl/server'
 import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
@@ -9,9 +10,10 @@ export const metadata: Metadata = {
 }
 
 export default async function EventsPage() {
+  const locale = await getLocale()
   let posts: Post[] = []
   try {
-    posts = await listPosts({ type: 'event' })
+    posts = await listPosts({ type: 'event', locale })
   } catch {
     posts = []
   }

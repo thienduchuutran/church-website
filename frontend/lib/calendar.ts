@@ -9,8 +9,21 @@ import type {
 
 const BASE = '/api/v1/calendar'
 
-export async function getMonth(year: number, month: number, accessToken?: string | null): Promise<CalendarMonthResponse> {
-  return apiGet(`${BASE}?year=${year}&month=${month}`, accessToken) as Promise<CalendarMonthResponse>
+// getMonth accepts an optional locale so public viewers see translated event
+// titles, notes, and the month note. Admins always read in English by omitting
+// the locale, since the admin UI edits the English source. The accessToken,
+// when present, opts the request into the OptionalAdmin middleware path which
+// reveals private fields like private_address - keep these two concerns
+// orthogonal so a Vietnamese-viewing admin still gets the admin-only fields.
+export async function getMonth(
+  year: number,
+  month: number,
+  accessToken?: string | null,
+  locale?: string,
+): Promise<CalendarMonthResponse> {
+  const params = new URLSearchParams({ year: String(year), month: String(month) })
+  if (locale && locale !== 'en') params.set('locale', locale)
+  return apiGet(`${BASE}?${params.toString()}`, accessToken) as Promise<CalendarMonthResponse>
 }
 
 export async function createEvent(

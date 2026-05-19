@@ -1,3 +1,4 @@
+import { getLocale } from 'next-intl/server'
 import { Link } from '@/i18n/routing'
 import { listPosts } from '@/lib/posts'
 import { getHeroVideo } from '@/lib/hero'
@@ -14,9 +15,10 @@ export default async function HomePage() {
   // Each call's failure is captured independently so a single dead feed doesn't
   // hide the other one. We sort/slice client-side instead of pushing date filters
   // to the server, which keeps the API surface small and the route easy to cache.
+  const locale = await getLocale()
   const [announcementsResult, eventsResult, heroVideoResult] = await Promise.allSettled([
-    listPosts({ type: 'announcement', limit: 3 }),
-    listPosts({ type: 'event', limit: 20 }),
+    listPosts({ type: 'announcement', limit: 3, locale }),
+    listPosts({ type: 'event', limit: 20, locale }),
     getHeroVideo(),
   ])
 

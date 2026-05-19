@@ -3,6 +3,7 @@ import type { Post } from '@/lib/types'
 import ReactionBar from './ReactionBar'
 import AdminControls from '@/components/features/admin/AdminControls'
 import { RichContent } from '@/components/editor/RichContent'
+import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 
 const TYPE_BADGE: Record<string, { label: string; className: string }> = {
   event: {
@@ -101,6 +102,18 @@ export default function PostCard({
           </a>
         )}
         <ReactionBar postId={post.id} showReactions={showReactions} />
+        {/*
+          Machine-translation notice. The card already carries reactions and
+          actions in the bottom region; the badge sits beneath them as a quiet
+          informational footnote, never blocking primary actions. Only renders
+          when the backend explicitly set machine_translated - so English
+          responses and human-approved Vietnamese stay unbadged.
+        */}
+        {post.machine_translated && (
+          <div className="mt-2 flex justify-end">
+            <MachineTranslatedBadge />
+          </div>
+        )}
       </div>
     </article>
   )

@@ -16,13 +16,19 @@ interface ListOptions {
   type?: string
   limit?: number
   tags?: string[]
+  // Locale string passed to the backend as `?locale=`. Public read paths
+  // (homepage, events, announcements, etc.) should pass the page's locale so
+  // translations get served via COALESCE; admin call sites should leave it
+  // undefined - admins always work with the English source.
+  locale?: string
 }
 
-function buildListPath({ type, limit, tags }: ListOptions = {}): string {
+function buildListPath({ type, limit, tags, locale }: ListOptions = {}): string {
   const params = new URLSearchParams()
   if (type) params.set('type', type)
   if (limit !== undefined) params.set('limit', String(limit))
   if (tags && tags.length > 0) params.set('tags', tags.join(','))
+  if (locale && locale !== 'en') params.set('locale', locale)
   const qs = params.toString()
   return qs ? `${POSTS_BASE}?${qs}` : POSTS_BASE
 }
@@ -31,8 +37,12 @@ export async function listPosts(opts: ListOptions = {}): Promise<Post[]> {
   return ((await apiGet(buildListPath(opts))) as Post[]) ?? []
 }
 
-export async function getPost(id: string): Promise<Post> {
-  return (await apiGet(`${POSTS_BASE}/${id}`)) as Post
+// getPost takes an optional locale so public detail views can request the
+// translated record. Admins reading a post for editing should call this
+// without locale (or with 'en') so the form pre-fills with the English source.
+export async function getPost(id: string, locale?: string): Promise<Post> {
+  const qs = locale && locale !== 'en' ? `?locale=${encodeURIComponent(locale)}` : ''
+  return (await apiGet(`${POSTS_BASE}/${id}${qs}`)) as Post
 }
 
 export async function createPost(payload: PostPayload, token: string): Promise<Post> {

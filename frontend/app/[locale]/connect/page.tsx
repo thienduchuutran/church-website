@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
-import { apiGet } from '@/lib/api'
+import { getLocale } from 'next-intl/server'
+import { getPageContent } from '@/lib/pages'
+import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 
 export const metadata: Metadata = {
   title: 'Connect - Our Church',
@@ -31,17 +33,21 @@ const defaults: Record<string, string> = {
     'TODO: a short paragraph telling first-time visitors what to expect - dress code, kids programs, where to park, how long the service runs.',
 }
 
-async function getSections(): Promise<Record<string, string>> {
+async function loadSections(locale: string): Promise<{ sections: Record<string, string>; machineTranslated: boolean }> {
   try {
-    const data = await apiGet('/api/v1/pages/connect')
-    return { ...defaults, ...data?.sections }
+    const data = await getPageContent('connect', locale)
+    return {
+      sections: { ...defaults, ...data.sections },
+      machineTranslated: data.machine_translated ?? false,
+    }
   } catch {
-    return defaults
+    return { sections: defaults, machineTranslated: false }
   }
 }
 
 export default async function ConnectPage() {
-  const s = await getSections()
+  const locale = await getLocale()
+  const { sections: s, machineTranslated } = await loadSections(locale)
 
   const serviceTimes = [
     { day: s.service_time_1_day, time: s.service_time_1_time, label: s.service_time_1_label },
@@ -56,6 +62,11 @@ export default async function ConnectPage() {
           {s.hero_title}
         </h1>
         <p className="font-sans text-lg text-muted">{s.hero_subtitle}</p>
+        {machineTranslated && (
+          <div className="mt-3">
+            <MachineTranslatedBadge />
+          </div>
+        )}
       </header>
 
       {/* Service Times */}

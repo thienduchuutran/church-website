@@ -64,9 +64,11 @@ frontend/
 ├── lib/
 │   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
+│   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale)
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
+│   ├── pages.ts                        ← Page-content API service (typed { sections, machine_translated } response)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
-│   ├── posts.ts                        ← Post API service (list/get/create/update/delete)
+│   ├── posts.ts                        ← Post API service (list/get takes optional locale)
 │   ├── social.ts                       ← SOCIAL_LINKS constant (YouTube/Facebook/Instagram URLs)
 │   └── supabase.ts                     ← Supabase client (auth + direct public reads)
 ├── public/
@@ -98,6 +100,19 @@ Locale is a first-class segment in the URL: `/about` (English, default) or `/vi/
 | `import { usePathname } from '@/i18n/routing'` | Reading the pathname without the locale prefix. `/vi/events` returns as `/events` - matches what you wrote in `<Link href>`. |
 | `import { useLocale } from 'next-intl'` | Client components that need the current locale string (e.g. to pass to a backend API call). |
 | `import { getLocale } from 'next-intl/server'` | Server components / data fetchers. |
+| `import { useTranslations } from 'next-intl'` | Read a message-bundle string. Works in both server and client components. Server components may also use the async `getTranslations` from `next-intl/server`. |
+
+### Locale-aware fetching
+
+Every resource service in `lib/` accepts an optional `locale` parameter:
+
+- `listPosts({ locale })`, `getPost(id, locale)` → adds `?locale=vi` to `/posts` calls.
+- `getMonth(year, month, accessToken?, locale?)` → adds `?locale=vi` to `/calendar` calls.
+- `getPageContent(slug, locale)` (in `lib/pages.ts`) → adds `?locale=vi` to `/pages/:slug` calls.
+
+**Rule:** public read paths pass the locale they resolved via `getLocale()` (server) or `useLocale()` (client). Admin call sites (admin dashboard, edit modal, page editor) deliberately omit the locale so the form pre-fills with the English source - admins always work with the canonical text, never the translation.
+
+`CalendarShell` reads `isAdmin` and only passes the locale when `!isAdmin` - same rule encoded in one component. When you add a new admin surface that calls `listPosts` or `getMonth`, follow the same pattern.
 
 The middleware in `frontend/middleware.ts` handles all locale detection. It checks (in order): the URL prefix, the `NEXT_LOCALE` cookie, and the `Accept-Language` header. The cookie persistence means once a visitor picks Vietnamese via the language switcher, they stay there on subsequent pageloads.
 

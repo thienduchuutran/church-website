@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
-import { apiGet } from '@/lib/api'
+import { getLocale } from 'next-intl/server'
+import { getPageContent } from '@/lib/pages'
+import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 
 export const metadata: Metadata = {
   title: 'About - Our Church',
@@ -27,17 +29,21 @@ const defaults: Record<string, string> = {
   values_item_4: 'TODO: fourth core value',
 }
 
-async function getSections(): Promise<Record<string, string>> {
+async function loadSections(locale: string): Promise<{ sections: Record<string, string>; machineTranslated: boolean }> {
   try {
-    const data = await apiGet('/api/v1/pages/about')
-    return { ...defaults, ...data?.sections }
+    const data = await getPageContent('about', locale)
+    return {
+      sections: { ...defaults, ...data.sections },
+      machineTranslated: data.machine_translated ?? false,
+    }
   } catch {
-    return defaults
+    return { sections: defaults, machineTranslated: false }
   }
 }
 
 export default async function AboutPage() {
-  const s = await getSections()
+  const locale = await getLocale()
+  const { sections: s, machineTranslated } = await loadSections(locale)
 
   const valueItems = [s.values_item_1, s.values_item_2, s.values_item_3, s.values_item_4]
 
@@ -49,6 +55,16 @@ export default async function AboutPage() {
           {s.hero_title}
         </h1>
         <p className="font-sans text-lg text-muted">{s.hero_subtitle}</p>
+        {/*
+          Page-level translation notice sits under the subtitle so it's part
+          of the header context, not floating mid-page. Only renders on a
+          non-English request where at least one section is unapproved AI.
+        */}
+        {machineTranslated && (
+          <div className="mt-3">
+            <MachineTranslatedBadge />
+          </div>
+        )}
       </header>
 
       {/* Mission */}

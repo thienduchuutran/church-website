@@ -54,6 +54,32 @@ Renders the church's social media follow icons (YouTube, Facebook, Instagram) in
 
 ---
 
+### `MachineTranslatedBadge`
+Small italic "Bản dịch tự động" notice that flags content served from an unapproved AI translation. Lives at the bottom of post cards, beside calendar event titles inside `DayEventsModal`, under the month note on the calendar shell, and below the page hero on About/Connect.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `className` | `string` | `''` | Extra classes appended to the `<span>` for layout (e.g. `mt-2` when stacking under other content) |
+
+**Design tokens (from Phase 4 spec):**
+- Color: terracotta `#C4663C` via inline style (so the badge keeps its brand color even if a parent surface uses a different palette).
+- Font size: `10px` (`text-[10px]`) - deliberately quiet.
+- `italic` - softens the visual weight further.
+- Text: read from `Common.machineTranslated` in the active locale's messages JSON.
+
+**Render guard.** Callers must wrap the badge in `{record.machine_translated && <MachineTranslatedBadge />}`. The Go backend omits the field on English responses and on human-approved translations, so the badge correctly disappears for both - but never render unconditionally.
+
+**Where it appears:**
+- `PostCard` - bottom-right of the action row, below `ReactionBar`.
+- `DayEventsModal` - per-event, beneath each event's notes (when present).
+- `CalendarShell` - under the month note text.
+- `app/[locale]/about/page.tsx`, `app/[locale]/connect/page.tsx` - centered under the hero subtitle, since the page itself is the unit (no per-section cards).
+
+**Client component:** no - reads translations via `useTranslations('Common')` from `next-intl`, which works in server components when the page tree includes `NextIntlClientProvider`. The badge is a pure presentational server component.
+
+---
+
 ## Feature components (`components/features/`)
 
 May contain business logic, API calls, and local state.
