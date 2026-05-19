@@ -12,7 +12,7 @@ import (
 // pageService is the interface the handler depends on.
 // Keeping it an interface lets tests swap in the mockPageService without a real database.
 type pageService interface {
-	GetPageContent(ctx context.Context, slug string) (map[string]string, error)
+	GetPageContent(ctx context.Context, slug, locale string) (sections map[string]string, machineTranslated bool, err error)
 	UpdatePageContent(ctx context.Context, slug string, sections map[string]string) error
 }
 
@@ -25,7 +25,16 @@ func NewPageHandler(svc pageService) *PageHandler {
 	return &PageHandler{svc: svc}
 }
 
-// Get handles GET /api/v1/pages/:slug - returns all sections for a page.
+// pageResponse is the JSON shape returned by GET /pages/:slug. machineTranslated
+// is omitted on English responses (zero value) so the existing API stays
+// backwards compatible when no locale is requested.
+type pageResponse struct {
+	Sections          map[string]string `json:"sections"`
+	MachineTranslated bool              `json:"machine_translated,omitempty"`
+}
+
+// Get handles GET /api/v1/pages/:slug. Accepts ?locale=<code> for translated
+// content; missing or "en" returns the English source unchanged.
 func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 	slug := chi.URLParam(r, "slug")
 	if slug == "" {
@@ -33,7 +42,9 @@ func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sections, err := h.svc.GetPageContent(r.Context(), slug)
+	locale := r.URL.Query().Get("locale")
+
+	sections, machineTranslated, err := h.svc.GetPageContent(r.Context(), slug, locale)
 	if err != nil {
 		log.Printf("GetPageContent error for slug %s: %v", slug, err)
 		writeError(w, http.StatusInternalServerError, "failed to fetch page content")
@@ -45,7 +56,7 @@ func (h *PageHandler) Get(w http.ResponseWriter, r *http.Request) {
 		sections = map[string]string{}
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"sections": sections})
+	writeJSON(w, http.StatusOK, pageResponse{Sections: sections, MachineTranslated: machineTranslated})
 }
 
 // updatePageRequest mirrors model.UpdatePageRequest but is local to the handler

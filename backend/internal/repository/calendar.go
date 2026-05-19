@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,14 +18,63 @@ func NewCalendarRepository(pool *pgxpool.Pool) *CalendarRepository {
 	return &CalendarRepository{pool: pool}
 }
 
+// calendarLocaleIsLocalized mirrors isLocalized in posts.go - "" and "en" mean
+// English source, anything else means apply the translation joins.
+func calendarLocaleIsLocalized(locale string) bool {
+	locale = strings.TrimSpace(locale)
+	return locale != "" && locale != "en"
+}
+
 // GetEventsByMonth returns all calendar events for the given year and month.
-func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month int) ([]model.CalendarEvent, error) {
+// When locale is non-English, title and notes are served via COALESCE from
+// the translations table; missing translations fall back to English.
+func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month int, locale string) ([]model.CalendarEvent, error) {
+	if !calendarLocaleIsLocalized(locale) {
+		rows, err := r.pool.Query(ctx,
+			`SELECT id, date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at
+			 FROM calendar_events
+			 WHERE EXTRACT(YEAR FROM date) = $1 AND EXTRACT(MONTH FROM date) = $2
+			 ORDER BY date ASC, created_at ASC`,
+			year, month,
+		)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		var events []model.CalendarEvent
+		for rows.Next() {
+			var e model.CalendarEvent
+			if err := rows.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
+				&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt); err != nil {
+				return nil, err
+			}
+			events = append(events, e)
+		}
+		if events == nil {
+			events = []model.CalendarEvent{}
+		}
+		return events, rows.Err()
+	}
+
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at
-		 FROM calendar_events
-		 WHERE EXTRACT(YEAR FROM date) = $1 AND EXTRACT(MONTH FROM date) = $2
-		 ORDER BY date ASC, created_at ASC`,
-		year, month,
+		`SELECT e.id, e.date::text,
+		        COALESCE(t_title.translated_text, e.title) AS title,
+		        e.event_type, e.icon, e.private_address, e.color,
+		        COALESCE(t_notes.translated_text, e.notes) AS notes,
+		        e.admin_id, e.created_at, e.updated_at,
+		        COALESCE((t_title.id IS NOT NULL AND t_title.is_ai_generated AND t_title.approved_by IS NULL), false)
+		        OR
+		        COALESCE((t_notes.id IS NOT NULL AND t_notes.is_ai_generated AND t_notes.approved_by IS NULL), false)
+		        AS machine_translated
+		 FROM calendar_events e
+		 LEFT JOIN translations t_title
+		   ON t_title.record_id = e.id AND t_title.field_name = 'title' AND t_title.locale = $3
+		 LEFT JOIN translations t_notes
+		   ON t_notes.record_id = e.id AND t_notes.field_name = 'notes' AND t_notes.locale = $3
+		 WHERE EXTRACT(YEAR FROM e.date) = $1 AND EXTRACT(MONTH FROM e.date) = $2
+		 ORDER BY e.date ASC, e.created_at ASC`,
+		year, month, locale,
 	)
 	if err != nil {
 		return nil, err
@@ -33,11 +83,15 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 
 	var events []model.CalendarEvent
 	for rows.Next() {
-		var e model.CalendarEvent
+		var (
+			e       model.CalendarEvent
+			machine bool
+		)
 		if err := rows.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
-			&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt); err != nil {
+			&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &machine); err != nil {
 			return nil, err
 		}
+		e.MachineTranslated = machine
 		events = append(events, e)
 	}
 	if events == nil {
@@ -46,20 +100,71 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 	return events, rows.Err()
 }
 
-// GetMonthNote returns the sidebar note for a given year+month, or nil if none exists.
-func (r *CalendarRepository) GetMonthNote(ctx context.Context, year, month int) (*model.CalendarMonthNote, error) {
-	var n model.CalendarMonthNote
+// GetEventByID returns a single calendar event by its UUID. Used by the service
+// to diff old vs new field values before enqueuing translation jobs - sending
+// a no-op PATCH should not produce worker activity.
+//
+// Always returns English source (no locale param). The admin editing flow
+// works in the source language; the diff is against the canonical English
+// text, not whatever locale the UI happens to be in.
+func (r *CalendarRepository) GetEventByID(ctx context.Context, id string) (*model.CalendarEvent, error) {
+	var e model.CalendarEvent
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, year, month, content, admin_id, created_at, updated_at
-		 FROM calendar_month_notes WHERE year = $1 AND month = $2`,
-		year, month,
-	).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.AdminID, &n.CreatedAt, &n.UpdatedAt)
+		`SELECT id, date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at
+		 FROM calendar_events WHERE id = $1`,
+		id,
+	).Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
+		&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, model.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &e, nil
+}
+
+// GetMonthNote returns the sidebar note for a given year+month, or nil if none exists.
+// When locale is non-English, content is served via COALESCE from translations.
+func (r *CalendarRepository) GetMonthNote(ctx context.Context, year, month int, locale string) (*model.CalendarMonthNote, error) {
+	if !calendarLocaleIsLocalized(locale) {
+		var n model.CalendarMonthNote
+		err := r.pool.QueryRow(ctx,
+			`SELECT id, year, month, content, admin_id, created_at, updated_at
+			 FROM calendar_month_notes WHERE year = $1 AND month = $2`,
+			year, month,
+		).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.AdminID, &n.CreatedAt, &n.UpdatedAt)
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		return &n, nil
+	}
+
+	var (
+		n       model.CalendarMonthNote
+		machine bool
+	)
+	err := r.pool.QueryRow(ctx,
+		`SELECT mn.id, mn.year, mn.month,
+		        COALESCE(t.translated_text, mn.content) AS content,
+		        mn.admin_id, mn.created_at, mn.updated_at,
+		        COALESCE((t.id IS NOT NULL AND t.is_ai_generated AND t.approved_by IS NULL), false) AS machine_translated
+		 FROM calendar_month_notes mn
+		 LEFT JOIN translations t
+		   ON t.record_id = mn.id AND t.field_name = 'content' AND t.locale = $3
+		 WHERE mn.year = $1 AND mn.month = $2`,
+		year, month, locale,
+	).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.AdminID, &n.CreatedAt, &n.UpdatedAt, &machine)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
 	if err != nil {
 		return nil, err
 	}
+	n.MachineTranslated = machine
 	return &n, nil
 }
 

@@ -34,29 +34,39 @@ backend/
 ├── cmd/server/main.go          ← entry point
 ├── internal/
 │   ├── handler/
-│   │   ├── posts.go            ← GET /posts, POST /posts, PATCH /posts/:id, DELETE /posts/:id
+│   │   ├── posts.go            ← GET /posts, POST /posts, PATCH /posts/:id, DELETE /posts/:id (locale-aware reads)
 │   │   ├── tag.go              ← GET /tags, POST /tags, POST/DELETE /posts/{id}/tags
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
-│   │   └── pages.go            ← GET /pages/:slug, PUT /pages/:slug
+│   │   ├── calendar.go         ← GET /calendar (locale-aware), POST/PATCH/DELETE /calendar/events, PUT month note + settings
+│   │   └── pages.go            ← GET /pages/:slug (locale-aware), PUT /pages/:slug
 │   ├── service/
-│   │   ├── posts.go            ← CreatePost (saves to DB + fires Discord webhook), List + Get with tag hydration
+│   │   ├── posts.go            ← CreatePost (DB + Discord + translation enqueue), List/Get with locale, Update with diff-based enqueue
 │   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
-│   │   └── pages.go            ← GetPageContent, UpdatePageContent
+│   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue)
+│   │   └── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue)
 │   ├── repository/
-│   │   ├── posts.go            ← InsertPost, GetPosts (with tag filtering), GetPostByID, UpdatePost, DeletePost
+│   │   ├── posts.go            ← InsertPost, GetPosts + GetPostByID (both take locale), UpdatePost, DeletePost
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
 │   │   ├── reactions.go        ← UpsertReaction, GetReactionCounts, DeleteReaction
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
-│   │   └── pages.go            ← GetSections, UpsertSections
+│   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings
+│   │   └── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections
+│   ├── translation/            ← Async EN→VI translation engine. See "Translation engine" section below.
+│   │   ├── models.go           ← TranslationJob, Translation, ContentType
+│   │   ├── prompt.go           ← PromptCache (5min TTL, falls back to stale on DB hiccup)
+│   │   ├── translator.go       ← TranslateField/TranslateRecord, Gemini + Claude HTTP calls, sha256 cache lookup
+│   │   ├── queue.go            ← EnqueueTranslation helper + EnqueueFn function type
+│   │   └── worker.go           ← Background poller (FOR UPDATE SKIP LOCKED, 3-retry policy)
 │   ├── middleware/
 │   │   ├── auth.go             ← Verify Supabase JWT → check admins table → attach to ctx
+│   │   ├── context.go          ← UserIDFromContext / AdminEmailFromContext / WithUserID (for tests)
 │   │   ├── cors.go             ← Allow frontend origin
 │   │   └── logger.go           ← Request logging
 │   ├── model/
-│   │   └── types.go            ← Post, Admin, Reaction, PostImage structs
+│   │   └── types.go            ← Post, Admin, Reaction, PostImage, CalendarEvent, etc. (many include MachineTranslated)
 │   ├── discord/
 │   │   └── webhook.go          ← SendToDiscord(channelType, message)
 │   └── storage/
@@ -84,14 +94,14 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/v1/health` | Liveness check |
-| GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?tags=uuid1,uuid2` (filter gallery_albums by tag), `?limit=20` (cap 100), `?offset=0`. Each item includes presigned `images[*].storage_url`. Gallery posts include `tags` array. |
-| GET | `/api/v1/posts/:id` | Single post with images, reaction counts, and tags (if gallery_album) |
+| GET | `/api/v1/posts` | List posts. Query params: `?type=event`, `?tags=uuid1,uuid2` (filter gallery_albums by tag), `?limit=20` (cap 100), `?offset=0`, `?locale=vi` (serve translations). Each item includes presigned `images[*].storage_url`. Gallery posts include `tags` array. Non-en responses may include `machine_translated: true`. |
+| GET | `/api/v1/posts/:id` | Single post with images, reaction counts, and tags (if gallery_album). `?locale=vi` for translated title/body. |
 | GET | `/api/v1/tags` | List all tags ordered by name |
 | GET | `/api/v1/reactions/:post_id` | Returns `ReactionSummary` - per-emoji counts + caller's reaction. Optional `?fingerprint=<fp>` query param; when omitted `my_reaction` is null. |
 | POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
-| GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value } }` for a static page |
-| GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month |
+| GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value }, machine_translated? }` for a static page. `?locale=vi` for translated sections. |
+| GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month. `?locale=vi` for translated event titles/notes and month note content. |
 
 > Full request/response shapes and model definitions live in `docs/api.md`.
 
@@ -188,6 +198,62 @@ Never leak internal error messages or stack traces to the client. Log them serve
 
 ---
 
+## Translation engine (`internal/translation/`)
+
+Async EN → VI translation for posts, page sections, calendar events, and month notes. The Go backend never blocks an HTTP write on a model call - it inserts English instantly, enqueues a job, and a background worker drains the queue.
+
+### Flow
+
+```
+admin POST /posts  →  PostService.Create
+                          ├─ posts.InsertPost (English source saved instantly)
+                          ├─ go discord.SendToDiscord (existing webhook)
+                          └─ enqueueTranslation(job)   ←── goroutine, fire-and-forget
+                                  │
+                                  ▼
+                            translation_jobs row (status='pending')
+                                  │
+                                  ▼  every 5s
+                            Worker.tick() polls FOR UPDATE SKIP LOCKED
+                                  │
+                                  ▼
+                            Translator.TranslateRecord
+                                  ├─ sha256(source) lookup in `translations` (cache)
+                                  ├─ on miss: Gemini (general) or Claude (pastoral)
+                                  └─ upsert by (record_id, field_name, locale)
+
+public GET /posts?locale=vi  →  PostRepository.GetPosts
+                                  └─ LEFT JOIN translations + COALESCE
+                                     (English fallback per-field when missing)
+```
+
+### Files
+
+| File | Responsibility |
+|---|---|
+| `models.go` | `TranslationJob`, `Translation`, `ContentType` constants (`general`, `pastoral`) |
+| `prompt.go` | `PromptCache` - in-memory cache of the system prompt body, 5-minute TTL, falls back to stale on Supabase hiccup |
+| `translator.go` | `Translator` - per-field translate-and-store, sha256 cache, raw HTTP to Gemini v1beta + Claude `/v1/messages`, upsert that resets `approved_by` on source change |
+| `queue.go` | `EnqueueTranslation` package-level helper + `EnqueueFn` function type that content services depend on |
+| `worker.go` | `Worker` - background goroutine, polls every 5s, batches up to 5 jobs per tick, `FOR UPDATE SKIP LOCKED` for safe horizontal scaling, retries up to 3 times before marking `failed` |
+
+### Wiring rules
+
+- Content services depend on `translation.EnqueueFn` (a `func(TranslationJob)`), **not** on `*pgxpool.Pool`. Wiring happens in `main.go` via setters: `postSvc.SetTranslationQueue(enqueueTranslation)` etc.
+- The enqueue closure in `main.go` launches its own goroutine and uses `context.Background()` (not the request context) so the calling HTTP request can return before the job-insert SQL runs.
+- The closure is built whenever `dbPool != nil`. Whether the **worker** runs is gated separately on `GEMINI_API_KEY` / `ANTHROPIC_API_KEY`: jobs always enqueue cleanly, but they only drain when at least one AI key is configured. Restarting the backend after adding a key picks up any backlog.
+- Update handlers always **diff old vs new** before enqueuing. A PATCH that doesn't change a translatable field produces no translation job. See `PostService.Update`, `CalendarService.UpdateEvent`, `PageService.UpdatePageContent`.
+- Locale flows through as a string query param (`?locale=vi`). The repository decides whether to add the `LEFT JOIN translations` clauses. English / missing locale uses the plain query path - **zero** translation joins on en, so unilingual visitors pay no overhead.
+
+### Model IDs
+
+- General content: `gemini-2.0-flash` via `https://generativelanguage.googleapis.com/v1beta`
+- Pastoral content: `claude-haiku-4-5-20251001` via `https://api.anthropic.com/v1/messages`
+
+Both clients are raw `net/http`. SDKs were rejected to keep the Docker image and `go.mod` lean.
+
+---
+
 ## Environment variables
 
 In production all env vars live in **Render's dashboard** (Settings → Environment). There is no `.env` file on the Render container disk.
@@ -210,6 +276,12 @@ AWS_REGION=auto                                    # R2 has no regions
 S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com  # set for R2; leave empty to use AWS S3
 AWS_ACCESS_KEY_ID=...                              # R2 access key (R2 has no IAM roles, static creds required)
 AWS_SECRET_ACCESS_KEY=...                          # R2 secret access key
+
+# Translation engine (Phase 2 onwards)
+GEMINI_API_KEY=...                                 # General content translations. Worker stays disabled when both AI keys are empty.
+ANTHROPIC_API_KEY=...                              # Pastoral content + Gemini fallback (see Phase 7).
+SUPPORTED_LOCALES=vi                               # Comma-separated. Defaults to "vi" when empty.
+TRANSLATION_WORKER_INTERVAL=5                      # Poll interval in seconds. Defaults to 5.
 ```
 
 ---

@@ -78,6 +78,7 @@ cd backend && go run ./cmd/server
 | Next.js frontend: pages, components, lib, styling         | `docs/agents/frontend.md`              |
 | Google login, Supabase Auth, JWT, admin whitelist         | `docs/agents/auth.md`                  |
 | Discord webhooks, channel mapping, webhook payload format | `docs/agents/discord.md`               |
+| Translation engine, `?locale=` query param, `machine_translated` field, AI prompt edits | `docs/agents/backend.md` → "Translation engine" + `docs/agents/database.md` → "Translation tables" |
 | Hosting, deployment, Render, Vercel, R2, CI/CD          | `docs/agents/deployment.md`            |
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
 | Posts/events/announcements not showing up after a write   | `docs/agents/known-quirks.md` ("Posts created on production don't show up in the UI") |

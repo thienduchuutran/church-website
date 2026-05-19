@@ -181,6 +181,10 @@ type CalendarEvent struct {
 	AdminID   *string           `json:"admin_id"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
+	// MachineTranslated: see Post.MachineTranslated. True when this event's
+	// title or notes were served via an unapproved AI translation. Omitted
+	// from JSON on English responses and on approved translations.
+	MachineTranslated bool `json:"machine_translated,omitempty"`
 }
 
 type CalendarMonthNote struct {
@@ -191,6 +195,9 @@ type CalendarMonthNote struct {
 	AdminID   *string   `json:"admin_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// MachineTranslated: true when this month note's content was served via
+	// an unapproved AI translation. Omitted on English responses.
+	MachineTranslated bool `json:"machine_translated,omitempty"`
 }
 
 // CalendarMonthSettings is the per-month admin-configurable styling for the

@@ -14,13 +14,14 @@ import (
 
 // mockPageService is an in-memory stub so handler tests don't need a real DB.
 type mockPageService struct {
-	sections   map[string]string
-	getErr     error
-	updateErr  error
+	sections          map[string]string
+	machineTranslated bool
+	getErr            error
+	updateErr         error
 }
 
-func (m *mockPageService) GetPageContent(_ context.Context, _ string) (map[string]string, error) {
-	return m.sections, m.getErr
+func (m *mockPageService) GetPageContent(_ context.Context, _, _ string) (map[string]string, bool, error) {
+	return m.sections, m.machineTranslated, m.getErr
 }
 
 func (m *mockPageService) UpdatePageContent(_ context.Context, _ string, _ map[string]string) error {

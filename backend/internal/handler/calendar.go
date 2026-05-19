@@ -21,13 +21,14 @@ func NewCalendarHandler(svc *service.CalendarService) *CalendarHandler {
 	return &CalendarHandler{svc: svc}
 }
 
-// GetMonth handles GET /api/v1/calendar?year=2026&month=4
+// GetMonth handles GET /api/v1/calendar?year=2026&month=4&locale=vi
 func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 	year, month, ok := parseYearMonth(w, r)
 	if !ok {
 		return
 	}
-	resp, err := h.svc.GetMonth(r.Context(), year, month)
+	locale := r.URL.Query().Get("locale")
+	resp, err := h.svc.GetMonth(r.Context(), year, month, locale)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load calendar")
 		return

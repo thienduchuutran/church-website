@@ -13,6 +13,25 @@ Every public endpoint below is **intentionally** unauthenticated. Anonymous visi
 
 ---
 
+## Localized reads (`?locale=`)
+
+Every read endpoint that returns translatable text accepts an optional `locale` query parameter. Supported values today: `en` (default, source language) and `vi` (Vietnamese).
+
+- When `locale` is missing or `en`, the response is the English source verbatim.
+- When `locale` is `vi`, the backend serves translations via a COALESCE join against the `translations` table. Missing translations fall back to English on a per-field basis - the page is never blank, it just shows English for the field whose translation has not landed yet.
+- The translation worker fills `translations` rows asynchronously after the admin writes content (~5s typical latency for the first visit; subsequent visits hit the row).
+- When a response contains at least one unapproved AI-generated translation, the JSON includes `"machine_translated": true`. The field is omitted on English responses and on responses where every served translation has been human-approved. The frontend reads this to render a subtle "Bản dịch tự động" badge.
+
+Endpoints that honor `locale`:
+- `GET /api/v1/posts`
+- `GET /api/v1/posts/:id`
+- `GET /api/v1/pages/:slug`
+- `GET /api/v1/calendar`
+
+See `docs/agents/backend.md` → "Translation engine" and `docs/agents/database.md` → "Translation tables" for the full architecture.
+
+---
+
 ## Public endpoints (no auth required - do not protect)
 
 ### `GET /api/v1/health`
@@ -35,6 +54,7 @@ List posts. Supports optional filtering by type and/or tags.
 | `tags` | string | - | Filter gallery_album posts by tag ID (comma-separated UUIDs). Uses OR logic - returns albums with ANY of the selected tags. Ignored when `type` is not `gallery_album`. |
 | `limit` | int | 20 | Max results. Server caps at 100. |
 | `offset` | int | 0 | Pagination offset |
+| `locale` | string | `en` | When `vi`, title and body are served from translations with English fallback. Sets `machine_translated: true` on posts whose translations are unapproved AI output. See [Localized reads](#localized-reads-locale). |
 
 **Response `200`** - array of Post objects (see [Models](#models)). Each post's `images` field is populated when the post has uploaded images. Gallery album posts include a `tags` array with the tags applied to that album. Non-gallery posts have an empty `tags` array.
 
@@ -42,6 +62,11 @@ List posts. Supports optional filtering by type and/or tags.
 
 ### `GET /api/v1/posts/:id`
 Single post with images and reaction counts.
+
+**Query params**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `locale` | string | `en` | See [Localized reads](#localized-reads-locale). |
 
 **Response `200`** - Post object  
 **Response `404`** - post not found
@@ -110,6 +135,7 @@ Returns the events for a given month, plus the optional sidebar note and the opt
 |-------|------|----------|-------------|
 | `year` | int | Yes | 4-digit year, e.g. `2026` |
 | `month` | int | Yes | 1–12 |
+| `locale` | string | No | When `vi`, event titles + notes and month note content are served from translations. Sets `machine_translated: true` per event / per note when the served value is unapproved AI output. See [Localized reads](#localized-reads-locale). |
 
 **Response `200`**
 ```json
@@ -128,6 +154,11 @@ Returns the events for a given month, plus the optional sidebar note and the opt
 ### `GET /api/v1/pages/:slug`
 Returns all editable sections for a static page (e.g. `about`, `connect`).
 
+**Query params**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `locale` | string | `en` | When `vi`, each section's content is served from translations with English fallback. The response includes `machine_translated: true` (page-level boolean) when any returned section is unapproved AI output. See [Localized reads](#localized-reads-locale). |
+
 **Response `200`**
 ```json
 {
@@ -136,10 +167,11 @@ Returns all editable sections for a static page (e.g. `about`, `connect`).
     "hero_subtitle": "Welcome",
     "mission_heading": "Our Mission",
     "mission_body": "..."
-  }
+  },
+  "machine_translated": true
 }
 ```
-`sections` is always an object (never `null`). Missing keys mean no content has been saved yet - the frontend fills defaults.
+`sections` is always an object (never `null`). Missing keys mean no content has been saved yet - the frontend fills defaults. `machine_translated` is omitted on English responses and on fully human-approved Vietnamese responses.
 
 ---
 
@@ -313,11 +345,13 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
   "updated_at": "2026-04-01T00:00:00Z",
   "images": [],
   "reactions": [],
-  "tags": []
+  "tags": [],
+  "machine_translated": true
 }
 ```
 `admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose - see [`backend/migrations/000001_initial_schema.up.sql`](../backend/migrations/000001_initial_schema.up.sql) and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.  
 `tags` is populated only for `gallery_album` posts; other post types have an empty array.
+`machine_translated` is **omitted** from the JSON unless the response is in a non-English locale AND at least one served field (title or body) was an unapproved AI translation. See [Localized reads](#localized-reads-locale).
 
 ### PostImage
 ```json
@@ -353,6 +387,40 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
 }
 ```
 Tags are reusable labels created by admins and can be applied to multiple gallery album posts. The `created_at` field shows when the tag was first created.
+
+### CalendarEvent
+```json
+{
+  "id": "uuid",
+  "date": "2026-05-04",
+  "title": "Bible Study",
+  "event_type": "bible_study",
+  "icon": "book-open",
+  "private_address": "123 Main St",
+  "color": "sky",
+  "notes": "Bring your study guide.",
+  "admin_id": "uuid",
+  "created_at": "2026-04-01T00:00:00Z",
+  "updated_at": "2026-04-01T00:00:00Z",
+  "machine_translated": true
+}
+```
+`date` is a `YYYY-MM-DD` string (no time component). `event_type` is one of `birthday`, `bible_study`, `general`, `announcement`, `prayer`. `icon` is a Phosphor icon key (one of: `cake`, `book-open`, `bell`, `heart`, `star`, `users`, `music-notes`, `cross`, `flame`, `sparkle`). `color` is one of `slate`, `red`, `amber`, `emerald`, `sky`, `violet`, `rose`, `stone`. `private_address` is **only returned to authenticated admins** - public viewers see `null` for that field even when an address exists in the database. `machine_translated` follows the same rule as on Post.
+
+### CalendarMonthNote
+```json
+{
+  "id": "uuid",
+  "year": 2026,
+  "month": 5,
+  "content": "May focus: gratitude. Bring guests on Sunday.",
+  "admin_id": "uuid",
+  "created_at": "2026-05-01T00:00:00Z",
+  "updated_at": "2026-05-01T00:00:00Z",
+  "machine_translated": true
+}
+```
+Sidebar note attached to a (`year`, `month`) pair. Returned on `GET /api/v1/calendar` as `month_note`; `null` when no row exists for that month. `machine_translated` follows the same rule as on Post.
 
 ### CalendarMonthSettings
 ```json

@@ -217,10 +217,16 @@ func main() {
 
 		pageRepo := repository.NewPageRepository(dbPool)
 		pageSvc := service.NewPageService(pageRepo)
+		if enqueueTranslation != nil {
+			pageSvc.SetTranslationQueue(enqueueTranslation)
+		}
 		pageHandler = handler.NewPageHandler(pageSvc)
 
 		calendarRepo := repository.NewCalendarRepository(dbPool)
 		calendarSvc := service.NewCalendarService(calendarRepo)
+		if enqueueTranslation != nil {
+			calendarSvc.SetTranslationQueue(enqueueTranslation)
+		}
 		calendarHandler = handler.NewCalendarHandler(calendarSvc)
 
 		// Hero video: requires S3 for upload and storage. Presigner decorates

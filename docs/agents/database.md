@@ -163,6 +163,77 @@ create table calendar_month_settings (
 
 ---
 
+## Translation tables
+
+Three tables back the async EN → VI translation engine. They are populated by the Go backend's `internal/translation/` worker; the frontend never writes to them directly. Schema source: `backend/migrations/000004_translations.up.sql`.
+
+### `translations`
+Stores every translated field for every record across every locale. Generic by design: a single table serves posts, page_content, and calendar_events.
+```sql
+create table translations (
+  id              uuid primary key default gen_random_uuid(),
+  table_name      text not null,                  -- 'posts' | 'page_content' | 'calendar_events' | 'calendar_month_notes'
+  record_id       uuid not null,                  -- the source row's UUID
+  field_name      text not null,                  -- 'title' | 'body' | 'content' | 'notes'
+  locale          text not null,                  -- 'vi' today; extensible
+  source_hash     text not null,                  -- sha256(trimmed source). Cache key.
+  source_text     text not null,                  -- audit trail: what we translated from
+  translated_text text not null,
+  is_ai_generated boolean not null default true,
+  approved_by     uuid,                           -- JWT sub of bilingual admin who approved/edited
+  approved_at     timestamptz,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  unique (record_id, field_name, locale)
+);
+create index on translations (table_name, record_id, locale);  -- the read-path COALESCE join
+create index on translations (source_hash, locale);            -- the cache lookup
+```
+
+**Why no FK on `record_id`:** translations are referenced across multiple parent tables (`posts`, `page_content`, ...). A FK would couple this table to a single parent or require a polymorphic FK trick. Orphans are cleaned up out-of-band (see Phase 7 of the original spec).
+
+**Why no FK on `approved_by`:** same convention as `posts.admin_id` and `calendar_events.admin_id` - JWT `sub` claims stored as plain uuid, no FK to `auth.users`. Project sidesteps the Supabase auth schema in application migrations (see "Posting fails with `posts_admin_id_fkey`" in `docs/agents/known-quirks.md`).
+
+**The `approved_by = NULL` reset:** the upsert in `Translator.upsertTranslation` resets `approved_by` and `approved_at` to `NULL` when the source hash changes. Intended: a human approval applies to the exact text it was for. New source text → fresh AI translation, fresh approval required.
+
+### `system_prompts`
+Holds the AI system prompt by key. The Go worker reads `vi_translation` at startup and refreshes from this table every 5 minutes (in-memory cache in `PromptCache`).
+```sql
+create table system_prompts (
+  key        text primary key,                    -- 'vi_translation'
+  content    text not null,                       -- the full prompt body (theological vocabulary + rules)
+  version    text not null,                       -- '1.0.0', '1.1.0', ...
+  updated_at timestamptz not null default now()
+);
+```
+
+**Editing flow:** edit `prompts/vi_translation_system_prompt.md` in the repo, run `./scripts/sync-prompt.sh <new-version>` to upsert into Supabase, and the running backend picks up the change within ~5 minutes (cache TTL) - no redeploy. See Phase 6 of the original spec.
+
+### `translation_jobs`
+Job queue polled by the worker. One row per (record, target locales) pair. The worker claims rows with `FOR UPDATE SKIP LOCKED` so multiple backend instances can run safely.
+```sql
+create table translation_jobs (
+  id             uuid primary key default gen_random_uuid(),
+  table_name     text not null,
+  record_id      uuid not null,
+  fields         jsonb not null,                  -- {"title": "<source>", "body": "<source>"}
+  target_locales text[] not null,                 -- {'vi'}
+  content_type   text not null default 'general', -- 'general' (Gemini) | 'pastoral' (Claude)
+  status         text not null default 'pending', -- 'pending' | 'processing' | 'done' | 'failed'
+  error          text,
+  attempts       int not null default 0,
+  created_at     timestamptz not null default now(),
+  processed_at   timestamptz
+);
+create index on translation_jobs (status, created_at) where status = 'pending';  -- the worker's only query
+```
+
+**Lifecycle:** content handler inserts `pending` → worker SELECT FOR UPDATE flips to `processing` and bumps `attempts` → on success becomes `done`, on error becomes `pending` again (retry) or `failed` after 3 attempts.
+
+**Why no FK on `record_id`:** same reason as `translations` - the queue serves multiple parent tables. By the time the worker drains a stale row, the parent record may already have been deleted; the worker tolerates this and the row stays as audit history.
+
+---
+
 ## Relationships
 ```
 posts       ──< post_images   (one post has many images)
@@ -217,6 +288,10 @@ backend/migrations/
 ├── 000001_initial_schema.down.sql
 ├── 000002_hero_video_visibility.up.sql ← alter hero_videos add column is_visible
 ├── 000002_hero_video_visibility.down.sql
+├── 000003_gallery_tags.up.sql          ← tags + post_tags join table
+├── 000003_gallery_tags.down.sql
+├── 000004_translations.up.sql          ← translations + system_prompts + translation_jobs (seeds vi_translation prompt)
+├── 000004_translations.down.sql
 └── embed.go                            ← exposes the SQL files as embed.FS to main.go
 ```
 
