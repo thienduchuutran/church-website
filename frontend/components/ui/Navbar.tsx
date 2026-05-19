@@ -1,7 +1,6 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { Link, usePathname } from '@/i18n/routing'
 import { useState, useEffect, useRef, useCallback, startTransition } from 'react'
 import { useAuth } from '@/lib/auth'
 import SocialIconBar from '@/components/ui/SocialIconBar'

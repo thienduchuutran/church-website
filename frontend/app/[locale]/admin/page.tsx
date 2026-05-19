@@ -1,6 +1,6 @@
 'use client'
 
-import Link from 'next/link'
+import { Link } from '@/i18n/routing'
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { useEditModal } from '@/lib/edit-modal'

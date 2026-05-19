@@ -1,6 +1,6 @@
 "use client"
 
-import { usePathname } from "next/navigation"
+import { usePathname } from "@/i18n/routing"
 
 // Uses key={pathname} to force React to remount this wrapper on every route
 // change, which replays the CSS fade-in animation for a consistent page entry.

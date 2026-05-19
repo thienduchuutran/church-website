@@ -1,4 +1,4 @@
-import Link from 'next/link'
+import { Link } from '@/i18n/routing'
 import { listPosts } from '@/lib/posts'
 import { getHeroVideo } from '@/lib/hero'
 import type { Post } from '@/lib/types'

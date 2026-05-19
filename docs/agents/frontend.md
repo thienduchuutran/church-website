@@ -14,19 +14,29 @@ Tailwind CSS. No inline styles. No separate CSS files unless absolutely necessar
 ```
 frontend/
 ├── app/
-│   ├── layout.tsx                      ← Root layout (required by App Router)
-│   ├── globals.css                     ← Tailwind CSS entry point
-│   ├── page.tsx                        ← Homepage
-│   ├── events/page.tsx
-│   ├── announcements/page.tsx
-│   ├── gallery/page.tsx
-│   ├── resources/page.tsx
-│   ├── about/page.tsx                  ← Fetches from GET /api/v1/pages/about; falls back to defaults
-│   ├── connect/page.tsx                ← Fetches from GET /api/v1/pages/connect; falls back to defaults
-│   └── admin/
-│       ├── page.tsx                    ← Admin dashboard (lists all posts, edit/delete, edit pages)
-│       ├── [section]/page.tsx          ← Post creation form per section
-│       └── pages/[slug]/page.tsx       ← Page content editor (about, connect)
+│   ├── globals.css                     ← Tailwind CSS entry point (lives at the root, imported by [locale]/layout.tsx)
+│   ├── favicon.ico
+│   └── [locale]/                       ← Every page lives here. Locale is "en" | "vi", resolved by next-intl middleware.
+│       ├── layout.tsx                  ← The de-facto root layout: <html>, <body>, fonts, NextIntlClientProvider, Navbar, footer.
+│       ├── page.tsx                    ← Homepage
+│       ├── events/page.tsx
+│       ├── announcements/page.tsx
+│       ├── gallery/page.tsx
+│       ├── resources/page.tsx
+│       ├── about/page.tsx              ← Fetches from GET /api/v1/pages/about; falls back to defaults
+│       ├── connect/page.tsx            ← Fetches from GET /api/v1/pages/connect; falls back to defaults
+│       ├── calendar/page.tsx           ← Interactive calendar
+│       └── admin/
+│           ├── page.tsx                ← Admin dashboard (lists all posts, edit/delete, edit pages)
+│           ├── [section]/page.tsx      ← Post creation form per section
+│           └── pages/[slug]/page.tsx   ← Page content editor (about, connect)
+├── i18n/
+│   ├── routing.ts                      ← defineRouting() + createNavigation() - locale list, default, locale-aware Link/useRouter/usePathname
+│   └── request.ts                      ← getRequestConfig - resolves locale + lazy-imports messages JSON
+├── messages/
+│   ├── en.json                         ← English UI strings (source of truth)
+│   └── vi.json                         ← Vietnamese UI strings
+├── middleware.ts                       ← next-intl middleware: detects locale, rewrites/redirects, sets NEXT_LOCALE cookie
 ├── components/
 │   ├── ui/                             ← Reusable primitives, no business logic
 │   │   ├── Button.tsx
@@ -72,6 +82,30 @@ frontend/
 - **One component per file.** File name = component name, PascalCase.
 - **Props** should be destructured in the function signature.
 - **No prop drilling beyond 2 levels.** If a value is needed 3+ levels deep, use React Context or fetch it at the point of use.
+
+---
+
+## i18n routing (next-intl)
+
+Locale is a first-class segment in the URL: `/about` (English, default) or `/vi/about` (Vietnamese). The `localePrefix: 'as-needed'` setting in `i18n/routing.ts` keeps English URLs unprefixed so the canonical URL for SEO stays clean.
+
+**Always import `Link`, `useRouter`, `usePathname` from `@/i18n/routing`** - never from `next/link` or `next/navigation`. The locale-aware versions auto-prefix the current locale onto every URL, so internal navigation stays inside whichever language the user picked without each call site having to remember.
+
+| Source | When |
+|---|---|
+| `import { Link } from '@/i18n/routing'` | Internal navigation. The Link will prefix `/vi` automatically when the user is on Vietnamese. |
+| `import { useRouter } from '@/i18n/routing'` | Programmatic navigation: `router.push('/admin')` keeps locale; `router.push('/admin', { locale: 'vi' })` forces a specific locale. |
+| `import { usePathname } from '@/i18n/routing'` | Reading the pathname without the locale prefix. `/vi/events` returns as `/events` - matches what you wrote in `<Link href>`. |
+| `import { useLocale } from 'next-intl'` | Client components that need the current locale string (e.g. to pass to a backend API call). |
+| `import { getLocale } from 'next-intl/server'` | Server components / data fetchers. |
+
+The middleware in `frontend/middleware.ts` handles all locale detection. It checks (in order): the URL prefix, the `NEXT_LOCALE` cookie, and the `Accept-Language` header. The cookie persistence means once a visitor picks Vietnamese via the language switcher, they stay there on subsequent pageloads.
+
+Adding a new locale:
+1. Add the code (e.g. `'es'`) to `locales` in `i18n/routing.ts`.
+2. Create `messages/es.json` mirroring the English keys.
+3. Add a system prompt row to Supabase `system_prompts` for the new locale (key like `es_translation`).
+4. Add the code to the backend's `SUPPORTED_LOCALES` env var on Render.
 
 ---
 

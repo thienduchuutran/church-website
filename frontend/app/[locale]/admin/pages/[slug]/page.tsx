@@ -1,7 +1,7 @@
 'use client'
 
 import { use, useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
 import { apiGet, apiPut } from '@/lib/api'
 
