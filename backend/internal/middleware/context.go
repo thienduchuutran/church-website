@@ -24,3 +24,14 @@ func UserIDFromContext(ctx context.Context) string {
 	}
 	return ""
 }
+
+// WithUserID returns a new context with the user ID set.
+func WithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, ctxUserID, userID)
+}
+
+// WithAdminEmail returns a new context with the admin email set.
+func WithAdminEmail(ctx context.Context, email string) context.Context {
+	return context.WithValue(ctx, ctxAdminEmail, email)
+}
+

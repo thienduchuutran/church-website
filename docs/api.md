@@ -148,6 +148,37 @@ List all available tags for filtering gallery albums.
 
 **Response `200`** - array of Tag objects (see [Models](#models)), ordered by name.
 
+### `POST /api/v1/assistant/chat`
+Ask the AI assistant a question. Powered by the Groq API (llama-3.3-70b-versatile) with RAG context from the church database. Supports optional conversational history.
+
+**Request body**
+```json
+{
+  "message": "When is the next event?",
+  "history": [
+    { "role": "user", "content": "Hello" },
+    { "role": "assistant", "content": "Hello! I am the VGOMNE Helper. How can I help you today?" }
+  ]
+}
+```
+* `message` is required (max 1000 characters).
+* `history` is optional and represents the conversation history turns (role must be `user` or `assistant`).
+
+**Response `200`**
+```json
+{
+  "answer": "The next event is Easter Sunday on April 5.",
+  "sources": [
+    { "id": "uuid", "type": "post", "title": "Easter Sunday" }
+  ]
+}
+```
+* `sources` identifies the pieces of database content used by the AI to synthesize its answer.
+
+**Response `400`** - invalid request body, empty message, or message too long  
+**Response `429`** - rate limit exceeded (too many requests from the same IP)  
+**Response `500`** - LLM inference or RAG search failed  
+
 ---
 
 ## Admin endpoints (JWT required)
@@ -379,6 +410,23 @@ Per-month admin styling for the calendar. `accent_color` is a 6-digit hex string
 }
 ```
 > The API never returns raw `PageContent` rows - it returns `{ sections: { key: value, ... } }`. This model is for reference only.
+
+### AssistantMessage
+```json
+{
+  "role": "user",
+  "content": "Hello"
+}
+```
+
+### AssistantSource
+```json
+{
+  "id": "uuid",
+  "type": "post",
+  "title": "Easter Sunday"
+}
+```
 
 ---
 

@@ -103,6 +103,7 @@ func main() {
 	var galleryHandler *handler.GalleryHandler
 	var calendarHandler *handler.CalendarHandler
 	var heroVideoHandler *handler.HeroVideoHandler
+	var assistantHandler *handler.AssistantHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
@@ -174,6 +175,19 @@ func main() {
 			heroVideoRepo := repository.NewHeroVideoRepository(dbPool)
 			heroVideoSvc := service.NewHeroVideoService(s3Client, heroVideoRepo, presigner)
 			heroVideoHandler = handler.NewHeroVideoHandler(heroVideoSvc)
+		}
+
+		// AI Assistant: RAG chatbox for visitors. Requires GROQ_API_KEY to call
+		// the LLM. If the key is missing the handler stays nil and the route is
+		// skipped — the frontend chatbox will show a graceful error.
+		if groqKey := os.Getenv("GROQ_API_KEY"); groqKey != "" {
+			assistantRepo := repository.NewAssistantRepository(dbPool)
+			groqClient := service.NewGroqClient(groqKey)
+			assistantSvc := service.NewAssistantService(assistantRepo, groqClient)
+			assistantHandler = handler.NewAssistantHandler(assistantSvc)
+			log.Println("AI assistant enabled (GROQ_API_KEY set)")
+		} else {
+			log.Println("AI assistant disabled (GROQ_API_KEY not set)")
 		}
 	}
 
@@ -278,6 +292,14 @@ func main() {
 				r.Put("/calendar/months/{year}/{month}/note", calendarHandler.UpsertMonthNote)
 				r.Put("/calendar/months/{year}/{month}/settings", calendarHandler.UpsertMonthSettings)
 			})
+		}
+
+		// AI Assistant chatbox:
+		//   PUBLIC (no auth, intentional): POST /assistant/chat
+		//     Any visitor can ask questions about church events, service times,
+		//     etc. No login required — same philosophy as reactions.
+		if assistantHandler != nil {
+			r.Post("/assistant/chat", assistantHandler.Chat)
 		}
 	})
 

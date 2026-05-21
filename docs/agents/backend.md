@@ -38,13 +38,16 @@ backend/
 │   │   ├── tag.go              ← GET /tags, POST /tags, POST/DELETE /posts/{id}/tags
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
-│   │   └── pages.go            ← GET /pages/:slug, PUT /pages/:slug
+│   │   ├── pages.go            ← GET /pages/:slug, PUT /pages/:slug
+│   │   └── assistant.go        ← POST /assistant/chat
 │   ├── service/
 │   │   ├── posts.go            ← CreatePost (saves to DB + fires Discord webhook), List + Get with tag hydration
 │   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
-│   │   └── pages.go            ← GetPageContent, UpdatePageContent
+│   │   ├── pages.go            ← GetPageContent, UpdatePageContent
+│   │   ├── assistant.go        ← Chat orchestration (RAG pipeline)
+│   │   └── groq.go             ← Thin client for Groq LLM API
 │   ├── repository/
 │   │   ├── posts.go            ← InsertPost, GetPosts (with tag filtering), GetPostByID, UpdatePost, DeletePost
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
@@ -92,6 +95,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value } }` for a static page |
 | GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month |
+| POST | `/api/v1/assistant/chat` | AI assistant chatbox with RAG context (rate-limited per IP) |
 
 > Full request/response shapes and model definitions live in `docs/api.md`.
 

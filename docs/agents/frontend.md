@@ -43,7 +43,7 @@ frontend/
 │       ├── gallery/
 │       │   ├── AlbumGrid.tsx           ← Grid of albums
 │       │   └── RecentMoments.tsx       ← Flat photo grid
-│       └── admin/
+│       ├── admin/
 │           ├── AdminControls.tsx        ← Per-post pencil/trash buttons
 │           ├── AdminFeedActions.tsx
 │           ├── AdminNav.tsx
@@ -51,12 +51,17 @@ frontend/
 │           ├── EditPostForm.tsx         ← Wraps PostFormFields, PATCHes existing posts
 │           ├── EditPostModal.tsx        ← Modal chrome + portal hosting EditPostForm
 │           └── PostFormFields.tsx       ← Presentational inputs shared by Create/Edit
+│       └── assistant/
+│           ├── ChatBox.tsx             ← Floating AI assistant widget
+│           ├── ChatMessage.tsx         ← Renders user/assistant chat bubbles
+│           └── TypingIndicator.tsx     ← Animated thinking indicator for the helper
 ├── lib/
 │   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
 │   ├── posts.ts                        ← Post API service (list/get/create/update/delete)
+│   ├── assistant.ts                    ← AI Assistant API service (chat endpoint)
 │   ├── social.ts                       ← SOCIAL_LINKS constant (YouTube/Facebook/Instagram URLs)
 │   └── supabase.ts                     ← Supabase client (auth + direct public reads)
 ├── public/

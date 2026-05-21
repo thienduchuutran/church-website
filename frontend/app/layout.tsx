@@ -7,6 +7,7 @@ import Navbar from '@/components/ui/Navbar'
 import PageTransition from '@/components/ui/PageTransition'
 import NavigationProgress from '@/components/ui/NavigationProgress'
 import SocialIconBar from '@/components/ui/SocialIconBar'
+import ChatBox from '@/components/features/assistant/ChatBox'
 
 const inter = Inter({
   variable: '--font-sans',
@@ -74,6 +75,7 @@ export default function RootLayout({
                 </p>
               </div>
             </footer>
+            <ChatBox />
           </EditModalProvider>
         </AuthProvider>
       </body>

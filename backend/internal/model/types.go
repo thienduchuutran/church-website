@@ -346,3 +346,31 @@ func (r *CreateTagRequest) Validate() error {
 type ReplaceTagsRequest struct {
 	TagIDs []string `json:"tag_ids"`
 }
+
+// --- Assistant chatbox types ---
+
+// AssistantMessage represents a single turn in the chat conversation history.
+type AssistantMessage struct {
+	Role    string `json:"role"`    // "user" or "assistant"
+	Content string `json:"content"`
+}
+
+// AssistantChatRequest is the request body for POST /api/v1/assistant/chat.
+type AssistantChatRequest struct {
+	Message string             `json:"message"`
+	History []AssistantMessage `json:"history,omitempty"`
+}
+
+// AssistantSource identifies a piece of church content used to answer a question.
+// The frontend renders these as clickable chips so visitors can verify the answer.
+type AssistantSource struct {
+	ID    string `json:"id"`
+	Type  string `json:"type"`  // "post", "calendar_event", "page"
+	Title string `json:"title"`
+}
+
+// AssistantChatResponse is the response body for POST /api/v1/assistant/chat.
+type AssistantChatResponse struct {
+	Answer  string            `json:"answer"`
+	Sources []AssistantSource `json:"sources"`
+}

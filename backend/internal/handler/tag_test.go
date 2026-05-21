@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/thienduchuutran/church-website/backend/internal/middleware"
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 )
 
@@ -49,7 +50,7 @@ func (m *mockTagService) RemoveTag(ctx context.Context, postID string, tagID str
 	return m.removeErr
 }
 
-func withPostID(r *http.Request, id string) *http.Request {
+func withTagPostID(r *http.Request, id string) *http.Request {
 	rctx := chi.NewRouteContext()
 	rctx.URLParams.Add("id", id)
 	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
@@ -111,6 +112,7 @@ func TestTagHandler_Create_success(t *testing.T) {
 	body := `{"name":"prayer"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(middleware.WithUserID(req.Context(), "user-123"))
 	rec := httptest.NewRecorder()
 
 	h.Create(rec, req)
@@ -148,6 +150,7 @@ func TestTagHandler_Create_conflict(t *testing.T) {
 	body := `{"name":"worship"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(middleware.WithUserID(req.Context(), "user-123"))
 	rec := httptest.NewRecorder()
 
 	h.Create(rec, req)
@@ -162,7 +165,7 @@ func TestTagHandler_Replace_success(t *testing.T) {
 	body := `{"tag_ids":["id1","id2"]}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/posts/post-abc/tags", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
-	req = withPostID(req, "post-abc")
+	req = withTagPostID(req, "post-abc")
 	rec := httptest.NewRecorder()
 
 	h.Replace(rec, req)

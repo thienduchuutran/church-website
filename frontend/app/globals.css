@@ -195,3 +195,14 @@ body {
 .rich-content [data-callout-variant="prayer"]       { background: #eef3eb; border-left: 3px solid #4a7a5c; }
 .rich-content [data-callout-variant="scripture"]    { background: #faf3e6; border-left: 3px solid #c49a3c; }
 .rich-content [data-callout-variant="callout"]      { background: #f0eeff; border-left: 3px solid #8b75d4; }
+
+@keyframes chatbox-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
