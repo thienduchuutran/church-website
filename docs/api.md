@@ -314,6 +314,72 @@ Remove a single tag from a gallery album post.
 
 ---
 
+### `GET /api/v1/admin/translations`
+List translations for the admin review panel. Admin only.
+
+**Query params**
+| Param | Type | Default | Description |
+|-------|------|---------|-------------|
+| `locale` | string | (all) | Filter to one locale, e.g. `vi`. |
+| `approved` | `true` \| `false` | (all) | Tri-state. Omit for "All" tab. `false` returns translations still needing review (`approved_by IS NULL`). `true` returns human-approved translations. |
+| `limit` | int | 20 | Page size. Server caps at 100. |
+| `offset` | int | 0 | Pagination offset. |
+
+**Response `200`**
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "table_name": "posts",
+      "record_id": "uuid",
+      "field_name": "title",
+      "locale": "vi",
+      "source_text": "Easter Sunday Service",
+      "translated_text": "Lễ Phục Sinh",
+      "is_ai_generated": true,
+      "approved_by": null,
+      "approved_at": null,
+      "created_at": "2026-05-22T10:00:00Z",
+      "updated_at": "2026-05-22T10:00:00Z",
+      "record_title": "Easter Sunday Service"
+    }
+  ],
+  "total": 42
+}
+```
+`record_title` is synthesized at query time by joining to the parent table and producing a human label:
+- `posts` → the post's `title`
+- `page_content` → `"<page_slug> / <section_key>"`
+- `calendar_events` → `"<title> · <date>"`
+- `calendar_month_notes` → `"Month note · YYYY-MM"`
+- orphaned (parent row deleted) → `"<table_name>:<short uuid>"`
+
+---
+
+### `PATCH /api/v1/admin/translations/:id`
+Approve a translation. Admin only. Sets `approved_by` to the caller's JWT `sub` and `approved_at` to `now()`.
+
+**Request body** (all optional)
+```json
+{ "translated_text": "Lễ Phục Sinh (edited)" }
+```
+- Omit `translated_text` → approves the existing AI output **as-is**. `is_ai_generated` stays `true`.
+- Include `translated_text` → updates the text AND sets `is_ai_generated = false`. The human owns this text now.
+
+**Response `200`** - the updated Translation object  
+**Response `404`** - translation id not found
+
+---
+
+### `POST /api/v1/admin/translations/retranslate/:id`
+Re-translate. Admin only. Deletes the existing `translations` row so the public read path's COALESCE falls back to English while the worker produces a fresh one, then enqueues a `translation_jobs` row with the same source_text and locale. Use case: the system prompt was edited and you want existing translations refreshed against the new prompt.
+
+**Response `202` Accepted** - returns the (now-deleted) source metadata so the frontend can update its UI immediately. The new translated text will not exist until the worker drains the queue (~5s).  
+**Response `404`** - translation id not found
+
+---
+
 ### `PUT /api/v1/calendar/months/:year/:month/settings`
 Upsert the per-month styling row. Currently a single field (`accent_color`); the row also stores the `admin_id` of the most recent editor for audit. The accent tints the day-of-week header, month title, and "today" marker on every visitor's view of that month.
 

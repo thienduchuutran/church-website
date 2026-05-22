@@ -157,6 +157,7 @@ func main() {
 	var galleryHandler *handler.GalleryHandler
 	var calendarHandler *handler.CalendarHandler
 	var heroVideoHandler *handler.HeroVideoHandler
+	var adminTranslationsHandler *handler.AdminTranslationsHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
@@ -238,6 +239,16 @@ func main() {
 			heroVideoSvc := service.NewHeroVideoService(s3Client, heroVideoRepo, presigner)
 			heroVideoHandler = handler.NewHeroVideoHandler(heroVideoSvc)
 		}
+
+		// Admin translation review panel. The service shares the same enqueue
+		// closure as the content services so the "Re-translate" action can
+		// re-queue work for the worker. List + Approve work without an AI key.
+		translationRepo := repository.NewTranslationRepository(dbPool)
+		translationSvc := service.NewTranslationService(translationRepo)
+		if enqueueTranslation != nil {
+			translationSvc.SetTranslationQueue(enqueueTranslation)
+		}
+		adminTranslationsHandler = handler.NewAdminTranslationsHandler(translationSvc)
 	}
 
 	router.Route("/api/v1", func(r chi.Router) {
@@ -323,6 +334,19 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Post("/posts/{id}/images", galleryHandler.UploadImage)
+			})
+		}
+
+		// Admin translation review panel. All routes are admin-only.
+		//   GET    /admin/translations            list with filters (locale, approved, pagination)
+		//   PATCH  /admin/translations/{id}       approve as-is or with edits
+		//   POST   /admin/translations/retranslate/{id}  delete current + re-enqueue
+		if adminTranslationsHandler != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Get("/admin/translations", adminTranslationsHandler.List)
+				r.Patch("/admin/translations/{id}", adminTranslationsHandler.Approve)
+				r.Post("/admin/translations/retranslate/{id}", adminTranslationsHandler.Retranslate)
 			})
 		}
 

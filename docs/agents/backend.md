@@ -39,21 +39,24 @@ backend/
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
 │   │   ├── calendar.go         ← GET /calendar (locale-aware), POST/PATCH/DELETE /calendar/events, PUT month note + settings
-│   │   └── pages.go            ← GET /pages/:slug (locale-aware), PUT /pages/:slug
+│   │   ├── pages.go            ← GET /pages/:slug (locale-aware), PUT /pages/:slug
+│   │   └── admin_translations.go  ← GET list, PATCH approve, POST retranslate (admin review panel)
 │   ├── service/
 │   │   ├── posts.go            ← CreatePost (DB + Discord + translation enqueue), List/Get with locale, Update with diff-based enqueue
 │   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
 │   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue)
-│   │   └── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue)
+│   │   ├── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue)
+│   │   └── translation.go      ← List/Approve/Retranslate for the admin review panel
 │   ├── repository/
 │   │   ├── posts.go            ← InsertPost, GetPosts + GetPostByID (both take locale), UpdatePost, DeletePost
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
 │   │   ├── reactions.go        ← UpsertReaction, GetReactionCounts, DeleteReaction
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
 │   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings
-│   │   └── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections
+│   │   ├── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections
+│   │   └── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete
 │   ├── translation/            ← Async EN→VI translation engine. See "Translation engine" section below.
 │   │   ├── models.go           ← TranslationJob, Translation, ContentType
 │   │   ├── prompt.go           ← PromptCache (5min TTL, falls back to stale on DB hiccup)
@@ -122,6 +125,9 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | DELETE | `/api/v1/calendar/events/:id` | Delete a calendar event |
 | PUT | `/api/v1/calendar/months/:year/:month/note` | Upsert the month's sidebar note |
 | PUT | `/api/v1/calendar/months/:year/:month/settings` | Upsert the month's per-month styling (accent color) |
+| GET | `/api/v1/admin/translations` | List translations for the review panel. Query params: `?locale=vi`, `?approved=false\|true`, `?limit=20`, `?offset=0`. Response includes `record_title` synthesized from a JOIN to each possible parent table. |
+| PATCH | `/api/v1/admin/translations/:id` | Approve a translation. Body `{translated_text?}` - omit to approve as-is, include to approve human-edited text. Sets `approved_by` to caller's JWT sub. |
+| POST | `/api/v1/admin/translations/retranslate/:id` | Delete the current translation + re-enqueue. Returns 202. Used after system-prompt edits to refresh translations. |
 
 ---
 
