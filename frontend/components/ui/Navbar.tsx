@@ -4,6 +4,7 @@ import { Link, usePathname } from '@/i18n/routing'
 import { useState, useEffect, useRef, useCallback, startTransition } from 'react'
 import { useAuth } from '@/lib/auth'
 import SocialIconBar from '@/components/ui/SocialIconBar'
+import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
 
 type NavLink = { kind: 'link'; href: string; label: string }
 type NavDropdown = { kind: 'dropdown'; label: string; children: { href: string; label: string }[] }
@@ -212,6 +213,12 @@ export default function Navbar() {
             </ul>
 
             <div className="flex items-center gap-2">
+              {/* Language switcher sits first in the right cluster so a
+                  Vietnamese-speaking visitor finds it without opening any menu.
+                  Same legitimacy-over-thumb-zone tradeoff as the social bar -
+                  identity-class controls are visible at every breakpoint. */}
+              <LanguageSwitcher />
+
               {/* Social icons sit at the start of the right cluster on every breakpoint.
                   On mobile they land just before the hamburger - we trade a small amount
                   of thumb-zone friction for constant legitimacy signaling, which a

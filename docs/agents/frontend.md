@@ -36,7 +36,7 @@ frontend/
 ├── messages/
 │   ├── en.json                         ← English UI strings (source of truth)
 │   └── vi.json                         ← Vietnamese UI strings
-├── middleware.ts                       ← next-intl middleware: detects locale, rewrites/redirects, sets NEXT_LOCALE cookie
+├── proxy.ts                       ← next-intl middleware: detects locale, rewrites/redirects, sets NEXT_LOCALE cookie
 ├── components/
 │   ├── ui/                             ← Reusable primitives, no business logic
 │   │   ├── Button.tsx
@@ -114,7 +114,9 @@ Every resource service in `lib/` accepts an optional `locale` parameter:
 
 `CalendarShell` reads `isAdmin` and only passes the locale when `!isAdmin` - same rule encoded in one component. When you add a new admin surface that calls `listPosts` or `getMonth`, follow the same pattern.
 
-The middleware in `frontend/middleware.ts` handles all locale detection. It checks (in order): the URL prefix, the `NEXT_LOCALE` cookie, and the `Accept-Language` header. The cookie persistence means once a visitor picks Vietnamese via the language switcher, they stay there on subsequent pageloads.
+The middleware in `frontend/proxy.ts` handles all locale detection. It checks (in order): the URL prefix, the `NEXT_LOCALE` cookie, and the `Accept-Language` header. The cookie persistence means once a visitor picks Vietnamese via the language switcher, they stay there on subsequent pageloads.
+
+The switcher itself is `components/ui/LanguageSwitcher.tsx`, mounted in the Navbar's right cluster. See `docs/components.md` → "LanguageSwitcher" for design and responsive behavior.
 
 Adding a new locale:
 1. Add the code (e.g. `'es'`) to `locales` in `i18n/routing.ts`.

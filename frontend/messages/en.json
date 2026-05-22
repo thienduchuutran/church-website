@@ -1,5 +1,11 @@
 {
   "Common": {
     "machineTranslated": "Auto-translated"
+  },
+  "Language": {
+    "label": "Language",
+    "en": "English",
+    "vi": "Vietnamese",
+    "switchTo": "Switch to {language}"
   }
 }

@@ -54,6 +54,44 @@ Renders the church's social media follow icons (YouTube, Facebook, Instagram) in
 
 ---
 
+### `LanguageSwitcher`
+Switches between English and Vietnamese without page reload. Lives in the Navbar's right cluster, just left of `SocialIconBar`.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `className` | `string` | `''` | Extra classes appended to the outer pill group |
+
+**Behavior:**
+- Reads the active locale via `useLocale()` from `next-intl`.
+- On click, calls `router.replace(pathname, { locale: target })` from `@/i18n/routing` - the locale-aware router automatically strips/adds the prefix so the user stays on the equivalent path in the new language (e.g. `/vi/events` ↔ `/events`).
+- next-intl middleware writes the new value into the `NEXT_LOCALE` cookie on the response, so the choice persists across visits.
+- Wraps the navigation in `useTransition`; the inactive button dims (`opacity-60`) while the route is committing.
+
+**Responsive form:**
+- **Desktop (`md+`):** both `EN` and `VI` pills visible. The active one carries `bg-primary/10 text-primary`; the inactive shows `text-muted`. Standard A/B toggle pattern.
+- **Mobile (below `md`):** only the **inactive** pill is visible - it acts as a single "switch to X" button. Reasoning: the navbar right cluster already carries logo, social icons, and hamburger (~240px). Adding two 44px pills would overflow on iPhone-SE-class widths (343px content). Hiding the active pill keeps the WCAG-compliant 44x44 tap target while saving 46px.
+
+**Accessibility:**
+- Each button has `aria-pressed` set to the active state.
+- `aria-label="Switch to <full language name>"` from the `Language.switchTo` message key.
+- `title` tooltip with the localized language name.
+- The outer `<div role="group" aria-label="Language">` (`Language.label` message key) groups the toggle for screen readers.
+
+**Message keys (in `messages/{en,vi}.json`):**
+```json
+"Language": {
+  "label": "Language",
+  "en": "English",
+  "vi": "Vietnamese",
+  "switchTo": "Switch to {language}"
+}
+```
+
+**Client component:** yes (uses `useTransition`, `useLocale`, locale-aware `useRouter`/`usePathname`).
+
+---
+
 ### `MachineTranslatedBadge`
 Small italic "Bản dịch tự động" notice that flags content served from an unapproved AI translation. Lives at the bottom of post cards, beside calendar event titles inside `DayEventsModal`, under the month note on the calendar shell, and below the page hero on About/Connect.
 
