@@ -27,9 +27,10 @@ frontend/
 │       ├── connect/page.tsx            ← Fetches from GET /api/v1/pages/connect; falls back to defaults
 │       ├── calendar/page.tsx           ← Interactive calendar
 │       └── admin/
-│           ├── page.tsx                ← Admin dashboard (lists all posts, edit/delete, edit pages)
+│           ├── page.tsx                ← Admin dashboard (lists all posts, edit/delete, edit pages, link to translation review)
 │           ├── [section]/page.tsx      ← Post creation form per section
-│           └── pages/[slug]/page.tsx   ← Page content editor (about, connect)
+│           ├── pages/[slug]/page.tsx   ← Page content editor (about, connect)
+│           └── translations/page.tsx   ← AI translation review panel (Phase 5)
 ├── i18n/
 │   ├── routing.ts                      ← defineRouting() + createNavigation() - locale list, default, locale-aware Link/useRouter/usePathname
 │   └── request.ts                      ← getRequestConfig - resolves locale + lazy-imports messages JSON
@@ -70,7 +71,8 @@ frontend/
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
 │   ├── posts.ts                        ← Post API service (list/get takes optional locale)
 │   ├── social.ts                       ← SOCIAL_LINKS constant (YouTube/Facebook/Instagram URLs)
-│   └── supabase.ts                     ← Supabase client (auth + direct public reads)
+│   ├── supabase.ts                     ← Supabase client (auth + direct public reads)
+│   └── translations.ts                 ← Admin translation review API (list/approve/retranslate)
 ├── public/
 ├── .env.local
 └── next.config.ts

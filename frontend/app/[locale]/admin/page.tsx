@@ -104,6 +104,20 @@ export default function AdminPage() {
 
       <div className="mb-8 space-y-4">
         <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">
+          Translation Review
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            href="/admin/translations"
+            className="rounded-lg border border-border bg-surface px-4 py-2 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5"
+          >
+            Review AI Translations →
+          </Link>
+        </div>
+      </div>
+
+      <div className="mb-8 space-y-4">
+        <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">
           Create New Post
         </h2>
         <div className="flex flex-wrap gap-2">

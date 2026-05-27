@@ -223,6 +223,38 @@ Flat photo grid showing the most recent images across all albums.
 
 ---
 
+### `TranslationReviewItem`
+Two-column side-by-side diff card for the `/admin/translations` review panel. English source on the left (read-only), Vietnamese translation on the right (editable textarea). Three action buttons: Approve as-is, Save edits, Re-translate.
+
+**Props**
+| Prop | Type | Description |
+|------|------|-------------|
+| `item` | `AdminTranslation` | The translation row from `GET /api/v1/admin/translations`, including the synthesized `record_title` |
+| `onChange` | `() => void` | Called after a successful approve / retranslate so the parent list refreshes |
+| `onApprove` | `(id, translatedText \| null) => Promise<void>` | Approve handler. Pass null for "approve as-is", a string for "save edits". |
+| `onRetranslate` | `(id) => Promise<void>` | Retranslate handler. The component shows a `window.confirm` before calling - this is destructive (deletes the row + re-enqueues) |
+
+**Design tokens:**
+- Approve as-is: `bg-primary` (terracotta `#C4663C`), white text - primary CTA
+- Save edits: sage `#4A7A5C` background, white text - only colored when `hasEdits === true`, otherwise muted disabled state
+- Re-translate: ghost (transparent, `text-muted`, hover bg) - secondary destructive action
+
+**State:**
+- `text` - controlled textarea, seeded from `item.translated_text`
+- `hasEdits` - computed: `text !== item.translated_text`, drives Save button enable state
+- `submitting` - one of `null | 'approve' | 'save' | 'retranslate'` so each button can show its own "…ing" label
+
+**Table label badges** (color-coded per `table_name`):
+- `posts` → "Post" (terracotta tint)
+- `page_content` → "Page" (amber tint)
+- `calendar_events` → "Event" (accent tint)
+- `calendar_month_notes` → "Month note" (emerald tint)
+- unknown → raw `table_name` (muted)
+
+**Client component:** yes (textarea state, async submit, window.confirm).
+
+---
+
 ### Admin (`components/features/admin/`)
 
 The post create/edit experience is split across four components plus a context provider, so each piece has a single responsibility:
