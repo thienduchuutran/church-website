@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth'
 import {
   approveTranslation,
   listAdminTranslations,
+  retranslateAllTranslations,
   retranslateTranslation,
   type AdminTranslation,
 } from '@/lib/translations'
@@ -40,6 +41,11 @@ export default function AdminTranslationsPage() {
   const [page, setPage] = useState(0)
   const [listLoading, setListLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Bulk retranslate state. `bulkBusy` doubles as the button's loading flag
+  // and the disable-while-running guard. `bulkMessage` shows the result count
+  // for a few seconds after success so the reviewer sees confirmation.
+  const [bulkBusy, setBulkBusy] = useState(false)
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null)
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
@@ -101,6 +107,33 @@ export default function AdminTranslationsPage() {
     [token],
   )
 
+  // Bulk re-translate. Destructive: every unapproved row is deleted and
+  // re-queued. We confirm with a sentence that makes the consequence
+  // unambiguous - the reviewer's approved edits are the obvious thing they'd
+  // worry about losing, so we name that explicitly in the prompt.
+  async function handleRetranslateAll() {
+    if (!token || bulkBusy) return
+    if (
+      !window.confirm(
+        'Delete every unapproved translation and re-queue them with the current system prompt? Approved (human-reviewed) translations will be left untouched.',
+      )
+    ) {
+      return
+    }
+    setBulkBusy(true)
+    setBulkMessage(null)
+    setError(null)
+    try {
+      const { requeued } = await retranslateAllTranslations(token)
+      setBulkMessage(`Re-queued ${requeued} translation${requeued === 1 ? '' : 's'}.`)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Bulk retranslate failed')
+    } finally {
+      setBulkBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -138,9 +171,36 @@ export default function AdminTranslationsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
         <h1 className="font-serif text-3xl font-bold text-foreground">Translation Review</h1>
         <span className="font-sans text-sm text-muted">{session.user.email}</span>
+      </div>
+
+      {/* Prompt-versioning action row. The button lives here (not buried in
+          per-row actions) because it's a project-wide operation tied to the
+          prompt-iteration workflow: edit prompts/*.md → sync-prompt.sh → click
+          this. The helper text explains the "approved rows are sacred" rule
+          since it's the surprising part - reviewers shouldn't have to read the
+          confirm dialog to learn it. */}
+      <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border bg-surface/40 px-4 py-3">
+        <div className="mr-auto font-sans text-xs text-muted">
+          After updating <span className="font-mono">prompts/vi_translation_system_prompt.md</span> and running{' '}
+          <span className="font-mono">scripts/sync-prompt.sh</span>, re-queue every unapproved translation so
+          the new prompt takes effect. Approved (human-edited) translations are never touched.
+        </div>
+        {bulkMessage && (
+          <span className="font-sans text-xs font-medium text-emerald-700" role="status">
+            {bulkMessage}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={handleRetranslateAll}
+          disabled={bulkBusy}
+          className="inline-flex h-9 items-center rounded-lg border border-border bg-surface px-3 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 disabled:opacity-50"
+        >
+          {bulkBusy ? 'Re-queuing…' : 'Re-translate all pending'}
+        </button>
       </div>
 
       {/* Filter tabs */}

@@ -128,6 +128,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | GET | `/api/v1/admin/translations` | List translations for the review panel. Query params: `?locale=vi`, `?approved=false\|true`, `?limit=20`, `?offset=0`. Response includes `record_title` synthesized from a JOIN to each possible parent table. |
 | PATCH | `/api/v1/admin/translations/:id` | Approve a translation. Body `{translated_text?}` - omit to approve as-is, include to approve human-edited text. Sets `approved_by` to caller's JWT sub. |
 | POST | `/api/v1/admin/translations/retranslate/:id` | Delete the current translation + re-enqueue. Returns 202. Used after system-prompt edits to refresh translations. |
+| POST | `/api/v1/admin/translations/retranslate-all` | Bulk: delete every unapproved row and re-enqueue. Returns `{"requeued": N}`. Approved (human-reviewed) translations are skipped. Pair with `scripts/sync-prompt.sh` for prompt iterations. |
 
 ---
 
@@ -225,7 +226,7 @@ admin POST /posts  →  PostService.Create
                                   ▼
                             Translator.TranslateRecord
                                   ├─ sha256(source) lookup in `translations` (cache)
-                                  ├─ on miss: Gemini (general) or Claude (pastoral)
+                                  ├─ on miss: Gemini (general) or Claude (no pastoral content, just a backup for gemini)
                                   └─ upsert by (record_id, field_name, locale)
 
 public GET /posts?locale=vi  →  PostRepository.GetPosts
@@ -237,7 +238,7 @@ public GET /posts?locale=vi  →  PostRepository.GetPosts
 
 | File | Responsibility |
 |---|---|
-| `models.go` | `TranslationJob`, `Translation`, `ContentType` constants (`general`, `pastoral`) |
+| `models.go` | `TranslationJob`, `Translation`, `ContentType` constants (`general`, `backup for Gemini, no pastoral content`) |
 | `prompt.go` | `PromptCache` - in-memory cache of the system prompt body, 5-minute TTL, falls back to stale on Supabase hiccup |
 | `translator.go` | `Translator` - per-field translate-and-store, sha256 cache, raw HTTP to Gemini v1beta + Claude `/v1/messages`, upsert that resets `approved_by` on source change |
 | `queue.go` | `EnqueueTranslation` package-level helper + `EnqueueFn` function type that content services depend on |
@@ -254,9 +255,38 @@ public GET /posts?locale=vi  →  PostRepository.GetPosts
 ### Model IDs
 
 - General content: `gemini-2.0-flash` via `https://generativelanguage.googleapis.com/v1beta`
-- Pastoral content: `claude-haiku-4-5-20251001` via `https://api.anthropic.com/v1/messages`
+- Backup for Gemini content: `claude-haiku-4-5-20251001` via `https://api.anthropic.com/v1/messages`
 
 Both clients are raw `net/http`. SDKs were rejected to keep the Docker image and `go.mod` lean.
+
+### Prompt versioning workflow
+
+The system prompt is owned by the `system_prompts` table at runtime but
+authored in `prompts/vi_translation_system_prompt.md` with a YAML front-matter
+header (`key`, `version`). `prompts/CHANGELOG.md` records the **why** of every
+version bump - patch (typo/wording), minor (vocabulary/rule additions), major
+(register or audience change).
+
+Lifecycle:
+
+1. Edit `prompts/vi_translation_system_prompt.md` and bump `version:`.
+2. Add a CHANGELOG entry that explains *why* (incident? feedback? new term?).
+3. Run `scripts/sync-prompt.sh` (needs `DATABASE_URL`). The script parses the
+   front-matter and upserts `(key, content, version)` via psql's `:'var'`
+   substitution so apostrophes in the body are escaped safely.
+4. The running backend's `PromptCache` has a 5-minute TTL - within that window
+   the worker fetches the new prompt without a redeploy. `prompt.go` also
+   falls back to the stale copy on a DB hiccup so a brief Supabase blip can't
+   kill in-flight translations.
+5. Click "Re-translate all pending" on `/admin/translations` (or POST
+   `/api/v1/admin/translations/retranslate-all`). Every `approved_by IS NULL`
+   row is deleted and re-queued; approved rows are deliberately skipped so a
+   reviewer's edits are never auto-clobbered by a prompt change.
+6. Commit `prompts/*.md` to git alongside any related code change. Git history
+   = what changed; CHANGELOG = why.
+
+The markdown-as-source / DB-as-runtime split keeps prompts diff-able and
+review-able in PRs while still letting them be hot-swapped without a deploy.
 
 ---
 
@@ -285,7 +315,7 @@ AWS_SECRET_ACCESS_KEY=...                          # R2 secret access key
 
 # Translation engine (Phase 2 onwards)
 GEMINI_API_KEY=...                                 # General content translations. Worker stays disabled when both AI keys are empty.
-ANTHROPIC_API_KEY=...                              # Pastoral content + Gemini fallback (see Phase 7).
+ANTHROPIC_API_KEY=...                              # Backup for Gemini content + Gemini fallback (see Phase 7).
 SUPPORTED_LOCALES=vi                               # Comma-separated. Defaults to "vi" when empty.
 TRANSLATION_WORKER_INTERVAL=5                      # Poll interval in seconds. Defaults to 5.
 ```

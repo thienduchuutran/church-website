@@ -338,14 +338,18 @@ func main() {
 		}
 
 		// Admin translation review panel. All routes are admin-only.
-		//   GET    /admin/translations            list with filters (locale, approved, pagination)
-		//   PATCH  /admin/translations/{id}       approve as-is or with edits
+		//   GET    /admin/translations                   list with filters (locale, approved, pagination)
+		//   PATCH  /admin/translations/{id}              approve as-is or with edits
 		//   POST   /admin/translations/retranslate/{id}  delete current + re-enqueue
+		//   POST   /admin/translations/retranslate-all   bulk: delete + re-enqueue every unapproved row
+		// retranslate-all is registered before retranslate/{id} so chi's router
+		// doesn't accidentally route "retranslate-all" into the {id} param.
 		if adminTranslationsHandler != nil {
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Get("/admin/translations", adminTranslationsHandler.List)
 				r.Patch("/admin/translations/{id}", adminTranslationsHandler.Approve)
+				r.Post("/admin/translations/retranslate-all", adminTranslationsHandler.RetranslateAll)
 				r.Post("/admin/translations/retranslate/{id}", adminTranslationsHandler.Retranslate)
 			})
 		}

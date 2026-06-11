@@ -380,6 +380,22 @@ Re-translate. Admin only. Deletes the existing `translations` row so the public 
 
 ---
 
+### `POST /api/v1/admin/translations/retranslate-all`
+Bulk version of `retranslate/:id`. Admin only. Deletes **every unapproved** translation (`approved_by IS NULL`) and re-enqueues each as a fresh `translation_jobs` row. Approved (human-reviewed) translations are deliberately left untouched.
+
+Use case: you just ran `scripts/sync-prompt.sh` to push a new system prompt version and want every pending translation rebuilt against it. The running backend's `PromptCache` (5-minute TTL) means the worker picks up the new prompt on its next refresh - no redeploy.
+
+**Request body** — empty.
+
+**Response `202` Accepted**
+```json
+{ "requeued": 47 }
+```
+
+The new translated text exists only after the worker drains the queue (~5s per job). Public reads return English via COALESCE during the gap.
+
+---
+
 ### `PUT /api/v1/calendar/months/:year/:month/settings`
 Upsert the per-month styling row. Currently a single field (`accent_color`); the row also stores the `admin_id` of the most recent editor for audit. The accent tints the day-of-week header, month title, and "today" marker on every visitor's view of that month.
 

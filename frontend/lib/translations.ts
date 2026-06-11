@@ -70,3 +70,16 @@ export async function approveTranslation(
 export async function retranslateTranslation(id: string, token: string): Promise<AdminTranslation> {
   return (await apiPost(`${BASE}/retranslate/${id}`, {}, token)) as AdminTranslation
 }
+
+export interface RetranslateAllResponse {
+  // Count of translations deleted + re-queued. Approved rows are not touched.
+  requeued: number
+}
+
+// retranslateAllTranslations: bulk version - delete every unapproved row and
+// re-queue. Use after running `scripts/sync-prompt.sh` to push a new system
+// prompt. Approved (human-reviewed) translations are NEVER auto-clobbered;
+// to refresh those, use the per-row Re-translate button on each card.
+export async function retranslateAllTranslations(token: string): Promise<RetranslateAllResponse> {
+  return (await apiPost(`${BASE}/retranslate-all`, {}, token)) as RetranslateAllResponse
+}

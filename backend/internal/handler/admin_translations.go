@@ -22,6 +22,7 @@ type adminTranslationService interface {
 	List(ctx context.Context, f repository.TranslationListFilters) (*model.TranslationListResponse, error)
 	Approve(ctx context.Context, id, approverID string, translatedText *string) (*model.Translation, error)
 	Retranslate(ctx context.Context, id string) (*model.Translation, error)
+	RetranslateAll(ctx context.Context) (int, error)
 }
 
 type AdminTranslationsHandler struct {
@@ -142,4 +143,19 @@ func (h *AdminTranslationsHandler) Retranslate(w http.ResponseWriter, r *http.Re
 	// exist until the worker drains the job. Returning the source row gives
 	// the frontend enough context to update its UI state immediately.
 	writeJSON(w, http.StatusAccepted, deleted)
+}
+
+// RetranslateAll handles POST /api/v1/admin/translations/retranslate-all.
+// Bulk version of Retranslate: every unapproved row is deleted and re-queued.
+// Approved rows (human-reviewed) are left untouched. The natural use case is
+// "I just ran sync-prompt.sh to ship a new prompt - rebuild every pending
+// translation against it."
+func (h *AdminTranslationsHandler) RetranslateAll(w http.ResponseWriter, r *http.Request) {
+	count, err := h.svc.RetranslateAll(r.Context())
+	if err != nil {
+		log.Printf("retranslate-all: %v", err)
+		writeError(w, http.StatusInternalServerError, "failed to retranslate all")
+		return
+	}
+	writeJSON(w, http.StatusAccepted, map[string]int{"requeued": count})
 }

@@ -219,3 +219,40 @@ func (r *TranslationRepository) Delete(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// DeleteUnapproved atomically deletes every unapproved translation and
+// returns the deleted rows so the caller can re-enqueue jobs. Approved
+// translations (approved_by IS NOT NULL) are deliberately left intact - the
+// reviewer's edits are sacred and a prompt change must not auto-clobber them.
+//
+// This is the bulk side of the per-row Retranslate flow: same shape, same
+// safety property (public reads fall back to English via COALESCE during the
+// gap), batched in a single DELETE ... RETURNING so a partial failure can't
+// leave the queue half-flushed.
+func (r *TranslationRepository) DeleteUnapproved(ctx context.Context) ([]model.Translation, error) {
+	rows, err := r.pool.Query(ctx,
+		`DELETE FROM translations
+		 WHERE approved_by IS NULL
+		 RETURNING id, table_name, record_id, field_name, locale,
+		           source_text, translated_text, is_ai_generated,
+		           approved_by, approved_at, created_at, updated_at`,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("delete unapproved translations: %w", err)
+	}
+	defer rows.Close()
+
+	var deleted []model.Translation
+	for rows.Next() {
+		var t model.Translation
+		if err := rows.Scan(
+			&t.ID, &t.TableName, &t.RecordID, &t.FieldName, &t.Locale,
+			&t.SourceText, &t.TranslatedText, &t.IsAIGenerated,
+			&t.ApprovedBy, &t.ApprovedAt, &t.CreatedAt, &t.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scan deleted translation: %w", err)
+		}
+		deleted = append(deleted, t)
+	}
+	return deleted, rows.Err()
+}
