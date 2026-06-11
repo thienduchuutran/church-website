@@ -114,9 +114,6 @@ func (r *CreatePostRequest) Validate() error {
 	default:
 		return fmt.Errorf("invalid post type: %s", r.Type)
 	}
-	if r.Type == PostTypeEvent && r.EventDate == nil {
-		return errors.New("event_date is required for events")
-	}
 	return nil
 }
 

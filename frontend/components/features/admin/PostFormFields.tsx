@@ -81,13 +81,12 @@ export default function PostFormFields({
       {has('event_date') && (
         <div>
           <label htmlFor="eventDate" className="mb-1 block font-display text-sm font-medium text-foreground">
-            Event Date *
+            Event Date <span className="font-normal text-muted">(optional)</span>
           </label>
           <div className="grid grid-cols-2 gap-2">
             <input
               id="eventDate"
               type="date"
-              required
               value={dateOnly}
               onChange={(e) =>
                 onChange({ ...state, eventDate: `${e.target.value}T${timeOnly}` })
@@ -97,7 +96,6 @@ export default function PostFormFields({
             <input
               id="eventTime"
               type="time"
-              required
               value={timeOnly}
               onChange={(e) =>
                 onChange({ ...state, eventDate: `${dateOnly}T${e.target.value}` })
