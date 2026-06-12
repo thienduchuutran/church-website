@@ -15,6 +15,31 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Merging master resurrects `app/layout.tsx` and breaks the i18n build
+**Date solved:** 2026-06-12
+**Symptom:** Vercel build fails during static generation with
+`Error occurred prerendering page "/en/about"` and a bare `Error:` whose
+stack points into the `use-intl` chunk at `usePathname`. Any `[locale]`
+page can be the one named - it is just the first page the worker tried.
+**Root cause:** The i18n setup commit deleted `frontend/app/layout.tsx`
+and made `frontend/app/[locale]/layout.tsx` the de-facto root layout
+(it owns `<html>`/`<body>` and wraps everything in
+`NextIntlClientProvider`). `master` still has the pre-i18n
+`app/layout.tsx`, so merging master into the i18n branch restores the
+file. The build then nests two layouts: the resurrected root layout
+mounts `Navbar`/`NavigationProgress`/`PageTransition` **above** the
+`NextIntlClientProvider` that lives in the `[locale]` layout. Those
+components call next-intl's `usePathname`, find no provider context,
+and throw during prerender. Production builds strip the error message,
+hence the empty `Error:`.
+**Fix:** Delete `frontend/app/layout.tsx` after any merge from a branch
+that still has it. Anything master added to that file (e.g. the ChatBox
+mount) must be ported into `frontend/app/[locale]/layout.tsx` instead.
+This stays a hazard until the i18n branch lands on master.
+**Files affected:** `frontend/app/layout.tsx` (deleted),
+`frontend/app/[locale]/layout.tsx` (received the disabled ChatBox
+import + mount comments).
+
 ## Vietnamese text corrupts to `?` when piped through PowerShell 5.1
 **Date solved:** 2026-06-11
 **Symptom:** Seeding or updating Vietnamese test data by piping SQL (or
