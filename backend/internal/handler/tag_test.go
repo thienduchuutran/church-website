@@ -111,6 +111,7 @@ func TestTagHandler_Create_success(t *testing.T) {
 	h := NewTagHandler(&mockTagService{createdTag: &createdTag})
 	body := `{"name":"prayer"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithUserID(req.Context(), "test-admin"))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(middleware.WithUserID(req.Context(), "user-123"))
 	rec := httptest.NewRecorder()
@@ -149,6 +150,7 @@ func TestTagHandler_Create_conflict(t *testing.T) {
 	})
 	body := `{"name":"worship"}`
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/tags", bytes.NewBufferString(body))
+	req = req.WithContext(middleware.WithUserID(req.Context(), "test-admin"))
 	req.Header.Set("Content-Type", "application/json")
 	req = req.WithContext(middleware.WithUserID(req.Context(), "user-123"))
 	rec := httptest.NewRecorder()

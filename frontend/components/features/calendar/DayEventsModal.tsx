@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom'
 import { X, Plus, PencilSimple } from '@phosphor-icons/react'
 import { CalendarEvent, COLOR_MAP, EVENT_TYPE_LABELS } from './types'
 import CalendarIcon from './CalendarIcon'
+import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 
 interface DayEventsModalProps {
   date: string                    // YYYY-MM-DD
@@ -121,6 +122,16 @@ export default function DayEventsModal({
                     <p className="font-sans text-xs text-foreground/80 mt-1.5 leading-relaxed whitespace-pre-wrap">
                       {e.notes}
                     </p>
+                  )}
+                  {/*
+                    Per-event translation notice. Sits inside the same column
+                    as the title/notes so it's clearly associated with this
+                    event, not the modal as a whole.
+                  */}
+                  {e.machine_translated && (
+                    <div className="mt-1.5">
+                      <MachineTranslatedBadge />
+                    </div>
                   )}
                 </div>
 

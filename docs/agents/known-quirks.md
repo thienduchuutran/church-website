@@ -15,6 +15,29 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Vietnamese text corrupts to `?` when piped through PowerShell 5.1
+**Date solved:** 2026-06-11
+**Symptom:** Seeding or updating Vietnamese test data by piping SQL (or
+Python source containing Vietnamese literals) into `psql` / `python -` from
+Windows PowerShell 5.1 stores literal `?` characters in place of every
+accented character. Example: `Buổi thờ phượng` arrives as `Bu?i th? ph??ng`.
+The data looks fine in the here-string but is already corrupted by the time
+the child process reads stdin.
+**Root cause:** Windows PowerShell 5.1 re-encodes text piped to native
+executables using the console output encoding (a legacy codepage like cp1252
+or cp437), which has no Vietnamese characters - each one degrades to `?`.
+This corrupts the *input*; it is not a display issue. The production paths
+are unaffected: Go + pgx and psycopg2 parameter binding are UTF-8 end to end.
+**Fix:** Never pipe non-ASCII content through PowerShell stdin. Put the SQL
+or Python in a file (UTF-8) and pass the *path* (`psql -f file.sql`,
+`python file.py`) so the bytes never transit the console encoding. Printing
+Vietnamese to the PowerShell console can also raise `UnicodeEncodeError`
+under cp1252 - keep verification output ASCII (compare in-process, print
+True/False) or set `$env:PYTHONIOENCODING = 'utf-8'`.
+**Files affected:** none in the repo - dev-environment workflow only.
+
+---
+
 ## Public read endpoints intentionally have no auth - do not "fix" them
 **Date noted:** 2026-04-27
 **Symptom:** An agent reviewing `cmd/server/main.go` notices that

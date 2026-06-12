@@ -1,0 +1,11 @@
+{
+  "Common": {
+    "machineTranslated": "Bản dịch tự động"
+  },
+  "Language": {
+    "label": "Ngôn ngữ",
+    "en": "Tiếng Anh",
+    "vi": "Tiếng Việt",
+    "switchTo": "Chuyển sang {language}"
+  }
+}

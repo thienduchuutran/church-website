@@ -53,6 +53,30 @@ body {
   font-family: var(--font-sans, Arial, Helvetica, sans-serif);
 }
 
+/* ─── iOS input-zoom guard ───
+   iOS Safari force-zooms the page when any focused text control computes a
+   font-size below 16px. This single rule floors EVERY editable control -
+   inputs, selects, textareas, contenteditable editors - at 16px on touch
+   and phone-width screens, so no individual form component ever has to
+   remember this again.
+   - Must stay OUTSIDE @layer: Tailwind v4 utilities live in @layer
+     utilities, and un-layered CSS outranks them, so a stray `text-sm`
+     on a future input can never reintroduce the zoom.
+   - !important: also outranks CSS-module class selectors (e.g. editor
+     toolbar styles), which would otherwise win on specificity.
+   - max(16px, 1em): a floor, not a fixed size - intentionally larger
+     inputs keep their size.
+   - (pointer: coarse) covers phones in landscape, which are wider than
+     the 639px breakpoint but still zoom. */
+@media (max-width: 639px), (pointer: coarse) {
+  input,
+  select,
+  textarea,
+  [contenteditable='true'] {
+    font-size: max(16px, 1em) !important;
+  }
+}
+
 /* Keyboard focus: terracotta ring matches PRODUCT interactive color */
 :where(a, button, input, textarea, select, summary):focus-visible {
   outline: 2px solid var(--primary);

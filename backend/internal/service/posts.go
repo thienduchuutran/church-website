@@ -9,6 +9,7 @@ import (
 	"github.com/thienduchuutran/church-website/backend/internal/discord"
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
+	"github.com/thienduchuutran/church-website/backend/internal/translation"
 )
 
 // PostImageRepo is the subset of the gallery repository PostService needs to
@@ -46,10 +47,11 @@ const presignTTL = 1 * time.Hour
 
 type PostService struct {
 	posts      *repository.PostRepository
-	images     PostImageRepo    // optional - nil-safe; when nil, posts are returned without images
-	presigner  URLPresigner     // optional - nil-safe; when nil, non-gallery images carry only storage_key
-	publicURLs PublicURLBuilder // optional - nil-safe; when nil, gallery images fall back to presigning
+	images     PostImageRepo            // optional - nil-safe; when nil, posts are returned without images
+	presigner  URLPresigner             // optional - nil-safe; when nil, non-gallery images carry only storage_key
+	publicURLs PublicURLBuilder         // optional - nil-safe; when nil, gallery images fall back to presigning
 	tags       *repository.TagRepository // optional - nil-safe; when nil, gallery posts have no tags
+	enqueue    translation.EnqueueFn    // optional - nil-safe; when nil, no translation jobs are fired
 }
 
 // NewPostService builds a post service. `images`, `presigner`, `publicURLs`, and `tags`
@@ -67,7 +69,16 @@ func (s *PostService) SetTagRepository(tags *repository.TagRepository) {
 	s.tags = tags
 }
 
-// Create validates the request, persists the post, and fires a Discord notification.
+// SetTranslationQueue wires the async translation enqueuer. Same pattern as
+// SetTagRepository - separate setter so a fresh dev environment with no AI
+// keys keeps the post service working; translation is opt-in.
+func (s *PostService) SetTranslationQueue(enqueue translation.EnqueueFn) {
+	s.enqueue = enqueue
+}
+
+// Create validates the request, persists the post, and fires two side effects:
+// a Discord webhook (existing behavior) and a translation job (new). Both run
+// in goroutines so the handler returns to the client immediately.
 func (s *PostService) Create(ctx context.Context, req model.CreatePostRequest, userID string) (*model.Post, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validation: %w", err)
@@ -92,11 +103,13 @@ func (s *PostService) Create(ctx context.Context, req model.CreatePostRequest, u
 		}
 	}()
 
+	s.fireTranslation(post.ID, post.Title, post.Body)
+
 	return post, nil
 }
 
-func (s *PostService) List(ctx context.Context, postType *model.PostType, tagIDs []string, limit, offset int) ([]model.Post, error) {
-	posts, err := s.posts.GetPosts(ctx, postType, tagIDs, limit, offset)
+func (s *PostService) List(ctx context.Context, postType *model.PostType, tagIDs []string, limit, offset int, locale string) ([]model.Post, error) {
+	posts, err := s.posts.GetPosts(ctx, postType, tagIDs, limit, offset, locale)
 	if err != nil {
 		return nil, err
 	}
@@ -111,8 +124,8 @@ func (s *PostService) List(ctx context.Context, postType *model.PostType, tagIDs
 	return posts, nil
 }
 
-func (s *PostService) Get(ctx context.Context, id string) (*model.Post, error) {
-	post, err := s.posts.GetPostByID(ctx, id)
+func (s *PostService) Get(ctx context.Context, id, locale string) (*model.Post, error) {
+	post, err := s.posts.GetPostByID(ctx, id, locale)
 	if err != nil {
 		return nil, err
 	}
@@ -130,12 +143,78 @@ func (s *PostService) Get(ctx context.Context, id string) (*model.Post, error) {
 	return post, nil
 }
 
+// Update fetches the existing post, applies the patch, then enqueues
+// translation only for fields that actually changed. The diff matters
+// because a PATCH with the same title should not re-fire a translation
+// job, even though the cache lookup would absorb the cost - silence in
+// logs is worth the extra read.
 func (s *PostService) Update(ctx context.Context, id string, req model.UpdatePostRequest) (*model.Post, error) {
-	return s.posts.UpdatePost(ctx, id, req)
+	existing, err := s.posts.GetPostByID(ctx, id, "")
+	if err != nil {
+		return nil, err
+	}
+
+	updated, err := s.posts.UpdatePost(ctx, id, req)
+	if err != nil {
+		return nil, err
+	}
+
+	changedFields := map[string]string{}
+	if req.Title != nil && *req.Title != existing.Title {
+		changedFields["title"] = updated.Title
+	}
+	if req.Body != nil && !stringPtrEqual(req.Body, existing.Body) {
+		if updated.Body != nil {
+			changedFields["body"] = *updated.Body
+		}
+	}
+	if len(changedFields) > 0 {
+		s.enqueueFields(updated.ID, changedFields)
+	}
+
+	return updated, nil
 }
 
 func (s *PostService) Delete(ctx context.Context, id string) error {
 	return s.posts.DeletePost(ctx, id)
+}
+
+// fireTranslation enqueues a job for the title/body of a freshly-created post.
+// Nil-safe: bails when no body and no title (shouldn't happen since title is
+// required, but defensive) or when no enqueue function is wired.
+func (s *PostService) fireTranslation(postID, title string, body *string) {
+	fields := map[string]string{}
+	if title != "" {
+		fields["title"] = title
+	}
+	if body != nil && *body != "" {
+		fields["body"] = *body
+	}
+	s.enqueueFields(postID, fields)
+}
+
+func (s *PostService) enqueueFields(postID string, fields map[string]string) {
+	if s.enqueue == nil || len(fields) == 0 {
+		return
+	}
+	s.enqueue(translation.TranslationJob{
+		TableName:     "posts",
+		RecordID:      postID,
+		Fields:        fields,
+		TargetLocales: []string{"vi"},
+		ContentType:   translation.ContentTypeGeneral,
+	})
+}
+
+func stringPtrEqual(a, b *string) bool {
+	switch {
+	case a == nil && b == nil:
+		return true
+	case a == nil || b == nil:
+		return false
+	default:
+		return *a == *b
+	}
 }
 
 // attachImages fills Post.Images for each post in-place. Gallery_album images

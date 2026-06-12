@@ -52,12 +52,21 @@ export function postToFormState(post: Post): PostFormState {
   }
 }
 
+// eventDate is composed from two optional inputs (date + time), so it can be
+// partial: "YYYY-MM-DDT" (no time) or "THH:mm" (no date). A date without a
+// time defaults to midnight; a time without a date is meaningless - drop it.
+function eventDateToIso(eventDate: string): string | null {
+  const [date, time] = eventDate.split('T')
+  if (!date) return null
+  return datetimeLocalToIso(`${date}T${time || '00:00'}`)
+}
+
 export function toPostPayload(section: string, state: PostFormState): PostPayload {
   return {
     type: section as PostType,
     title: state.title,
     body: state.body || null,
-    event_date: state.eventDate ? datetimeLocalToIso(state.eventDate) : null,
+    event_date: eventDateToIso(state.eventDate),
     external_link: state.externalLink || null,
   }
 }

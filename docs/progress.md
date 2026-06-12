@@ -3,6 +3,60 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+<<<<<<< HEAD
+## 2026-06-12 - Orphan cleanup for the translation engine (closes the "Phase 7" loose end)
+
+When an admin deletes a post/page section/calendar event, its translations lingered forever (the `translations` table has no FKs by design) and cluttered the review panel with `posts:a1b2c3d4`-style labels. Now a "Clean up orphans" button on `/admin/translations` sweeps them. Built TDD-first per the AGENTS.md workflow (handler test → repository → service → handler → route → UI → docs).
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/handler/admin_translations_test.go` | New test file: mock `adminTranslationService`, tests for success / zero-count / service-error | TDD rule; the handler package previously had no translations tests |
+| `backend/internal/repository/translation.go` | `DeleteOrphanedTranslations` + `DeleteOrphanedPendingJobs`, sharing an `orphanConditions` whitelist of the four known table_names | Whitelist over blacklist: an unrecognized `table_name` (future content type) is never swept, so the cleanup can't eat valid translations it doesn't understand. Pending jobs must be swept too or the worker re-creates the orphan ~5s later; done/failed jobs stay as audit history |
+| `backend/internal/service/translation.go` | `CleanupOrphans` - jobs first, then translations | Sweeping jobs last would leave a window where a just-drained job re-creates an orphan the sweep already deleted |
+| `backend/internal/handler/admin_translations.go` + `cmd/server/main.go` | `CleanupOrphans` handler + `POST /admin/translations/cleanup-orphans` (admin group) | Returns 200 (not 202) - the sweep is synchronous, counts are final |
+| `frontend/lib/translations.ts` + `app/[locale]/admin/translations/page.tsx` | `cleanupOrphanTranslations` helper + "Clean up orphans" button beside "Re-translate all pending", with a confirm that names exactly what gets deleted | Human-triggered, matching the review panel's human-in-the-loop philosophy; orphan volume at church scale never justifies an automatic background sweep |
+
+Deliberately NOT swept: `fine_tuning_examples` - captured training pairs are designed to survive parent deletion.
+
+Verified: 3 new handler tests pass; SQL exercised against the local Docker Postgres in a rolled-back transaction (orphans deleted including approved ones, unknown table_name kept, failed job kept); `tsc --noEmit` clean.
+
+## 2026-06-11 - Fine-tuning data capture pipeline (additive, zero behavior change)
+
+Every admin approval on `/admin/translations` now silently captures a gold (English source, approved Vietnamese) pair into a new `fine_tuning_examples` table - the dataset for a future LoRA fine-tune of an open-source translation model (full roadmap: `docs/FINE_TUNING_PLAN.md`). Nothing in the serving path changed; the existing translation engine's design rules are untouched.
+
+### Phase 1 - Database
+
+| File | Change | Why |
+|---|---|---|
+| `backend/migrations/000005_fine_tuning_examples.up.sql` | New `fine_tuning_examples` table (`source_en`, `approved_vi`, `content_type`, `source_field`, `record_table`, `record_id`, `approved_by`, `used_in_training`, `training_run_id`). Partial index on `used_in_training = false`; unique index on `(record_id, source_field, record_table)` | The table IS the dataset. The unique index makes capture idempotent (double-approve = no-op); the partial index keeps exporter scans cheap as consumed rows pile up. No FKs - a deleted post must not delete its training pair, matching the `translations` convention |
+| `backend/migrations/000005_fine_tuning_examples.down.sql` | `drop table if exists` | Reversibility in dev, matching every other migration pair |
+
+### Phase 2 - Backend
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/repository/finetuning.go` | `FinetuningExample` struct + `CaptureFinetuningExample` on `TranslationRepository`: `INSERT ... ON CONFLICT (record_id, source_field, record_table) DO NOTHING` | Repository owns the raw SQL (3-layer rule); ON CONFLICT means the call never errors on duplicates |
+| `backend/internal/service/translation.go` | After `repo.Approve` succeeds, `captureFinetuningExample(t)` fires a goroutine with `context.Background()` that logs failures and never returns them | Same fire-and-forget pattern as the translation enqueue. Approval is mandatory, capture is best-effort. One hook covers both approve-as-is and edit+approve because both flow through `Approve` - and the repo's `RETURNING` already hands back `source_text` + final `translated_text`, so no extra query |
+
+### Phase 3 - Export tooling
+
+| File | Change | Why |
+|---|---|---|
+| `scripts/export_training_pairs.py` | Pulls `used_in_training = false` rows + the live `vi_translation` system prompt, writes HuggingFace SFTTrainer JSONL (`system`/`user`/`assistant` messages + metadata) to `fine_tuning_data/training_YYYY-MM-DD.jsonl`. `--dry-run` prints count breakdowns only. Deliberately never flips `used_in_training` | Pairs leave the DB in exactly the format the future training notebook consumes, carrying the same system prompt the model will see at inference. Re-export stays lossless; marking pairs consumed is the training run's job |
+| `.gitignore` | `fine_tuning_data/` | Dataset artifacts, not source |
+
+### Phase 4 - Documentation
+
+`docs/FINE_TUNING_PLAN.md` (why Qwen2.5-7B-Instruct, the Southern-dialect rationale, Phases 0-3 with eval gates), `docs/agents/database.md` (table doc + migration list), `docs/agents/backend.md` (folder map + capture section), `AGENTS.md` (routing rule).
+
+### Architecture notes (resume bullets)
+- **Human-in-the-loop review doubles as dataset labeling.** The approval flow the admins already use produces training pairs as a free side effect - no separate annotation workflow, no extra UI.
+- **Best-effort side effects stay off the critical path.** Capture mirrors the engine's enqueue pattern: goroutine + `context.Background()` + log-and-swallow. An INSERT failure can never fail an approval.
+- **Idempotency via constraint, not application logic.** `ON CONFLICT DO NOTHING` against a unique index is the whole dedup story; no read-before-write race.
+
+### Current status / next trigger
+Phase 0 (collection) is live. Run `python scripts/export_training_pairs.py --dry-run` periodically; at 200+ pairs with a healthy content-type mix, start Phase 1 of `docs/FINE_TUNING_PLAN.md` (first LoRA experiment on Colab).
+=======
 ## 2026-05-20 - AI Church Assistant (VGOMNE Helper) with RAG Pipeline
 
 Designed and built an intelligent, context-aware chatbot helper for church visitors. It retrieves church posts, events, announcements, and static page content dynamically using a robust search-fallback keyword-matching RAG pipeline, synthesized using Groq (llama-3.3-70b-versatile).
@@ -29,6 +83,7 @@ Designed and built an intelligent, context-aware chatbot helper for church visit
    - Documented the entire feature inside `docs/api.md`, `docs/components.md`, `docs/agents/backend.md`, and `docs/agents/frontend.md`.
 
 ---
+>>>>>>> f457d2f6da2dcd3e0e99857f6c8b96bb7578833e
 
 ## 2026-05-15 - Full AWS exodus to serverless ($0/month infrastructure)
 

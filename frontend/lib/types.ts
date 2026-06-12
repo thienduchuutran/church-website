@@ -26,6 +26,11 @@ export interface Post {
   images?: PostImage[]
   // Backend populates tags only for gallery_album posts
   tags?: Tag[]
+  // True when this response is in a non-English locale AND at least one
+  // served field (title or body) came from an unapproved AI translation.
+  // Omitted on English responses (the backend uses Go's omitempty). The
+  // MachineTranslatedBadge component reads this to decide whether to render.
+  machine_translated?: boolean
 }
 
 export interface PostImage {

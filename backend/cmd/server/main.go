@@ -4,10 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"strings"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -23,6 +24,7 @@ import (
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
 	"github.com/thienduchuutran/church-website/backend/internal/service"
 	"github.com/thienduchuutran/church-website/backend/internal/storage"
+	"github.com/thienduchuutran/church-website/backend/internal/translation"
 	"github.com/thienduchuutran/church-website/backend/migrations"
 	"github.com/thienduchuutran/church-website/backend/pkg/database"
 )
@@ -81,6 +83,58 @@ func main() {
 		defer dbPool.Close()
 	}
 
+	// Translation engine wiring.
+	//
+	// enqueueTranslation is the function content services call to fan out a
+	// translation job. It is built whenever the DB pool exists, independent
+	// of whether API keys are present - jobs always enqueue cleanly; whether
+	// they get processed depends on the worker, which only starts when at
+	// least one AI key is configured. The closure launches its own goroutine
+	// with a fresh background context so the calling HTTP request can return
+	// to the client immediately, and a 10s timeout so a stalled DB does not
+	// leak goroutines forever.
+	//
+	// The worker Stop defer is registered after dbPool.Close so it runs
+	// first on shutdown: stop accepting new translate work, then tear down
+	// the pool.
+	var (
+		translationWorker  *translation.Worker
+		enqueueTranslation translation.EnqueueFn
+	)
+	if dbPool != nil {
+		enqueueTranslation = func(job translation.TranslationJob) {
+			go func() {
+				bg, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+				defer cancel()
+				if err := translation.EnqueueTranslation(bg, dbPool, job); err != nil {
+					log.Printf("enqueue translation job (table=%s record=%s): %v", job.TableName, job.RecordID, err)
+				}
+			}()
+		}
+
+		geminiKey := os.Getenv("GEMINI_API_KEY")
+		claudeKey := os.Getenv("ANTHROPIC_API_KEY")
+		if geminiKey != "" || claudeKey != "" {
+			supported := []string{"vi"}
+			if raw := os.Getenv("SUPPORTED_LOCALES"); raw != "" {
+				supported = strings.Split(raw, ",")
+			}
+			interval := 5 * time.Second
+			if raw := os.Getenv("TRANSLATION_WORKER_INTERVAL"); raw != "" {
+				if secs, err := strconv.Atoi(raw); err == nil && secs > 0 {
+					interval = time.Duration(secs) * time.Second
+				}
+			}
+			translator := translation.NewTranslator(dbPool, geminiKey, claudeKey, supported)
+			translationWorker = translation.NewWorker(translator, dbPool, interval)
+			translationWorker.Start(ctx)
+			defer translationWorker.Stop()
+			log.Printf("translation worker enabled (gemini=%t claude=%t)", geminiKey != "", claudeKey != "")
+		} else {
+			log.Println("translation worker disabled (no GEMINI_API_KEY or ANTHROPIC_API_KEY) - jobs will enqueue but not drain")
+		}
+	}
+
 	// Initialize JWKS cache and fetch Supabase public keys
 	jwksCache := appMiddleware.NewJWKSCache()
 	if err := jwksCache.FetchAndCacheKeys(supabaseURL); err != nil {
@@ -103,6 +157,7 @@ func main() {
 	var galleryHandler *handler.GalleryHandler
 	var calendarHandler *handler.CalendarHandler
 	var heroVideoHandler *handler.HeroVideoHandler
+	var adminTranslationsHandler *handler.AdminTranslationsHandler
 	var assistantHandler *handler.AssistantHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
@@ -146,6 +201,9 @@ func main() {
 			}
 		}
 		postSvc := service.NewPostService(postRepo, galleryRepo, presigner, publicURLs)
+		if enqueueTranslation != nil {
+			postSvc.SetTranslationQueue(enqueueTranslation)
+		}
 		postHandler = handler.NewPostHandler(postSvc)
 
 		// Tag service and handler. Wired into PostService so gallery albums
@@ -161,10 +219,16 @@ func main() {
 
 		pageRepo := repository.NewPageRepository(dbPool)
 		pageSvc := service.NewPageService(pageRepo)
+		if enqueueTranslation != nil {
+			pageSvc.SetTranslationQueue(enqueueTranslation)
+		}
 		pageHandler = handler.NewPageHandler(pageSvc)
 
 		calendarRepo := repository.NewCalendarRepository(dbPool)
 		calendarSvc := service.NewCalendarService(calendarRepo)
+		if enqueueTranslation != nil {
+			calendarSvc.SetTranslationQueue(enqueueTranslation)
+		}
 		calendarHandler = handler.NewCalendarHandler(calendarSvc)
 
 		// Hero video: requires S3 for upload and storage. Presigner decorates
@@ -177,6 +241,15 @@ func main() {
 			heroVideoHandler = handler.NewHeroVideoHandler(heroVideoSvc)
 		}
 
+		// Admin translation review panel. The service shares the same enqueue
+		// closure as the content services so the "Re-translate" action can
+		// re-queue work for the worker. List + Approve work without an AI key.
+		translationRepo := repository.NewTranslationRepository(dbPool)
+		translationSvc := service.NewTranslationService(translationRepo)
+		if enqueueTranslation != nil {
+			translationSvc.SetTranslationQueue(enqueueTranslation)
+		}
+		adminTranslationsHandler = handler.NewAdminTranslationsHandler(translationSvc)
 		// AI Assistant: RAG chatbox for visitors. Requires GROQ_API_KEY to call
 		// the LLM. If the key is missing the handler stays nil and the route is
 		// skipped — the frontend chatbox will show a graceful error.
@@ -274,6 +347,25 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Post("/posts/{id}/images", galleryHandler.UploadImage)
+			})
+		}
+
+		// Admin translation review panel. All routes are admin-only.
+		//   GET    /admin/translations                   list with filters (locale, approved, pagination)
+		//   PATCH  /admin/translations/{id}              approve as-is or with edits
+		//   POST   /admin/translations/retranslate/{id}  delete current + re-enqueue
+		//   POST   /admin/translations/retranslate-all   bulk: delete + re-enqueue every unapproved row
+		//   POST   /admin/translations/cleanup-orphans   delete translations whose parent record is gone
+		// retranslate-all is registered before retranslate/{id} so chi's router
+		// doesn't accidentally route "retranslate-all" into the {id} param.
+		if adminTranslationsHandler != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Get("/admin/translations", adminTranslationsHandler.List)
+				r.Patch("/admin/translations/{id}", adminTranslationsHandler.Approve)
+				r.Post("/admin/translations/retranslate-all", adminTranslationsHandler.RetranslateAll)
+				r.Post("/admin/translations/retranslate/{id}", adminTranslationsHandler.Retranslate)
+				r.Post("/admin/translations/cleanup-orphans", adminTranslationsHandler.CleanupOrphans)
 			})
 		}
 

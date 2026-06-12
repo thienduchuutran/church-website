@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useLocale } from 'next-intl'
 import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import TagFilterChips from './TagFilterChips'
 import AlbumGrid from './AlbumGrid'
 
 export default function GalleryContent() {
+  const locale = useLocale()
   const [albums, setAlbums] = useState<Post[]>([])
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -19,6 +21,7 @@ export default function GalleryContent() {
           type: 'gallery_album',
           limit: 100,
           tags: selectedTagId ? [selectedTagId] : undefined,
+          locale,
         })
 
         setAlbums(data)
@@ -31,7 +34,7 @@ export default function GalleryContent() {
     }
 
     fetchAlbums()
-  }, [selectedTagId])
+  }, [selectedTagId, locale])
 
   return (
     <>

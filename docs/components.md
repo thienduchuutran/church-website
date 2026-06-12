@@ -54,6 +54,70 @@ Renders the church's social media follow icons (YouTube, Facebook, Instagram) in
 
 ---
 
+### `LanguageSwitcher`
+Switches between English and Vietnamese without page reload. Lives in the Navbar's right cluster, just left of `SocialIconBar`.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `className` | `string` | `''` | Extra classes appended to the outer pill group |
+
+**Behavior:**
+- Reads the active locale via `useLocale()` from `next-intl`.
+- On click, calls `router.replace(pathname, { locale: target })` from `@/i18n/routing` - the locale-aware router automatically strips/adds the prefix so the user stays on the equivalent path in the new language (e.g. `/vi/events` ↔ `/events`).
+- next-intl middleware writes the new value into the `NEXT_LOCALE` cookie on the response, so the choice persists across visits.
+- Wraps the navigation in `useTransition`; the inactive button dims (`opacity-60`) while the route is committing.
+
+**Responsive form:**
+- **Desktop (`md+`):** both `EN` and `VI` pills visible. The active one carries `bg-primary/10 text-primary`; the inactive shows `text-muted`. Standard A/B toggle pattern.
+- **Mobile (below `md`):** only the **inactive** pill is visible - it acts as a single "switch to X" button. Reasoning: the navbar right cluster already carries logo, social icons, and hamburger (~240px). Adding two 44px pills would overflow on iPhone-SE-class widths (343px content). Hiding the active pill keeps the WCAG-compliant 44x44 tap target while saving 46px.
+
+**Accessibility:**
+- Each button has `aria-pressed` set to the active state.
+- `aria-label="Switch to <full language name>"` from the `Language.switchTo` message key.
+- `title` tooltip with the localized language name.
+- The outer `<div role="group" aria-label="Language">` (`Language.label` message key) groups the toggle for screen readers.
+
+**Message keys (in `messages/{en,vi}.json`):**
+```json
+"Language": {
+  "label": "Language",
+  "en": "English",
+  "vi": "Vietnamese",
+  "switchTo": "Switch to {language}"
+}
+```
+
+**Client component:** yes (uses `useTransition`, `useLocale`, locale-aware `useRouter`/`usePathname`).
+
+---
+
+### `MachineTranslatedBadge`
+Small italic "Bản dịch tự động" notice that flags content served from an unapproved AI translation. Lives at the bottom of post cards, beside calendar event titles inside `DayEventsModal`, under the month note on the calendar shell, and below the page hero on About/Connect.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `className` | `string` | `''` | Extra classes appended to the `<span>` for layout (e.g. `mt-2` when stacking under other content) |
+
+**Design tokens (from Phase 4 spec):**
+- Color: terracotta `#C4663C` via inline style (so the badge keeps its brand color even if a parent surface uses a different palette).
+- Font size: `10px` (`text-[10px]`) - deliberately quiet.
+- `italic` - softens the visual weight further.
+- Text: read from `Common.machineTranslated` in the active locale's messages JSON.
+
+**Render guard.** Callers must wrap the badge in `{record.machine_translated && <MachineTranslatedBadge />}`. The Go backend omits the field on English responses and on human-approved translations, so the badge correctly disappears for both - but never render unconditionally.
+
+**Where it appears:**
+- `PostCard` - bottom-right of the action row, below `ReactionBar`.
+- `DayEventsModal` - per-event, beneath each event's notes (when present).
+- `CalendarShell` - under the month note text.
+- `app/[locale]/about/page.tsx`, `app/[locale]/connect/page.tsx` - centered under the hero subtitle, since the page itself is the unit (no per-section cards).
+
+**Client component:** no - reads translations via `useTranslations('Common')` from `next-intl`, which works in server components when the page tree includes `NextIntlClientProvider`. The badge is a pure presentational server component.
+
+---
+
 ## Feature components (`components/features/`)
 
 May contain business logic, API calls, and local state.
@@ -156,6 +220,38 @@ Flat photo grid showing the most recent images across all albums.
 | `images` | `PostImage[]` | required | Flat array of images |
 
 **Client component:** no
+
+---
+
+### `TranslationReviewItem`
+Two-column side-by-side diff card for the `/admin/translations` review panel. English source on the left (read-only), Vietnamese translation on the right (editable textarea). Three action buttons: Approve as-is, Save edits, Re-translate.
+
+**Props**
+| Prop | Type | Description |
+|------|------|-------------|
+| `item` | `AdminTranslation` | The translation row from `GET /api/v1/admin/translations`, including the synthesized `record_title` |
+| `onChange` | `() => void` | Called after a successful approve / retranslate so the parent list refreshes |
+| `onApprove` | `(id, translatedText \| null) => Promise<void>` | Approve handler. Pass null for "approve as-is", a string for "save edits". |
+| `onRetranslate` | `(id) => Promise<void>` | Retranslate handler. The component shows a `window.confirm` before calling - this is destructive (deletes the row + re-enqueues) |
+
+**Design tokens:**
+- Approve as-is: `bg-primary` (terracotta `#C4663C`), white text - primary CTA
+- Save edits: sage `#4A7A5C` background, white text - only colored when `hasEdits === true`, otherwise muted disabled state
+- Re-translate: ghost (transparent, `text-muted`, hover bg) - secondary destructive action
+
+**State:**
+- `text` - controlled textarea, seeded from `item.translated_text`
+- `hasEdits` - computed: `text !== item.translated_text`, drives Save button enable state
+- `submitting` - one of `null | 'approve' | 'save' | 'retranslate'` so each button can show its own "…ing" label
+
+**Table label badges** (color-coded per `table_name`):
+- `posts` → "Post" (terracotta tint)
+- `page_content` → "Page" (amber tint)
+- `calendar_events` → "Event" (accent tint)
+- `calendar_month_notes` → "Month note" (emerald tint)
+- unknown → raw `table_name` (muted)
+
+**Client component:** yes (textarea state, async submit, window.confirm).
 
 ---
 

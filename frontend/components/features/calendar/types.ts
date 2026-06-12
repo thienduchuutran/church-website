@@ -12,6 +12,10 @@ export interface CalendarEvent {
   admin_id: string | null
   created_at: string
   updated_at: string
+  // True when this event's title or notes came from an unapproved AI
+  // translation. Omitted on English responses. Drives the badge in the
+  // calendar tile.
+  machine_translated?: boolean
 }
 
 export interface CalendarMonthNote {
@@ -22,6 +26,9 @@ export interface CalendarMonthNote {
   admin_id: string | null
   created_at: string
   updated_at: string
+  // Same semantics as CalendarEvent.machine_translated - applies to the
+  // sidebar note's content field.
+  machine_translated?: boolean
 }
 
 export interface CalendarMonthSettings {

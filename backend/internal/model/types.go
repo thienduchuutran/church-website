@@ -49,6 +49,12 @@ type Post struct {
 	Images       []PostImage     `json:"images,omitempty"`
 	Reactions    []ReactionCount `json:"reactions,omitempty"`
 	Tags         []Tag           `json:"tags,omitempty"`
+	// MachineTranslated is true when the response is in a non-English locale
+	// AND at least one rendered field was served from translations (rather
+	// than the English source) AND that translation has not been human-approved.
+	// The frontend reads this to render the subtle "Bản dịch tự động" badge.
+	// Omitted when the request locale is English (no translation involved).
+	MachineTranslated bool `json:"machine_translated,omitempty"`
 }
 
 type PostImage struct {
@@ -107,9 +113,6 @@ func (r *CreatePostRequest) Validate() error {
 	case PostTypeEvent, PostTypeAnnouncement, PostTypeBibleStudy, PostTypePlaylist, PostTypeGalleryAlbum:
 	default:
 		return fmt.Errorf("invalid post type: %s", r.Type)
-	}
-	if r.Type == PostTypeEvent && r.EventDate == nil {
-		return errors.New("event_date is required for events")
 	}
 	return nil
 }
@@ -175,6 +178,10 @@ type CalendarEvent struct {
 	AdminID   *string           `json:"admin_id"`
 	CreatedAt time.Time         `json:"created_at"`
 	UpdatedAt time.Time         `json:"updated_at"`
+	// MachineTranslated: see Post.MachineTranslated. True when this event's
+	// title or notes were served via an unapproved AI translation. Omitted
+	// from JSON on English responses and on approved translations.
+	MachineTranslated bool `json:"machine_translated,omitempty"`
 }
 
 type CalendarMonthNote struct {
@@ -185,6 +192,9 @@ type CalendarMonthNote struct {
 	AdminID   *string   `json:"admin_id"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// MachineTranslated: true when this month note's content was served via
+	// an unapproved AI translation. Omitted on English responses.
+	MachineTranslated bool `json:"machine_translated,omitempty"`
 }
 
 // CalendarMonthSettings is the per-month admin-configurable styling for the
@@ -328,6 +338,55 @@ type PageContent struct {
 // UpdatePageRequest is the request body for PUT /api/v1/pages/:slug.
 type UpdatePageRequest struct {
 	Sections map[string]string `json:"sections"`
+}
+
+// --- Translation review types ---
+
+// Translation mirrors a row in the `translations` table. Used by the admin
+// review panel; the public read path returns translated text inline via the
+// COALESCE join, never as a Translation struct.
+type Translation struct {
+	ID             string     `json:"id"`
+	TableName      string     `json:"table_name"`
+	RecordID       string     `json:"record_id"`
+	FieldName      string     `json:"field_name"`
+	Locale         string     `json:"locale"`
+	SourceText     string     `json:"source_text"`
+	TranslatedText string     `json:"translated_text"`
+	IsAIGenerated  bool       `json:"is_ai_generated"`
+	ApprovedBy     *string    `json:"approved_by"`
+	ApprovedAt     *time.Time `json:"approved_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	UpdatedAt      time.Time  `json:"updated_at"`
+}
+
+// TranslationListItem is a Translation plus the human-readable label of its
+// parent record, synthesized in SQL via a CASE on table_name. The bilingual
+// reviewer needs this label to know which post/page/event they are looking
+// at - the bare table_name + record_id pair gives them no context.
+type TranslationListItem struct {
+	Translation
+	// RecordTitle is one of:
+	//   posts                  -> the post's title
+	//   page_content           -> "<page_slug> / <section_key>"
+	//   calendar_events        -> "<title> · <date>"
+	//   calendar_month_notes   -> "Month note · YYYY-MM"
+	// Falls back to "<table_name>:<short uuid>" if the parent row was deleted.
+	RecordTitle string `json:"record_title"`
+}
+
+// TranslationListResponse is the GET /admin/translations response shape.
+// Total enables pagination UI without a second HEAD/COUNT request.
+type TranslationListResponse struct {
+	Items []TranslationListItem `json:"items"`
+	Total int                   `json:"total"`
+}
+
+// ApproveTranslationRequest is the PATCH /admin/translations/:id body.
+// translated_text is optional - omit it to approve the AI output as-is,
+// include it to approve a human-edited version.
+type ApproveTranslationRequest struct {
+	TranslatedText *string `json:"translated_text"`
 }
 
 // --- Request types for tags ---

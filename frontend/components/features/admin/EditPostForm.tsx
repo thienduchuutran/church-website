@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
 import { updatePost, replaceTags } from '@/lib/posts'
 import type { Post } from '@/lib/types'

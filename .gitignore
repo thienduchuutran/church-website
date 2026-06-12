@@ -17,6 +17,9 @@ backend/tmp/
 # Compiled binaries
 *.exe
 
+# Fine-tuning dataset exports (scripts/export_training_pairs.py output)
+fine_tuning_data/
+
 # OS junk
 .DS_Store
 Thumbs.db

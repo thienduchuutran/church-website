@@ -1,6 +1,6 @@
 'use client'
 
-import { usePathname } from 'next/navigation'
+import { usePathname } from '@/i18n/routing'
 import { useEffect, useRef, useState } from 'react'
 
 // Shows a thin progress bar at the top of the page immediately on link click,
