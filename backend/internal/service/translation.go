@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
@@ -52,7 +53,42 @@ func (s *TranslationService) Approve(ctx context.Context, id, approverID string,
 	if err != nil {
 		return nil, fmt.Errorf("approve translation: %w", err)
 	}
+	s.captureFinetuningExample(t)
 	return t, nil
+}
+
+// captureFinetuningExample records the approved (English source, Vietnamese
+// final) pair into fine_tuning_examples - the training dataset for a future
+// fine-tuned model (docs/FINE_TUNING_PLAN.md). Both approve-as-is and
+// edit+approve land here because both flow through Approve; the edited case
+// is the most valuable pair (the human's preferred wording).
+//
+// Fire-and-forget with context.Background(), same pattern as the translation
+// enqueue: approval is mandatory, capture is best-effort. A capture failure
+// is logged and never surfaced to the admin. Re-approving the same row is a
+// silent no-op via ON CONFLICT in the repository.
+func (s *TranslationService) captureFinetuningExample(t *model.Translation) {
+	if t == nil || t.ApprovedBy == nil {
+		return
+	}
+	ex := repository.FinetuningExample{
+		SourceEN:   t.SourceText,
+		ApprovedVI: t.TranslatedText,
+		// The translations row does not carry the job's content_type, and the
+		// engine currently routes everything as general (Retranslate below
+		// re-enqueues with ContentTypeGeneral for the same reason). Revisit
+		// when pastoral routing carries through to the translations table.
+		ContentType: string(translation.ContentTypeGeneral),
+		SourceField: t.FieldName,
+		RecordTable: t.TableName,
+		RecordID:    t.RecordID,
+		ApprovedBy:  *t.ApprovedBy,
+	}
+	go func() {
+		if err := s.repo.CaptureFinetuningExample(context.Background(), ex); err != nil {
+			log.Printf("fine-tuning capture for translation %s: %v", t.ID, err)
+		}
+	}()
 }
 
 // RetranslateAll is the bulk version of Retranslate. It is meant to be run

@@ -48,7 +48,7 @@ backend/
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
 │   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue)
 │   │   ├── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue)
-│   │   └── translation.go      ← List/Approve/Retranslate for the admin review panel
+│   │   └── translation.go      ← List/Approve/Retranslate for the admin review panel; Approve also fire-and-forgets a fine-tuning pair capture
 │   ├── repository/
 │   │   ├── posts.go            ← InsertPost, GetPosts + GetPostByID (both take locale), UpdatePost, DeletePost
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
@@ -56,7 +56,8 @@ backend/
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
 │   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings
 │   │   ├── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections
-│   │   └── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete
+│   │   ├── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete
+│   │   └── finetuning.go       ← CaptureFinetuningExample: idempotent INSERT of gold (en, vi) pairs into fine_tuning_examples
 │   ├── translation/            ← Async EN→VI translation engine. See "Translation engine" section below.
 │   │   ├── models.go           ← TranslationJob, Translation, ContentType
 │   │   ├── prompt.go           ← PromptCache (5min TTL, falls back to stale on DB hiccup)
@@ -287,6 +288,20 @@ Lifecycle:
 
 The markdown-as-source / DB-as-runtime split keeps prompts diff-able and
 review-able in PRs while still letting them be hot-swapped without a deploy.
+
+### Fine-tuning data capture
+
+Every approval on `/admin/translations` (approve-as-is or edit+approve) also
+captures a gold `(source_en, approved_vi)` pair into `fine_tuning_examples` -
+the dataset for a future fine-tuned open-source translation model. The hook
+lives in `TranslationService.Approve` and is fire-and-forget, same pattern as
+the translation enqueue: a capture failure is logged, never surfaced, and
+never blocks the approval. Dedup is `ON CONFLICT (record_id, source_field,
+record_table) DO NOTHING` so double-approval is a silent no-op.
+
+Export the dataset as HuggingFace SFTTrainer JSONL with
+`python scripts/export_training_pairs.py` (use `--dry-run` for a count-only
+summary). Roadmap, base-model choice, and eval gates: `docs/FINE_TUNING_PLAN.md`.
 
 ---
 
