@@ -86,6 +86,7 @@ cd backend && go run ./cmd/server
 | Posts/events/announcements not showing up after a write   | `docs/agents/known-quirks.md` ("Posts created on production don't show up in the UI") |
 | FK violation on `posts_admin_id_fkey` or similar          | `docs/agents/known-quirks.md` ("Posting fails with `posts_admin_id_fkey`...") |
 | Vietnamese text showing as `?` after a script/seed on Windows | `docs/agents/known-quirks.md` ("Vietnamese text corrupts to `?` when piped through PowerShell 5.1") |
+| Prerender error on a `/en/*` or `/vi/*` page mentioning `use-intl` / `usePathname`, especially after merging master | `docs/agents/known-quirks.md` ("Merging master resurrects `app/layout.tsx` and breaks the i18n build") |
 | Whether an endpoint should require auth / "should I protect this read?" | `docs/agents/backend.md` → Auth contract + `cmd/server/main.go` route comments. **Default answer: no - public reads are intentional.** |
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |

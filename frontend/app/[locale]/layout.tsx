@@ -11,6 +11,9 @@ import PageTransition from '@/components/ui/PageTransition'
 import NavigationProgress from '@/components/ui/NavigationProgress'
 import SocialIconBar from '@/components/ui/SocialIconBar'
 import { routing } from '@/i18n/routing'
+// Temporarily disabled: AI assistant is not working yet. Uncomment this import
+// and the <ChatBox /> mount below to re-enable.
+// import ChatBox from '@/components/features/assistant/ChatBox'
 
 const inter = Inter({
   variable: '--font-sans',
@@ -107,6 +110,7 @@ export default async function LocaleLayout({
                   </p>
                 </div>
               </footer>
+              {/* <ChatBox /> */}
             </EditModalProvider>
           </AuthProvider>
         </NextIntlClientProvider>
