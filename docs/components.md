@@ -387,6 +387,45 @@ Inline contextual popover that lets an admin pick the accent color for the curre
 
 ---
 
+### Assistant (`components/features/assistant/`)
+
+#### `ChatBox`
+Floating AI assistant widget for the church website, appearing as a FAB in the bottom-right corner.
+
+**Props:** none  
+**Client component:** yes (state, conversation history, FAB toggling, scrolling effects)  
+**How it works**
+1. When clicked, opens a floating 380x520px dialog with an intro card.
+2. Offers four quick-question chips when empty. Clicking one sends that question immediately.
+3. Submits queries via `chatWithAssistant` from `lib/assistant.ts`.
+4. Saves full message entries with their citation sources to render inline.
+5. Employs typing indicators and handles network/rate-limit errors gracefully.
+
+---
+
+#### `ChatMessage`
+A single message bubble in the AI assistant conversation list.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `role` | `'user' \| 'assistant'` | required | Message sender role |
+| `content` | `string` | required | Text content from the user or assistant |
+| `sources` | `AssistantSource[]` | optional | Citation source references returned by the RAG backend |
+
+**Visuals:** User bubbles are primary (terracotta) aligned right. Assistant bubbles are surface-toned with a border, aligned left. Renders markdown-lite bold formatting (`**text**`) and safely escapes HTML to prevent XSS. Sources are rendered as labeled chips with icons.  
+**Client component:** yes
+
+---
+
+#### `TypingIndicator`
+Three-dot staggered bouncing typing indicator for the assistant thinking state.
+
+**Props:** none  
+**Client component:** yes
+
+---
+
 ## Adding a new component - checklist
 
 1. Place it in `components/ui/` (no business logic) or `components/features/<domain>/` (with logic).

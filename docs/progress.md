@@ -3,6 +3,7 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+<<<<<<< HEAD
 ## 2026-06-12 - Orphan cleanup for the translation engine (closes the "Phase 7" loose end)
 
 When an admin deletes a post/page section/calendar event, its translations lingered forever (the `translations` table has no FKs by design) and cluttered the review panel with `posts:a1b2c3d4`-style labels. Now a "Clean up orphans" button on `/admin/translations` sweeps them. Built TDD-first per the AGENTS.md workflow (handler test → repository → service → handler → route → UI → docs).
@@ -55,6 +56,34 @@ Every admin approval on `/admin/translations` now silently captures a gold (Engl
 
 ### Current status / next trigger
 Phase 0 (collection) is live. Run `python scripts/export_training_pairs.py --dry-run` periodically; at 200+ pairs with a healthy content-type mix, start Phase 1 of `docs/FINE_TUNING_PLAN.md` (first LoRA experiment on Colab).
+=======
+## 2026-05-20 - AI Church Assistant (VGOMNE Helper) with RAG Pipeline
+
+Designed and built an intelligent, context-aware chatbot helper for church visitors. It retrieves church posts, events, announcements, and static page content dynamically using a robust search-fallback keyword-matching RAG pipeline, synthesized using Groq (llama-3.3-70b-versatile).
+
+1. **Database Search & Fallback RAG (Go Backend):**
+   - Added keyword-extraction service with a full stop-words list.
+   - Built RAG search repository executing parallel-style keyword matches across `posts`, `calendar_events`, and `page_content` tables.
+   - Added smart fallback search queries to automatically retrieve current upcoming events and recent announcements if the query contains no keyword match.
+2. **Abuse Prevention & Rate Limiting:**
+   - Implemented a per-IP rolling rate limiter (max 10 requests/minute) directly within the `AssistantService` and wired it into the HTTP handler.
+   - Enforced a 1000-character maximum message limit in the HTTP validation.
+3. **Public POST /assistant/chat Endpoint:**
+   - Exposed a public endpoint `POST /api/v1/assistant/chat` requiring no authorization so any anonymous visitor can ask questions.
+   - Designed response shape to include references (`Sources`) so visitors can instantly trace and verify facts back to the original church posts.
+4. **Interactive Chatbox Widget (Next.js Frontend):**
+   - Built a sleek, floating ChatBox widget featuring a terracotta FAB with a subtle pulse ring.
+   - Renders a warm-toned 380x520px chat panel with micro-animations, Playfair typography, and a staggered bounce 3-dot typing indicator.
+   - Displays four quick-question preset chips when empty so visitors can tap to instantly ask common questions.
+   - Renders assistant response bubbles with clickable citation chips directing to the referenced church events/posts.
+   - Handles connection errors and rate-limiting (429) cleanly with helpful user alerts.
+5. **Robust Quality & Documentation:**
+   - Verified that the Next.js production build passes with 100% success.
+   - Added robust unit test coverage in `backend/internal/handler/assistant_test.go` covering success, invalid JSON, empty message, service error, and rate-limiting cases.
+   - Documented the entire feature inside `docs/api.md`, `docs/components.md`, `docs/agents/backend.md`, and `docs/agents/frontend.md`.
+
+---
+>>>>>>> f457d2f6da2dcd3e0e99857f6c8b96bb7578833e
 
 ## 2026-05-15 - Full AWS exodus to serverless ($0/month infrastructure)
 

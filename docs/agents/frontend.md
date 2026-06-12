@@ -56,7 +56,7 @@ frontend/
 │       ├── gallery/
 │       │   ├── AlbumGrid.tsx           ← Grid of albums
 │       │   └── RecentMoments.tsx       ← Flat photo grid
-│       └── admin/
+│       ├── admin/
 │           ├── AdminControls.tsx        ← Per-post pencil/trash buttons
 │           ├── AdminFeedActions.tsx
 │           ├── AdminNav.tsx
@@ -64,6 +64,10 @@ frontend/
 │           ├── EditPostForm.tsx         ← Wraps PostFormFields, PATCHes existing posts
 │           ├── EditPostModal.tsx        ← Modal chrome + portal hosting EditPostForm
 │           └── PostFormFields.tsx       ← Presentational inputs shared by Create/Edit
+│       └── assistant/
+│           ├── ChatBox.tsx             ← Floating AI assistant widget
+│           ├── ChatMessage.tsx         ← Renders user/assistant chat bubbles
+│           └── TypingIndicator.tsx     ← Animated thinking indicator for the helper
 ├── lib/
 │   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
@@ -71,7 +75,12 @@ frontend/
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
 │   ├── pages.ts                        ← Page-content API service (typed { sections, machine_translated } response)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
+<<<<<<< HEAD
 │   ├── posts.ts                        ← Post API service (list/get takes optional locale)
+=======
+│   ├── posts.ts                        ← Post API service (list/get/create/update/delete)
+│   ├── assistant.ts                    ← AI Assistant API service (chat endpoint)
+>>>>>>> f457d2f6da2dcd3e0e99857f6c8b96bb7578833e
 │   ├── social.ts                       ← SOCIAL_LINKS constant (YouTube/Facebook/Instagram URLs)
 │   ├── supabase.ts                     ← Supabase client (auth + direct public reads)
 │   └── translations.ts                 ← Admin translation review API (list/approve/retranslate/retranslate-all/cleanup-orphans)

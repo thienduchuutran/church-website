@@ -25,9 +25,13 @@ func UserIDFromContext(ctx context.Context) string {
 	return ""
 }
 
-// WithUserID returns a derived context carrying the given user ID. Exposed so
-// handler tests can exercise authenticated paths without standing up the full
-// RequireAdmin middleware chain (JWKS fetch, JWT verify, admins lookup).
-func WithUserID(ctx context.Context, id string) context.Context {
-	return context.WithValue(ctx, ctxUserID, id)
+// WithUserID returns a new context with the user ID set.
+func WithUserID(ctx context.Context, userID string) context.Context {
+	return context.WithValue(ctx, ctxUserID, userID)
 }
+
+// WithAdminEmail returns a new context with the admin email set.
+func WithAdminEmail(ctx context.Context, email string) context.Context {
+	return context.WithValue(ctx, ctxAdminEmail, email)
+}
+
