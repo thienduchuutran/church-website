@@ -79,11 +79,13 @@ cd backend && go run ./cmd/server
 | Google login, Supabase Auth, JWT, admin whitelist         | `docs/agents/auth.md`                  |
 | Discord webhooks, channel mapping, webhook payload format | `docs/agents/discord.md`               |
 | Translation engine, `?locale=` query param, `machine_translated` field, AI prompt edits | `docs/agents/backend.md` → "Translation engine" + `docs/agents/database.md` → "Translation tables" |
+| Fine-tuning, training data capture, `fine_tuning_examples`, export script, local model plans | `docs/FINE_TUNING_PLAN.md` + `docs/agents/backend.md` → "Fine-tuning data capture" |
 | Frontend i18n, next-intl routing, language switcher, `[locale]` segment, message JSON files | `docs/agents/frontend.md` → "i18n routing (next-intl)" |
 | Hosting, deployment, Render, Vercel, R2, CI/CD          | `docs/agents/deployment.md`            |
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
 | Posts/events/announcements not showing up after a write   | `docs/agents/known-quirks.md` ("Posts created on production don't show up in the UI") |
 | FK violation on `posts_admin_id_fkey` or similar          | `docs/agents/known-quirks.md` ("Posting fails with `posts_admin_id_fkey`...") |
+| Vietnamese text showing as `?` after a script/seed on Windows | `docs/agents/known-quirks.md` ("Vietnamese text corrupts to `?` when piped through PowerShell 5.1") |
 | Whether an endpoint should require auth / "should I protect this read?" | `docs/agents/backend.md` → Auth contract + `cmd/server/main.go` route comments. **Default answer: no - public reads are intentional.** |
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |
