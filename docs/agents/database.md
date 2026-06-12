@@ -232,6 +232,31 @@ create index on translation_jobs (status, created_at) where status = 'pending'; 
 
 **Why no FK on `record_id`:** same reason as `translations` - the queue serves multiple parent tables. By the time the worker drains a stale row, the parent record may already have been deleted; the worker tolerates this and the row stays as audit history.
 
+### `fine_tuning_examples`
+Gold (English source, approved Vietnamese) training pairs for a future fine-tuned translation model (see `docs/FINE_TUNING_PLAN.md`). Populated fire-and-forget by `TranslationService.Approve` whenever a bilingual admin approves or edits a translation. Nothing in the serving path reads this table - it is purely a dataset accumulator. Schema source: `backend/migrations/000005_fine_tuning_examples.up.sql`.
+```sql
+create table if not exists fine_tuning_examples (
+  id               uuid primary key default gen_random_uuid(),
+  source_en        text not null,        -- the English the AI translated from
+  approved_vi      text not null,        -- the Vietnamese as finalized by the human
+  content_type     text not null check (content_type in ('general', 'pastoral')),
+  source_field     text not null,        -- 'title', 'body', 'content', 'notes', ...
+  record_table     text not null,        -- 'posts', 'page_content', ...
+  record_id        uuid not null,
+  approved_by      text not null,        -- JWT sub of the approving admin
+  approved_at      timestamptz not null default now(),
+  used_in_training boolean not null default false,
+  training_run_id  text,                 -- set when a training run consumes the pair
+  created_at       timestamptz not null default now()
+);
+create index on fine_tuning_examples (used_in_training) where used_in_training = false;  -- exporter scan
+create unique index on fine_tuning_examples (record_id, source_field, record_table);     -- dedup target for ON CONFLICT
+```
+
+**Why no FK anywhere:** same convention as `translations` - a training pair must survive its parent record being edited or deleted; it was valid human output at the moment of approval. `approved_by` follows the `posts.admin_id` no-FK convention.
+
+**Export:** `python scripts/export_training_pairs.py` writes `used_in_training = FALSE` rows as SFTTrainer JSONL into `fine_tuning_data/` (gitignored). The script never flips `used_in_training` - that is the future training pipeline's job.
+
 ---
 
 ## Relationships
@@ -292,6 +317,8 @@ backend/migrations/
 ├── 000003_gallery_tags.down.sql
 ├── 000004_translations.up.sql          ← translations + system_prompts + translation_jobs (seeds vi_translation prompt)
 ├── 000004_translations.down.sql
+├── 000005_fine_tuning_examples.up.sql  ← fine_tuning_examples (gold pairs captured on translation approval)
+├── 000005_fine_tuning_examples.down.sql
 └── embed.go                            ← exposes the SQL files as embed.FS to main.go
 ```
 
