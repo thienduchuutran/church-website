@@ -3,6 +3,22 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-06-12 - Orphan cleanup for the translation engine (closes the "Phase 7" loose end)
+
+When an admin deletes a post/page section/calendar event, its translations lingered forever (the `translations` table has no FKs by design) and cluttered the review panel with `posts:a1b2c3d4`-style labels. Now a "Clean up orphans" button on `/admin/translations` sweeps them. Built TDD-first per the AGENTS.md workflow (handler test → repository → service → handler → route → UI → docs).
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/handler/admin_translations_test.go` | New test file: mock `adminTranslationService`, tests for success / zero-count / service-error | TDD rule; the handler package previously had no translations tests |
+| `backend/internal/repository/translation.go` | `DeleteOrphanedTranslations` + `DeleteOrphanedPendingJobs`, sharing an `orphanConditions` whitelist of the four known table_names | Whitelist over blacklist: an unrecognized `table_name` (future content type) is never swept, so the cleanup can't eat valid translations it doesn't understand. Pending jobs must be swept too or the worker re-creates the orphan ~5s later; done/failed jobs stay as audit history |
+| `backend/internal/service/translation.go` | `CleanupOrphans` - jobs first, then translations | Sweeping jobs last would leave a window where a just-drained job re-creates an orphan the sweep already deleted |
+| `backend/internal/handler/admin_translations.go` + `cmd/server/main.go` | `CleanupOrphans` handler + `POST /admin/translations/cleanup-orphans` (admin group) | Returns 200 (not 202) - the sweep is synchronous, counts are final |
+| `frontend/lib/translations.ts` + `app/[locale]/admin/translations/page.tsx` | `cleanupOrphanTranslations` helper + "Clean up orphans" button beside "Re-translate all pending", with a confirm that names exactly what gets deleted | Human-triggered, matching the review panel's human-in-the-loop philosophy; orphan volume at church scale never justifies an automatic background sweep |
+
+Deliberately NOT swept: `fine_tuning_examples` - captured training pairs are designed to survive parent deletion.
+
+Verified: 3 new handler tests pass; SQL exercised against the local Docker Postgres in a rolled-back transaction (orphans deleted including approved ones, unknown table_name kept, failed job kept); `tsc --noEmit` clean.
+
 ## 2026-06-11 - Fine-tuning data capture pipeline (additive, zero behavior change)
 
 Every admin approval on `/admin/translations` now silently captures a gold (English source, approved Vietnamese) pair into a new `fine_tuning_examples` table - the dataset for a future LoRA fine-tune of an open-source translation model (full roadmap: `docs/FINE_TUNING_PLAN.md`). Nothing in the serving path changed; the existing translation engine's design rules are untouched.

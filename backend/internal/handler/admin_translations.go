@@ -23,6 +23,7 @@ type adminTranslationService interface {
 	Approve(ctx context.Context, id, approverID string, translatedText *string) (*model.Translation, error)
 	Retranslate(ctx context.Context, id string) (*model.Translation, error)
 	RetranslateAll(ctx context.Context) (int, error)
+	CleanupOrphans(ctx context.Context) (int, int, error)
 }
 
 type AdminTranslationsHandler struct {
@@ -158,4 +159,21 @@ func (h *AdminTranslationsHandler) RetranslateAll(w http.ResponseWriter, r *http
 		return
 	}
 	writeJSON(w, http.StatusAccepted, map[string]int{"requeued": count})
+}
+
+// CleanupOrphans handles POST /api/v1/admin/translations/cleanup-orphans.
+// Deletes translations (and pending queue jobs) whose parent record no longer
+// exists. 200 rather than 202 because the sweep completes synchronously -
+// there is nothing left pending when the response returns.
+func (h *AdminTranslationsHandler) CleanupOrphans(w http.ResponseWriter, r *http.Request) {
+	translations, jobs, err := h.svc.CleanupOrphans(r.Context())
+	if err != nil {
+		log.Printf("cleanup-orphans: %v", err)
+		writeError(w, http.StatusInternalServerError, "failed to clean up orphans")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{
+		"deleted_translations": translations,
+		"deleted_jobs":         jobs,
+	})
 }

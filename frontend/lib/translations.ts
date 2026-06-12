@@ -83,3 +83,17 @@ export interface RetranslateAllResponse {
 export async function retranslateAllTranslations(token: string): Promise<RetranslateAllResponse> {
   return (await apiPost(`${BASE}/retranslate-all`, {}, token)) as RetranslateAllResponse
 }
+
+export interface CleanupOrphansResponse {
+  deleted_translations: number
+  deleted_jobs: number
+}
+
+// cleanupOrphanTranslations: deletes translations whose parent record (post,
+// page section, calendar event, month note) has been deleted, plus any
+// pending queue jobs for those records. These show up in the review panel
+// with "posts:a1b2c3d4"-style labels. Synchronous - counts are final when
+// the response returns.
+export async function cleanupOrphanTranslations(token: string): Promise<CleanupOrphansResponse> {
+  return (await apiPost(`${BASE}/cleanup-orphans`, {}, token)) as CleanupOrphansResponse
+}

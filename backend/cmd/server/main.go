@@ -342,6 +342,7 @@ func main() {
 		//   PATCH  /admin/translations/{id}              approve as-is or with edits
 		//   POST   /admin/translations/retranslate/{id}  delete current + re-enqueue
 		//   POST   /admin/translations/retranslate-all   bulk: delete + re-enqueue every unapproved row
+		//   POST   /admin/translations/cleanup-orphans   delete translations whose parent record is gone
 		// retranslate-all is registered before retranslate/{id} so chi's router
 		// doesn't accidentally route "retranslate-all" into the {id} param.
 		if adminTranslationsHandler != nil {
@@ -351,6 +352,7 @@ func main() {
 				r.Patch("/admin/translations/{id}", adminTranslationsHandler.Approve)
 				r.Post("/admin/translations/retranslate-all", adminTranslationsHandler.RetranslateAll)
 				r.Post("/admin/translations/retranslate/{id}", adminTranslationsHandler.Retranslate)
+				r.Post("/admin/translations/cleanup-orphans", adminTranslationsHandler.CleanupOrphans)
 			})
 		}
 

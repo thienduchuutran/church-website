@@ -91,6 +91,25 @@ func (s *TranslationService) captureFinetuningExample(t *model.Translation) {
 	}()
 }
 
+// CleanupOrphans sweeps translations (and pending queue jobs) whose parent
+// record has been deleted. Translations deliberately have no FK to their
+// parents, so content deletes leave rows behind that clutter the review panel
+// with "posts:a1b2c3d4"-style labels. Order matters: jobs first, then
+// translations - sweeping jobs last would leave a window where a just-claimed
+// job re-creates an orphan translation that this sweep already deleted.
+// Returns both counts so the admin panel can report what was removed.
+func (s *TranslationService) CleanupOrphans(ctx context.Context) (int, int, error) {
+	jobs, err := s.repo.DeleteOrphanedPendingJobs(ctx)
+	if err != nil {
+		return 0, 0, fmt.Errorf("cleanup orphans: %w", err)
+	}
+	translations, err := s.repo.DeleteOrphanedTranslations(ctx)
+	if err != nil {
+		return 0, jobs, fmt.Errorf("cleanup orphans: %w", err)
+	}
+	return translations, jobs, nil
+}
+
 // RetranslateAll is the bulk version of Retranslate. It is meant to be run
 // after `scripts/sync-prompt.sh` pushes a new system prompt: all unapproved
 // translations get deleted and re-queued so the worker produces fresh output

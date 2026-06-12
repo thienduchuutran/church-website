@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import {
   approveTranslation,
+  cleanupOrphanTranslations,
   listAdminTranslations,
   retranslateAllTranslations,
   retranslateTranslation,
@@ -46,6 +47,10 @@ export default function AdminTranslationsPage() {
   // for a few seconds after success so the reviewer sees confirmation.
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string | null>(null)
+  // Orphan cleanup gets its own busy flag (so one slow operation doesn't lock
+  // the other button) but shares the bulkMessage status line - there's only
+  // ever one result the reviewer cares about at a time.
+  const [orphanBusy, setOrphanBusy] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
@@ -134,6 +139,37 @@ export default function AdminTranslationsPage() {
     }
   }
 
+  // Orphan cleanup. Destructive but narrow: only translations whose parent
+  // record was already deleted (the "posts:a1b2c3d4"-labeled rows). The
+  // confirm names exactly what is removed so the reviewer never wonders if
+  // live translations are at risk.
+  async function handleCleanupOrphans() {
+    if (!token || orphanBusy) return
+    if (
+      !window.confirm(
+        'Delete translations whose source post/page/event no longer exists? Translations for existing content (approved or pending) are not touched.',
+      )
+    ) {
+      return
+    }
+    setOrphanBusy(true)
+    setBulkMessage(null)
+    setError(null)
+    try {
+      const { deleted_translations, deleted_jobs } = await cleanupOrphanTranslations(token)
+      setBulkMessage(
+        deleted_translations === 0 && deleted_jobs === 0
+          ? 'No orphans found.'
+          : `Removed ${deleted_translations} orphaned translation${deleted_translations === 1 ? '' : 's'}${deleted_jobs > 0 ? ` and ${deleted_jobs} stale job${deleted_jobs === 1 ? '' : 's'}` : ''}.`,
+      )
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Orphan cleanup failed')
+    } finally {
+      setOrphanBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -200,6 +236,15 @@ export default function AdminTranslationsPage() {
           className="inline-flex h-9 items-center rounded-lg border border-border bg-surface px-3 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 disabled:opacity-50"
         >
           {bulkBusy ? 'Re-queuing…' : 'Re-translate all pending'}
+        </button>
+        <button
+          type="button"
+          onClick={handleCleanupOrphans}
+          disabled={orphanBusy}
+          title="Remove translations whose source post/page/event has been deleted (shown with table:id labels)"
+          className="inline-flex h-9 items-center rounded-lg border border-border bg-surface px-3 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 disabled:opacity-50"
+        >
+          {orphanBusy ? 'Cleaning…' : 'Clean up orphans'}
         </button>
       </div>
 

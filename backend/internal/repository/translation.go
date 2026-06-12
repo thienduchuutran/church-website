@@ -50,9 +50,9 @@ const translationSelectColumns = `
       WHEN 'calendar_events'      THEN ce.title || ' · ' || ce.date::text
       WHEN 'calendar_month_notes' THEN 'Month note · ' || cmn.year || '-' || LPAD(cmn.month::text, 2, '0')
     END,
-    -- Parent row was deleted but the translation lingers. The orphan cleanup
-    -- (Phase 7) will eventually sweep these; in the meantime, surface them
-    -- with a recognizable label so the reviewer can ignore or delete them.
+    -- Parent row was deleted but the translation lingers. Surface it with a
+    -- recognizable label; the reviewer clears these with the "Clean up
+    -- orphans" button (DeleteOrphanedTranslations below).
     t.table_name || ':' || LEFT(t.record_id::text, 8)
   ) AS record_title`
 
@@ -255,4 +255,47 @@ func (r *TranslationRepository) DeleteUnapproved(ctx context.Context) ([]model.T
 		deleted = append(deleted, t)
 	}
 	return deleted, rows.Err()
+}
+
+// orphanConditions matches rows whose parent record no longer exists, checked
+// per known parent table. Deliberately a whitelist: a table_name this clause
+// does not recognize is NEVER treated as an orphan, so translations for a
+// future content type added before this list learns about it are left intact
+// rather than swept by mistake. Written with %s-substituted aliases so the
+// same conditions serve both the translations and translation_jobs deletes.
+const orphanConditions = `
+     (%[1]s.table_name = 'posts'                AND NOT EXISTS (SELECT 1 FROM posts                p   WHERE p.id   = %[1]s.record_id))
+  OR (%[1]s.table_name = 'page_content'         AND NOT EXISTS (SELECT 1 FROM page_content         pc  WHERE pc.id  = %[1]s.record_id))
+  OR (%[1]s.table_name = 'calendar_events'      AND NOT EXISTS (SELECT 1 FROM calendar_events      ce  WHERE ce.id  = %[1]s.record_id))
+  OR (%[1]s.table_name = 'calendar_month_notes' AND NOT EXISTS (SELECT 1 FROM calendar_month_notes cmn WHERE cmn.id = %[1]s.record_id))`
+
+// DeleteOrphanedTranslations removes translations whose parent record has
+// been deleted. The translations table has no FKs by design (it serves many
+// parent tables), so deletes on posts/pages/events leave rows behind; this is
+// the out-of-band sweep the schema comments promise. Approval status is
+// irrelevant here - an approved translation of a deleted post serves nothing.
+// (fine_tuning_examples is deliberately NOT swept: captured training pairs
+// must survive parent deletion.)
+func (r *TranslationRepository) DeleteOrphanedTranslations(ctx context.Context) (int, error) {
+	ct, err := r.pool.Exec(ctx,
+		`DELETE FROM translations t WHERE `+fmt.Sprintf(orphanConditions, "t"))
+	if err != nil {
+		return 0, fmt.Errorf("delete orphaned translations: %w", err)
+	}
+	return int(ct.RowsAffected()), nil
+}
+
+// DeleteOrphanedPendingJobs removes pending queue rows whose parent record has
+// been deleted. Without this, the worker would translate the dead job ~5s
+// after a sweep and re-create the very orphan that was just cleaned. Only
+// status='pending' is touched: done/failed rows stay as audit history (the
+// established translation_jobs convention), and 'processing' rows are left
+// for the worker to finish - a rare race the next sweep catches.
+func (r *TranslationRepository) DeleteOrphanedPendingJobs(ctx context.Context) (int, error) {
+	ct, err := r.pool.Exec(ctx,
+		`DELETE FROM translation_jobs j WHERE j.status = 'pending' AND (`+fmt.Sprintf(orphanConditions, "j")+`)`)
+	if err != nil {
+		return 0, fmt.Errorf("delete orphaned pending jobs: %w", err)
+	}
+	return int(ct.RowsAffected()), nil
 }

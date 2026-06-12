@@ -74,7 +74,7 @@ frontend/
 │   ├── posts.ts                        ← Post API service (list/get takes optional locale)
 │   ├── social.ts                       ← SOCIAL_LINKS constant (YouTube/Facebook/Instagram URLs)
 │   ├── supabase.ts                     ← Supabase client (auth + direct public reads)
-│   └── translations.ts                 ← Admin translation review API (list/approve/retranslate/retranslate-all)
+│   └── translations.ts                 ← Admin translation review API (list/approve/retranslate/retranslate-all/cleanup-orphans)
 ├── public/
 ├── .env.local
 └── next.config.ts

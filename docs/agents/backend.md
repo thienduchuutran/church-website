@@ -48,7 +48,7 @@ backend/
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
 │   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue)
 │   │   ├── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue)
-│   │   └── translation.go      ← List/Approve/Retranslate for the admin review panel; Approve also fire-and-forgets a fine-tuning pair capture
+│   │   └── translation.go      ← List/Approve/Retranslate/CleanupOrphans for the admin review panel; Approve also fire-and-forgets a fine-tuning pair capture
 │   ├── repository/
 │   │   ├── posts.go            ← InsertPost, GetPosts + GetPostByID (both take locale), UpdatePost, DeletePost
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
@@ -56,7 +56,7 @@ backend/
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
 │   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings
 │   │   ├── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections
-│   │   ├── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete
+│   │   ├── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete, orphan sweeps (DeleteOrphanedTranslations/PendingJobs)
 │   │   └── finetuning.go       ← CaptureFinetuningExample: idempotent INSERT of gold (en, vi) pairs into fine_tuning_examples
 │   ├── translation/            ← Async EN→VI translation engine. See "Translation engine" section below.
 │   │   ├── models.go           ← TranslationJob, Translation, ContentType
@@ -130,6 +130,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | PATCH | `/api/v1/admin/translations/:id` | Approve a translation. Body `{translated_text?}` - omit to approve as-is, include to approve human-edited text. Sets `approved_by` to caller's JWT sub. |
 | POST | `/api/v1/admin/translations/retranslate/:id` | Delete the current translation + re-enqueue. Returns 202. Used after system-prompt edits to refresh translations. |
 | POST | `/api/v1/admin/translations/retranslate-all` | Bulk: delete every unapproved row and re-enqueue. Returns `{"requeued": N}`. Approved (human-reviewed) translations are skipped. Pair with `scripts/sync-prompt.sh` for prompt iterations. |
+| POST | `/api/v1/admin/translations/cleanup-orphans` | Delete translations (and pending jobs) whose parent record was deleted. Returns `{"deleted_translations": N, "deleted_jobs": N}`. Only known table_names are swept; `fine_tuning_examples` is never touched. |
 
 ---
 

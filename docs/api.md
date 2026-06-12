@@ -396,6 +396,23 @@ The new translated text exists only after the worker drains the queue (~5s per j
 
 ---
 
+### `POST /api/v1/admin/translations/cleanup-orphans`
+Orphan sweep. Admin only. Deletes `translations` rows whose parent record (post, page section, calendar event, month note) no longer exists, plus `pending` queue jobs pointing at those dead records (without this, the worker would re-create the orphan ~5s after the sweep). Orphans appear in the review panel with `posts:a1b2c3d4`-style labels.
+
+Safety properties:
+- Only the four known `table_name` values are swept; rows with an unrecognized `table_name` (e.g. a future content type) are never touched.
+- `done`/`failed` jobs are kept as audit history.
+- `fine_tuning_examples` is never touched - captured training pairs intentionally survive parent deletion.
+
+**Request body** — empty.
+
+**Response `200` OK** (synchronous - counts are final when the response returns)
+```json
+{ "deleted_translations": 3, "deleted_jobs": 1 }
+```
+
+---
+
 ### `PUT /api/v1/calendar/months/:year/:month/settings`
 Upsert the per-month styling row. Currently a single field (`accent_color`); the row also stores the `admin_id` of the most recent editor for audit. The accent tints the day-of-week header, month title, and "today" marker on every visitor's view of that month.
 

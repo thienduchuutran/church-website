@@ -190,7 +190,7 @@ create index on translations (table_name, record_id, locale);  -- the read-path 
 create index on translations (source_hash, locale);            -- the cache lookup
 ```
 
-**Why no FK on `record_id`:** translations are referenced across multiple parent tables (`posts`, `page_content`, ...). A FK would couple this table to a single parent or require a polymorphic FK trick. Orphans are cleaned up out-of-band (see Phase 7 of the original spec).
+**Why no FK on `record_id`:** translations are referenced across multiple parent tables (`posts`, `page_content`, ...). A FK would couple this table to a single parent or require a polymorphic FK trick. Orphans are cleaned up out-of-band: the "Clean up orphans" button on `/admin/translations` (POST `/api/v1/admin/translations/cleanup-orphans`) sweeps rows whose parent is gone. Only the four known `table_name` values are swept - unknown names are left intact so a future content type can't be clobbered before the sweep list learns about it.
 
 **Why no FK on `approved_by`:** same convention as `posts.admin_id` and `calendar_events.admin_id` - JWT `sub` claims stored as plain uuid, no FK to `auth.users`. Project sidesteps the Supabase auth schema in application migrations (see "Posting fails with `posts_admin_id_fkey`" in `docs/agents/known-quirks.md`).
 
@@ -230,7 +230,7 @@ create index on translation_jobs (status, created_at) where status = 'pending'; 
 
 **Lifecycle:** content handler inserts `pending` → worker SELECT FOR UPDATE flips to `processing` and bumps `attempts` → on success becomes `done`, on error becomes `pending` again (retry) or `failed` after 3 attempts.
 
-**Why no FK on `record_id`:** same reason as `translations` - the queue serves multiple parent tables. By the time the worker drains a stale row, the parent record may already have been deleted; the worker tolerates this and the row stays as audit history.
+**Why no FK on `record_id`:** same reason as `translations` - the queue serves multiple parent tables. By the time the worker drains a stale row, the parent record may already have been deleted; the worker tolerates this and the row stays as audit history. The orphan sweep (POST `/api/v1/admin/translations/cleanup-orphans`) deletes `pending` jobs whose parent is gone - otherwise the worker would re-create a just-swept orphan translation - but leaves `done`/`failed` rows as audit history.
 
 ### `fine_tuning_examples`
 Gold (English source, approved Vietnamese) training pairs for a future fine-tuned translation model (see `docs/FINE_TUNING_PLAN.md`). Populated fire-and-forget by `TranslationService.Approve` whenever a bilingual admin approves or edits a translation. Nothing in the serving path reads this table - it is purely a dataset accumulator. Schema source: `backend/migrations/000005_fine_tuning_examples.up.sql`.
