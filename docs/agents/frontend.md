@@ -61,6 +61,8 @@ frontend/
 │           ├── AdminFeedActions.tsx
 │           ├── AdminNav.tsx
 │           ├── CreatePostForm.tsx       ← Wraps PostFormFields, POSTs new posts
+│           ├── DiscordComposerNote.tsx  ← Create-only: "posts to #channel as <you>" + @everyone opt-in
+│           ├── DiscordLinkCard.tsx      ← Dashboard card: one-time Discord OAuth link
 │           ├── EditPostForm.tsx         ← Wraps PostFormFields, PATCHes existing posts
 │           ├── EditPostModal.tsx        ← Modal chrome + portal hosting EditPostForm
 │           └── PostFormFields.tsx       ← Presentational inputs shared by Create/Edit
@@ -72,6 +74,7 @@ frontend/
 │   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
 │   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale)
+│   ├── discord.ts                      ← Discord link API (getDiscordStatus / getDiscordLinkUrl)
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
 │   ├── pages.ts                        ← Page-content API service (typed { sections, machine_translated } response)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables

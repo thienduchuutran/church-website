@@ -274,9 +274,34 @@ Pure presentational. Renders Title plus the conditional Body / Event Date / Exte
 | `section` | `string` (PostType) | required | Drives which inputs render - looked up via `POST_TYPE_FIELDS` in `lib/post-types.ts` |
 | `state` | `PostFormState` | required | Controlled values for all inputs |
 | `onChange` | `(next: PostFormState) => void` | required | Called with the next state on every keystroke |
+| `postId` | `string \| undefined` | required | Edit mode when set, create mode when undefined. Gates the gallery `TagSelector` and the create-only `DiscordComposerNote` |
 
 **Client component:** yes (controlled inputs)
-**No state, no API calls, no router** - safe to reuse from any caller.
+**No state or API calls of its own.** In create mode it renders `DiscordComposerNote` (which fetches Discord link status); otherwise still safe to reuse from any caller.
+
+---
+
+#### `DiscordComposerNote`
+Shown under the form **only when creating** (`!postId`). Tells the admin which Discord channel the post will go to and under whose identity, and exposes the "Notify @everyone" opt-in. Self-contained: fetches the admin's link status so `PostFormFields` stays presentational.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `section` | `string` (PostType) | required | Looked up in `POST_TYPE_DISCORD_CHANNELS`; renders nothing for an unmapped type |
+| `notifyEveryone` | `boolean` | required | Controlled checkbox value (bound to `PostFormState.notifyEveryone`) |
+| `onNotifyChange` | `(next: boolean) => void` | required | Toggles the @everyone opt-in |
+
+**Client component:** yes
+**Data flow:** `getDiscordStatus(token)` (from `lib/discord.ts`) → "post to #channel as &lt;name&gt;" or a "Link your Discord" nudge linking to `/admin`.
+
+---
+
+#### `DiscordLinkCard`
+Dashboard card (mounted on `/admin`) for the one-time Discord account link. Shows the linked identity (avatar + name) once connected, or a "Link my Discord" button that fetches the OAuth URL and redirects the browser. Reads `?discord=linked|error` (set by the callback redirect) to show a success/error banner; surfaces a friendly message when the server returns `503` (Discord linking not configured).
+
+**Props:** none.
+**Client component:** yes (uses `useSearchParams` - mounted inside a `<Suspense>` boundary on the admin page).
+**Data flow:** `getDiscordStatus(token)` on mount; `getDiscordLinkUrl(token)` → `window.location` on click.
 
 ---
 
