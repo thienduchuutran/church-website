@@ -10,6 +10,9 @@ export interface PostPayload {
   body: string | null
   event_date: string | null
   external_link: string | null
+  // Opt the Discord message into pinging @everyone. Honored only on create;
+  // the backend ignores it on PATCH. Optional so edit payloads can omit it.
+  notify_everyone?: boolean
 }
 
 interface ListOptions {
