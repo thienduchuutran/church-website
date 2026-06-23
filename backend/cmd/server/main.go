@@ -159,6 +159,7 @@ func main() {
 	var heroVideoHandler *handler.HeroVideoHandler
 	var adminTranslationsHandler *handler.AdminTranslationsHandler
 	var assistantHandler *handler.AssistantHandler
+	var discordOAuthHandler *handler.DiscordOAuthHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
@@ -212,6 +213,13 @@ func main() {
 		tagSvc := service.NewTagService(tagRepo)
 		tagHandler = handler.NewTagHandler(tagSvc)
 		postSvc.SetTagRepository(tagRepo)
+
+		// Wire the admin lookup so a post's Discord message is sent under the
+		// writing admin's own linked Discord identity, and build the Discord
+		// account-linking handler. FRONTEND_ORIGIN is reused as the base the
+		// OAuth callback redirects back to.
+		postSvc.SetAdminLookup(adminRepo)
+		discordOAuthHandler = handler.NewDiscordOAuthHandler(adminRepo, os.Getenv("FRONTEND_ORIGIN"))
 
 		reactionRepo := repository.NewReactionRepository(dbPool)
 		reactionSvc := service.NewReactionService(reactionRepo)
@@ -298,6 +306,23 @@ func main() {
 					r.Post("/admin/hero-video", heroVideoHandler.UploadVideo)
 					r.Patch("/admin/hero-video/visibility", heroVideoHandler.SetVisibility)
 				}
+			})
+		}
+
+		// Discord account linking (per-admin identity on posts):
+		//   ADMIN-ONLY: GET /admin/discord/link   - returns the Discord consent URL
+		//   ADMIN-ONLY: GET /admin/discord/status - is the current admin linked?
+		//   PUBLIC:     GET /admin/discord/callback - Discord redirects the browser
+		//     here after consent. A top-level redirect carries no Bearer token, so
+		//     this MUST stay public; trust comes from the HMAC-signed `state`. Do
+		//     NOT move it into the RequireAdmin group or linking breaks.
+		if discordOAuthHandler != nil {
+			r.Get("/admin/discord/callback", discordOAuthHandler.Callback)
+
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Get("/admin/discord/link", discordOAuthHandler.LinkStart)
+				r.Get("/admin/discord/status", discordOAuthHandler.Status)
 			})
 		}
 
