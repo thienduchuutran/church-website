@@ -64,8 +64,10 @@ DISCORD_WEBHOOK_ANNOUNCEMENTS https://...                            [Secret]
 DISCORD_WEBHOOK_BIBLE_STUDIES https://...                            [Secret]
 DISCORD_WEBHOOK_PLAYLISTS     https://...                            [Secret]
 DISCORD_WEBHOOK_GALLERY       https://...                            [Secret]
-DISCORD_WEBHOOK_USERNAME      Duc
-DISCORD_WEBHOOK_AVATAR_URL    https://cdn.discordapp.com/avatars/...
+DISCORD_OAUTH_CLIENT_ID=
+DISCORD_OAUTH_CLIENT_SECRET=
+DISCORD_OAUTH_REDIRECT_URI=
+DISCORD_OAUTH_STATE_SECRET
 ```
 
 > **`DATABASE_URL` uses single `%40` for the `@` in the password** (URL encoding). Render does not have systemd's specifier quirk - do not double the `%` here.
