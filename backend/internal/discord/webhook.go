@@ -1,8 +1,6 @@
 package discord
 
 import (
-	"bytes"
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
@@ -12,11 +10,12 @@ import (
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 )
 
-// Identity defaults applied per-message so the same webhook URL can post under
-// any name/avatar without re-provisioning the Discord-side webhook.
+// Identity defaults applied when an admin has not linked Discord. The same
+// shared webhook URL can post under any name/avatar (overridden per message),
+// so these are only the fallback sender for unlinked admins.
 const (
-	defaultUsername  = "Duc"
-	defaultAvatarURL = "https://cdn.discordapp.com/avatars/1018271669938307102/2aca3d1181e6643b78d9401b25582e48.webp"
+	defaultUsername  = "VGOMNE"
+	defaultAvatarURL = "https://cdn.discordapp.com/embed/avatars/0.png"
 )
 
 // Discord rejects messages over 2000 codepoints; truncating with an ellipsis
@@ -26,38 +25,15 @@ const (
 	truncationSuffix = "..."
 )
 
-// httpClient bounds the wait on Discord's webhook endpoint. The caller in
-// service/posts.go fires SendToDiscord in a detached goroutine, so without a
-// timeout a hung Discord request would leak the goroutine for the lifetime of
-// the process.
+// httpClient bounds the wait on Discord's endpoints. Sends happen in detached
+// goroutines from the post service, so without a timeout a hung Discord request
+// would leak the goroutine for the lifetime of the process.
 var httpClient = &http.Client{Timeout: 10 * time.Second}
 
-// Embed is the rich-card payload Discord renders inside a colored container.
-// Retained for post types not yet migrated to plain `content` (bible_study,
-// playlist, gallery_album).
-type Embed struct {
-	Title       string      `json:"title"`
-	Description string      `json:"description,omitempty"`
-	URL         string      `json:"url,omitempty"`
-	Color       int         `json:"color"`
-	Footer      EmbedFooter `json:"footer"`
-	Timestamp   string      `json:"timestamp"`
-}
-
-type EmbedFooter struct {
-	Text string `json:"text"`
-}
-
-// Payload is the Discord webhook request body. Username and AvatarURL apply to
-// every message; Content (plain text) and Embeds (rich card) are mutually
-// exclusive in practice - omitempty hides the unused field from the JSON.
-type Payload struct {
-	Username  string  `json:"username"`
-	AvatarURL string  `json:"avatar_url"`
-	Content   string  `json:"content,omitempty"`
-	Embeds    []Embed `json:"embeds,omitempty"`
-}
-
+// webhookEnvKeys maps each post type to the env var holding that channel's
+// webhook URL. The KEY (not the URL) is stored on the post as
+// discord_channel_key so edit/delete can resolve the same webhook later, even
+// if this mapping is changed afterwards.
 var webhookEnvKeys = map[model.PostType]string{
 	model.PostTypeEvent:        "DISCORD_WEBHOOK_EVENTS",
 	model.PostTypeAnnouncement: "DISCORD_WEBHOOK_ANNOUNCEMENTS",
@@ -66,81 +42,54 @@ var webhookEnvKeys = map[model.PostType]string{
 	model.PostTypeGalleryAlbum: "DISCORD_WEBHOOK_GALLERY",
 }
 
-var colorByType = map[model.PostType]int{
-	model.PostTypeBibleStudy:   16711516, // #FEE75C yellow
-	model.PostTypePlaylist:     1948500,  // #1DB954 Spotify green
-	model.PostTypeGalleryAlbum: 15418270, // #EB459E pink
+// WebhookForType returns the webhook URL for a post type plus the env key it
+// came from. The env key is stored on the post (discord_channel_key) so a later
+// edit/delete reuses exactly this webhook. ok is false when the type has no
+// channel configured or the env var is unset - the caller logs and skips
+// delivery (best-effort), it does not fail the request.
+func WebhookForType(t model.PostType) (url, envKey string, ok bool) {
+	envKey, mapped := webhookEnvKeys[t]
+	if !mapped {
+		return "", "", false
+	}
+	url = os.Getenv(envKey)
+	if url == "" {
+		return "", envKey, false
+	}
+	return url, envKey, true
 }
 
-// SendToDiscord sends a post notification to the matching Discord channel via webhook.
-func SendToDiscord(post model.Post) error {
-	envKey, ok := webhookEnvKeys[post.Type]
-	if !ok {
-		return fmt.Errorf("no webhook configured for post type %s", post.Type)
+// WebhookByKey resolves a stored channel key (env var name) back to its current
+// URL, for editing or deleting a message sent earlier.
+func WebhookByKey(envKey string) (url string, ok bool) {
+	if envKey == "" {
+		return "", false
 	}
-
-	webhookURL := os.Getenv(envKey)
-	if webhookURL == "" {
-		return fmt.Errorf("environment variable %s is not set", envKey)
-	}
-
-	body, err := json.Marshal(buildPayload(post))
-	if err != nil {
-		return fmt.Errorf("failed to marshal discord payload: %w", err)
-	}
-
-	resp, err := httpClient.Post(webhookURL, "application/json", bytes.NewReader(body))
-	if err != nil {
-		return fmt.Errorf("failed to send discord webhook: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("discord webhook returned status %d", resp.StatusCode)
-	}
-	return nil
+	url = os.Getenv(envKey)
+	return url, url != ""
 }
 
-// buildPayload routes by post type because the two formats are not equivalent:
-// flat content reads as a normal message in-channel; embeds add a card border
-// that's the right affordance for link-driven types (bible_study, playlist,
-// gallery_album) but visual noise for announcements and events.
-func buildPayload(post model.Post) Payload {
-	p := Payload{
-		Username:  envOrDefault("DISCORD_WEBHOOK_USERNAME", defaultUsername),
-		AvatarURL: envOrDefault("DISCORD_WEBHOOK_AVATAR_URL", defaultAvatarURL),
-	}
-
-	switch post.Type {
-	case model.PostTypeAnnouncement, model.PostTypeEvent:
-		p.Content = truncate(buildTitleBodyContent(post), maxContentLength)
-	default:
-		p.Embeds = []Embed{buildEmbed(post)}
-	}
-	return p
-}
-
-// buildTitleBodyContent serializes the post to Discord markdown. The body is
-// stored as Tiptap HTML; HTMLToDiscordMarkdown converts it to plain markdown
-// so Discord renders it correctly instead of showing raw HTML tags.
-func buildTitleBodyContent(post model.Post) string {
+// BuildContent renders a post to the plain-text message body shown in Discord.
+// Every post type is plain content now (no embeds): the title in bold, the body
+// converted from Tiptap HTML to Discord markdown, and any external link on its
+// own line so Discord auto-unfurls it into a preview card (Spotify, Google
+// Slides, YouTube, etc.) - which is why link-driven types no longer need an
+// embed. The result is truncated to Discord's 2000-codepoint ceiling.
+func BuildContent(post model.Post) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "**%s**", post.Title)
+
 	if post.Body != nil && *post.Body != "" {
 		b.WriteString("\n")
 		b.WriteString(HTMLToDiscordMarkdown(*post.Body))
 	}
-	return b.String()
-}
 
-// envOrDefault keeps the optional identity vars truly optional - admins can
-// rotate username/avatar via the systemd env file, but a fresh deploy without
-// those vars set still produces a usable message.
-func envOrDefault(key, def string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+	if post.ExternalLink != nil && *post.ExternalLink != "" {
+		b.WriteString("\n")
+		b.WriteString(*post.ExternalLink)
 	}
-	return def
+
+	return truncate(b.String(), maxContentLength)
 }
 
 // truncate counts codepoints rather than bytes because Discord enforces its
@@ -153,39 +102,4 @@ func truncate(s string, maxRunes int) string {
 	}
 	suffix := []rune(truncationSuffix)
 	return string(runes[:maxRunes-len(suffix)]) + truncationSuffix
-}
-
-// buildEmbed handles the post types still on rich cards. Kept until those
-// types are migrated, so the switch in buildPayload doesn't have to fan out
-// inline.
-func buildEmbed(post model.Post) Embed {
-	embed := Embed{
-		Color:     colorByType[post.Type],
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
-	}
-
-	switch post.Type {
-	case model.PostTypeBibleStudy:
-		embed.Title = "\U0001f4d6 " + post.Title
-		embed.Description = "Friday Bible study materials are posted."
-		if post.ExternalLink != nil {
-			embed.URL = *post.ExternalLink
-		}
-		embed.Footer = EmbedFooter{Text: "Click the link to open the slides"}
-
-	case model.PostTypePlaylist:
-		embed.Title = "\U0001f3b5 " + post.Title
-		embed.Description = "Worship playlist is up!"
-		if post.ExternalLink != nil {
-			embed.URL = *post.ExternalLink
-		}
-		embed.Footer = EmbedFooter{Text: "Open in Spotify"}
-
-	case model.PostTypeGalleryAlbum:
-		embed.Title = "\U0001f4f8 " + post.Title
-		embed.Description = fmt.Sprintf("New photos from %s are up on the website.", post.Title)
-		embed.Footer = EmbedFooter{Text: "View album on website"}
-	}
-
-	return embed
 }

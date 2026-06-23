@@ -38,6 +38,15 @@ type PublicURLBuilder interface {
 	PublicURL(key string) string
 }
 
+// AdminLookup resolves the admin who wrote a post (by their email, which is on
+// the request context) so the Discord message can be posted under that admin's
+// own linked Discord identity. An interface so PostService stays decoupled from
+// the admin repository and so a fake can be swapped in for tests; nil-safe, so
+// posting still works when no lookup is wired (falls back to default identity).
+type AdminLookup interface {
+	GetByEmail(ctx context.Context, email string) (*model.Admin, error)
+}
+
 // presignTTL is how long each presigned URL stays valid. It needs to outlive
 // Next.js's revalidate window (60s) by a comfortable margin so the URL doesn't
 // expire mid-render or right after the page finishes streaming. One hour is a
@@ -52,6 +61,7 @@ type PostService struct {
 	publicURLs PublicURLBuilder         // optional - nil-safe; when nil, gallery images fall back to presigning
 	tags       *repository.TagRepository // optional - nil-safe; when nil, gallery posts have no tags
 	enqueue    translation.EnqueueFn    // optional - nil-safe; when nil, no translation jobs are fired
+	admins     AdminLookup              // optional - nil-safe; when nil, Discord posts use default identity
 }
 
 // NewPostService builds a post service. `images`, `presigner`, `publicURLs`, and `tags`
@@ -76,10 +86,18 @@ func (s *PostService) SetTranslationQueue(enqueue translation.EnqueueFn) {
 	s.enqueue = enqueue
 }
 
+// SetAdminLookup wires the admin resolver used to post Discord messages under
+// the writing admin's own Discord identity. Same opt-in pattern as the other
+// setters: without it, Discord posts fall back to the default church identity.
+func (s *PostService) SetAdminLookup(admins AdminLookup) {
+	s.admins = admins
+}
+
 // Create validates the request, persists the post, and fires two side effects:
-// a Discord webhook (existing behavior) and a translation job (new). Both run
-// in goroutines so the handler returns to the client immediately.
-func (s *PostService) Create(ctx context.Context, req model.CreatePostRequest, userID string) (*model.Post, error) {
+// a Discord message (under the writing admin's identity) and a translation job.
+// Both run in goroutines so the handler returns to the client immediately, and
+// both are best-effort - a failure logs but never fails the create.
+func (s *PostService) Create(ctx context.Context, req model.CreatePostRequest, userID, adminEmail string) (*model.Post, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validation: %w", err)
 	}
@@ -97,11 +115,10 @@ func (s *PostService) Create(ctx context.Context, req model.CreatePostRequest, u
 		return nil, fmt.Errorf("insert: %w", err)
 	}
 
-	go func() {
-		if err := discord.SendToDiscord(*post); err != nil {
-			log.Printf("discord webhook error for post %s: %v", post.ID, err)
-		}
-	}()
+	// Detached goroutine: it must outlive the request, so it resolves identity
+	// and writes the message id back using its own background context rather
+	// than ctx (which is cancelled the moment Create returns).
+	go s.dispatchDiscordCreate(*post, adminEmail, req.NotifyEveryone)
 
 	s.fireTranslation(post.ID, post.Title, post.Body)
 
@@ -172,11 +189,127 @@ func (s *PostService) Update(ctx context.Context, id string, req model.UpdatePos
 		s.enqueueFields(updated.ID, changedFields)
 	}
 
+	// Mirror the edit to Discord (best-effort). Identity stays as originally
+	// sent - Discord ignores username/avatar on edit - so we only update text.
+	go s.dispatchDiscordEdit(*updated)
+
 	return updated, nil
 }
 
 func (s *PostService) Delete(ctx context.Context, id string) error {
-	return s.posts.DeletePost(ctx, id)
+	// Read the Discord ref BEFORE deleting the row - afterwards the message id
+	// and channel key are gone. Read failure is non-fatal: we just skip the
+	// Discord delete (best-effort) and still remove the post.
+	messageID, channelKey, refErr := s.posts.GetDiscordRef(ctx, id)
+
+	if err := s.posts.DeletePost(ctx, id); err != nil {
+		return err
+	}
+
+	if refErr == nil && messageID != nil && channelKey != nil {
+		go s.dispatchDiscordDelete(*messageID, *channelKey)
+	}
+	return nil
+}
+
+// discordSideEffectTimeout bounds each detached Discord delivery goroutine
+// (resolve identity + HTTP call + persist message id). Generous enough for a
+// slow Discord, short enough that a stall cannot leak goroutines forever.
+const discordSideEffectTimeout = 15 * time.Second
+
+// dispatchDiscordCreate posts a freshly-created post to its channel under the
+// writing admin's Discord identity, then records the returned message id +
+// channel key so a later edit/delete targets the same message. Best-effort:
+// every failure path logs and returns; none of them can fail the user's create
+// (the post is already saved). Runs in its own goroutine with a background
+// context because the request context is gone by the time this executes.
+func (s *PostService) dispatchDiscordCreate(post model.Post, adminEmail string, notifyEveryone bool) {
+	url, envKey, ok := discord.WebhookForType(post.Type)
+	if !ok {
+		log.Printf("discord: no webhook configured for post %s (type %s)", post.ID, post.Type)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), discordSideEffectTimeout)
+	defer cancel()
+
+	msg := s.buildOutbound(post, notifyEveryone)
+	identity := s.identityFor(ctx, adminEmail)
+	msg.Username = identity.Username
+	msg.AvatarURL = identity.AvatarURL
+
+	messageID, err := discord.Send(url, msg)
+	if err != nil {
+		log.Printf("discord: send failed for post %s: %v", post.ID, err)
+		return
+	}
+	if err := s.posts.SetDiscordMessage(ctx, post.ID, messageID, envKey); err != nil {
+		log.Printf("discord: persist message id for post %s: %v", post.ID, err)
+	}
+}
+
+// dispatchDiscordEdit updates the Discord message a post was delivered as.
+// No-op when the post was never sent to Discord. Identity is omitted (Discord
+// ignores it on edit). Best-effort: logs and returns on any failure.
+func (s *PostService) dispatchDiscordEdit(post model.Post) {
+	ctx, cancel := context.WithTimeout(context.Background(), discordSideEffectTimeout)
+	defer cancel()
+
+	messageID, channelKey, err := s.posts.GetDiscordRef(ctx, post.ID)
+	if err != nil || messageID == nil || channelKey == nil {
+		return // never delivered to Discord - nothing to edit
+	}
+	url, ok := discord.WebhookByKey(*channelKey)
+	if !ok {
+		log.Printf("discord: webhook env %q for post %s is unset; skipping edit", *channelKey, post.ID)
+		return
+	}
+	// NotifyEveryone is a create-time choice only; an edit never re-pings.
+	if err := discord.Edit(url, *messageID, s.buildOutbound(post, false)); err != nil {
+		log.Printf("discord: edit failed for post %s: %v", post.ID, err)
+	}
+}
+
+// dispatchDiscordDelete removes the Discord message a deleted post was
+// delivered as. Best-effort: logs and returns on failure.
+func (s *PostService) dispatchDiscordDelete(messageID, channelKey string) {
+	url, ok := discord.WebhookByKey(channelKey)
+	if !ok {
+		log.Printf("discord: webhook env %q is unset; skipping delete of message %s", channelKey, messageID)
+		return
+	}
+	if err := discord.Delete(url, messageID); err != nil {
+		log.Printf("discord: delete failed for message %s: %v", messageID, err)
+	}
+}
+
+// buildOutbound renders a post into a Discord message. A NotifyEveryone post
+// gets the "@everyone " prefix AND the matching allowed_mentions; otherwise the
+// default suppresses every mention so stray @everyone text in the body is inert.
+func (s *PostService) buildOutbound(post model.Post, notifyEveryone bool) discord.OutboundMessage {
+	content := discord.BuildContent(post)
+	mentions := discord.NoMentions()
+	if notifyEveryone {
+		content = "@everyone " + content
+		mentions = discord.EveryoneMention()
+	}
+	return discord.OutboundMessage{Content: content, AllowedMentions: mentions}
+}
+
+// identityFor resolves the Discord sender for the admin with this email. Falls
+// back to the default identity when no lookup is wired, the email is empty, or
+// the admin can't be loaded - so an unlinked admin (or a misconfigured lookup)
+// still posts.
+func (s *PostService) identityFor(ctx context.Context, email string) discord.SenderIdentity {
+	if s.admins == nil || email == "" {
+		return discord.IdentityForAdmin(nil)
+	}
+	admin, err := s.admins.GetByEmail(ctx, email)
+	if err != nil {
+		log.Printf("discord: resolve admin %q: %v", email, err)
+		return discord.IdentityForAdmin(nil)
+	}
+	return discord.IdentityForAdmin(admin)
 }
 
 // fireTranslation enqueues a job for the title/body of a freshly-created post.
