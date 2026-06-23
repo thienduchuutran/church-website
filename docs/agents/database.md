@@ -16,13 +16,17 @@ The session pooler (not the transaction pooler on port 6543, and not the direct 
 Whitelist of people allowed to access the admin panel.
 ```sql
 create table admins (
-  id           uuid primary key default gen_random_uuid(),
-  email        text unique not null,   -- must match Google account email exactly
-  display_name text,
-  created_at   timestamptz default now()
+  id                 uuid primary key default gen_random_uuid(),
+  email              text unique not null,   -- must match Google account email exactly
+  display_name       text,
+  discord_user_id    text,                   -- Discord snowflake; set by the "Link Discord" OAuth flow (000006)
+  discord_username   text,                   -- Discord handle, shown as the message sender
+  discord_avatar_url text,                   -- cdn.discordapp.com avatar URL, built at link time from id + avatar hash
+  created_at         timestamptz default now()
 );
 ```
 > To add the first admin: connect via psql and `INSERT INTO admins (email) VALUES ('you@example.com');`
+> The `discord_*` columns (migration `000006`) are nullable and filled by the one-time Discord link flow. When null, a post falls back to the admin's `display_name` + a default church avatar. See `docs/agents/discord.md` → "Per-admin identity".
 
 ---
 
@@ -34,17 +38,20 @@ create type post_type as enum (
 );
 
 create table posts (
-  id            uuid primary key default gen_random_uuid(),
-  type          post_type not null,
-  title         text not null,
-  body          text,
-  event_date    timestamptz,
-  external_link text,
-  admin_id      uuid,          -- JWT sub claim from Supabase Auth; no FK (auth.users lives in Supabase)
-  created_at    timestamptz default now(),
-  updated_at    timestamptz default now()
+  id                  uuid primary key default gen_random_uuid(),
+  type                post_type not null,
+  title               text not null,
+  body                text,
+  event_date          timestamptz,
+  external_link       text,
+  admin_id            uuid,          -- JWT sub claim from Supabase Auth; no FK (auth.users lives in Supabase)
+  discord_message_id  text,          -- id Discord returns on send (?wait=true); edit/delete target this message (000006)
+  discord_channel_key text,          -- env var name of the webhook used, e.g. 'DISCORD_WEBHOOK_EVENTS'; edit/delete reuse it
+  created_at          timestamptz default now(),
+  updated_at          timestamptz default now()
 );
 ```
+> `discord_message_id` / `discord_channel_key` (migration `000006`) are nullable - they stay null until a post is delivered to Discord (delivery is best-effort). They let the site edit/delete the exact same Discord message it originally sent, through the exact same webhook, even if the post-type→channel mapping later changes. See `docs/agents/discord.md`.
 
 **Type usage guide:**
 | type | title | body | event_date | external_link |
