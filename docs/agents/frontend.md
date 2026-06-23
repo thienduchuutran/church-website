@@ -75,12 +75,9 @@ frontend/
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
 │   ├── pages.ts                        ← Page-content API service (typed { sections, machine_translated } response)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
-<<<<<<< HEAD
 │   ├── posts.ts                        ← Post API service (list/get takes optional locale)
-=======
 │   ├── posts.ts                        ← Post API service (list/get/create/update/delete)
 │   ├── assistant.ts                    ← AI Assistant API service (chat endpoint)
->>>>>>> f457d2f6da2dcd3e0e99857f6c8b96bb7578833e
 │   ├── social.ts                       ← SOCIAL_LINKS constant (YouTube/Facebook/Instagram URLs)
 │   ├── supabase.ts                     ← Supabase client (auth + direct public reads)
 │   └── translations.ts                 ← Admin translation review API (list/approve/retranslate/retranslate-all/cleanup-orphans)
