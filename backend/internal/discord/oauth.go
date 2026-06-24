@@ -103,18 +103,31 @@ func FetchUser(ctx context.Context, accessToken string) (DiscordUser, error) {
 	}
 
 	var u struct {
-		ID       string `json:"id"`
-		Username string `json:"username"`
-		Avatar   string `json:"avatar"`
+		ID         string `json:"id"`
+		Username   string `json:"username"`
+		GlobalName string `json:"global_name"`
+		Avatar     string `json:"avatar"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&u); err != nil {
 		return DiscordUser{}, fmt.Errorf("decode user: %w", err)
 	}
 	return DiscordUser{
 		ID:        u.ID,
-		Username:  u.Username,
+		Username:  preferredName(u.GlobalName, u.Username),
 		AvatarURL: avatarURL(u.ID, u.Avatar),
 	}, nil
+}
+
+// preferredName picks the Discord display name (global_name) - the friendly name
+// shown across the Discord UI and what other members see in the server -
+// falling back to the unique @handle for accounts that never set a display name.
+// Without this we would post under the handle ("_ductran_") instead of the
+// display name ("Duc").
+func preferredName(globalName, username string) string {
+	if strings.TrimSpace(globalName) != "" {
+		return globalName
+	}
+	return username
 }
 
 // avatarURL builds the CDN URL from a user id + avatar hash. A user with no
