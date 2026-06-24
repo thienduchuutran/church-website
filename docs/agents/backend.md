@@ -267,7 +267,7 @@ public GET /posts?locale=vi  →  PostRepository.GetPosts
 
 ### Model IDs
 
-- General content: `gemini-2.0-flash` via `https://generativelanguage.googleapis.com/v1beta`
+- General content: `gemini-2.5-flash` via `https://generativelanguage.googleapis.com/v1beta` (was `gemini-2.0-flash` until Google retired it 2026-06)
 - Backup for Gemini content: `claude-haiku-4-5-20251001` via `https://api.anthropic.com/v1/messages`
 
 Both clients are raw `net/http`. SDKs were rejected to keep the Docker image and `go.mod` lean.
