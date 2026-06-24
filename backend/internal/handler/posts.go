@@ -30,8 +30,12 @@ func (h *PostHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Both come from RequireAdmin: userID (JWT sub) is stamped as the post's
+	// author; adminEmail keys the admins row so the Discord message posts under
+	// this admin's linked Discord identity.
 	userID := middleware.UserIDFromContext(r.Context())
-	post, err := h.svc.Create(r.Context(), req, userID)
+	adminEmail := middleware.AdminEmailFromContext(r.Context())
+	post, err := h.svc.Create(r.Context(), req, userID, adminEmail)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return

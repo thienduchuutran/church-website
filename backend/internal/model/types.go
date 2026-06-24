@@ -91,7 +91,13 @@ type Admin struct {
 	ID          string    `json:"id"`
 	Email       string    `json:"email"`
 	DisplayName *string   `json:"display_name"`
-	CreatedAt   time.Time `json:"created_at"`
+	// Discord identity, filled by the one-time "Link Discord" OAuth flow. All
+	// nullable: an admin who never links still posts, falling back to
+	// DisplayName + a default church avatar (see discord.IdentityForAdmin).
+	DiscordUserID    *string   `json:"discord_user_id"`
+	DiscordUsername  *string   `json:"discord_username"`
+	DiscordAvatarURL *string   `json:"discord_avatar_url"`
+	CreatedAt        time.Time `json:"created_at"`
 }
 
 // --- Request types ---
@@ -102,6 +108,10 @@ type CreatePostRequest struct {
 	Body         *string    `json:"body"`
 	EventDate    *time.Time `json:"event_date"`
 	ExternalLink *string    `json:"external_link"`
+	// NotifyEveryone opts this one post's Discord message into pinging
+	// @everyone. Default false so a normal post never notifies the whole
+	// server. Not persisted - it only affects the create-time send.
+	NotifyEveryone bool `json:"notify_everyone"`
 }
 
 // Validate checks required fields and type-specific constraints.

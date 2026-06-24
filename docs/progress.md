@@ -3,7 +3,36 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
-<<<<<<< HEAD
+## 2026-06-22 - Discord posts as the real admin (per-admin identity + clean edit/delete) - backend
+
+Replaced the single generic-bot webhook with a system where a post appears in Discord as **one
+plain message under the writing admin's own Discord name + avatar**, and editing/deleting the post
+updates/removes that same message. Webhooks override `username`/`avatar_url` per message, so one
+webhook per channel serves every admin. Identity comes from a one-time Discord OAuth link
+(`identify` scope) stored on the admin row; unlinked admins fall back to `display_name` + a default
+avatar, so posting always works. Decisions for this first cut (with the project owner): **text only**
+(album photos upload after create, so attaching them is deferred) and **embeds removed** (every type
+is now plain content; bare external links auto-unfurl). Delivery stays best-effort: a Discord failure
+logs and never fails the website request. Built TDD-first (identity / mentions / send / state / OAuth
+handler tests). Frontend (link card + composer note + @everyone box) is the separate commit 2.
+
+| File | Change | Why |
+|---|---|---|
+| `backend/migrations/000006_discord_identity.{up,down}.sql` | `admins` += `discord_user_id/username/avatar_url`; `posts` += `discord_message_id/channel_key` (all nullable) | Somewhere to store linked identity + which message/webhook a post went to, for edit/delete |
+| `internal/discord/identity.go` | `IdentityForAdmin` - linked identity or display-name/default fallback | One place decides the per-message sender; unlinked admins still post |
+| `internal/discord/mentions.go` | `AllowedMentions` default `{parse:[]}` + `EveryoneMention()` | Stray `@everyone` in a body never pings unless the per-post box is ticked |
+| `internal/discord/send.go` | `Send` (POST `?wait=true`, returns id), `Edit`, `Delete` by id; 404-on-delete = success | The single-message send/edit/delete-by-id mechanism; `?wait=true` is what yields the id |
+| `internal/discord/oauth.go` + `state.go` | OAuth `identify` exchange + `/users/@me`; HMAC-signed, 10-min `state` | One-time linking; the public callback trusts the signed state, not a Bearer token |
+| `internal/discord/webhook.go` | Deleted embeds/color table/`buildEmbed`; `BuildContent` (plain, all types) + `WebhookForType`/`WebhookByKey` | Plain content for every type; bare links unfurl; channel mapping retained for edit/delete |
+| `internal/repository/{admins,posts}.go` | `GetByEmail`, `SetDiscordIdentity`; `SetDiscordMessage`, `GetDiscordRef` | Identity at post time; message ref kept off the public read SELECTs |
+| `internal/service/posts.go` | `Create` resolves identity by email → send → persist id; `Update` edits; `Delete` reads ref then deletes message - all detached, best-effort | Orchestration with a background context (request ctx is gone once the handler returns) |
+| `internal/handler/{posts,discord_oauth}.go` | `Create` passes admin email; `LinkStart`/`Status` (admin) + `Callback` (public) | Wire identity through; expose the link flow |
+| `cmd/server/main.go` | `SetAdminLookup`, build OAuth handler, register routes (callback **public**) | The public callback must stay outside `RequireAdmin` or OAuth breaks |
+
+New env (Render): `DISCORD_OAUTH_CLIENT_ID/SECRET/REDIRECT_URI`, `DISCORD_OAUTH_STATE_SECRET`; reuses
+`FRONTEND_ORIGIN` for the post-callback redirect. All optional - the link flow returns 503 when unset
+and the rest of the app is unaffected. `go build`, `go test ./...`, `go vet ./...` all green.
+
 ## 2026-06-12 - Orphan cleanup for the translation engine (closes the "Phase 7" loose end)
 
 When an admin deletes a post/page section/calendar event, its translations lingered forever (the `translations` table has no FKs by design) and cluttered the review panel with `posts:a1b2c3d4`-style labels. Now a "Clean up orphans" button on `/admin/translations` sweeps them. Built TDD-first per the AGENTS.md workflow (handler test → repository → service → handler → route → UI → docs).
@@ -56,7 +85,6 @@ Every admin approval on `/admin/translations` now silently captures a gold (Engl
 
 ### Current status / next trigger
 Phase 0 (collection) is live. Run `python scripts/export_training_pairs.py --dry-run` periodically; at 200+ pairs with a healthy content-type mix, start Phase 1 of `docs/FINE_TUNING_PLAN.md` (first LoRA experiment on Colab).
-=======
 ## 2026-05-20 - AI Church Assistant (VGOMNE Helper) with RAG Pipeline
 
 Designed and built an intelligent, context-aware chatbot helper for church visitors. It retrieves church posts, events, announcements, and static page content dynamically using a robust search-fallback keyword-matching RAG pipeline, synthesized using Groq (llama-3.3-70b-versatile).
@@ -83,7 +111,6 @@ Designed and built an intelligent, context-aware chatbot helper for church visit
    - Documented the entire feature inside `docs/api.md`, `docs/components.md`, `docs/agents/backend.md`, and `docs/agents/frontend.md`.
 
 ---
->>>>>>> f457d2f6da2dcd3e0e99857f6c8b96bb7578833e
 
 ## 2026-05-15 - Full AWS exodus to serverless ($0/month infrastructure)
 

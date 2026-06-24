@@ -200,3 +200,33 @@ func (r *PostRepository) DeletePost(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// SetDiscordMessage records which Discord message a post was delivered as, and
+// through which webhook (env key). Written by the best-effort delivery
+// goroutine after a successful send, so a later edit/delete can target the same
+// message. Kept off the read path: the public SELECTs never need these columns.
+func (r *PostRepository) SetDiscordMessage(ctx context.Context, postID, messageID, channelKey string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE posts SET discord_message_id = $2, discord_channel_key = $3 WHERE id = $1`,
+		postID, messageID, channelKey,
+	)
+	return err
+}
+
+// GetDiscordRef returns the stored Discord message id and channel key for a
+// post. Both are nil when the post was never delivered to Discord (delivery is
+// best-effort and may not have happened). Used by edit/delete to find the
+// message to update or remove.
+func (r *PostRepository) GetDiscordRef(ctx context.Context, postID string) (messageID, channelKey *string, err error) {
+	err = r.pool.QueryRow(ctx,
+		`SELECT discord_message_id, discord_channel_key FROM posts WHERE id = $1`,
+		postID,
+	).Scan(&messageID, &channelKey)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil, model.ErrNotFound
+		}
+		return nil, nil, err
+	}
+	return messageID, channelKey, nil
+}

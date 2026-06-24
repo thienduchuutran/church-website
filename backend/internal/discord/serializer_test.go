@@ -43,6 +43,25 @@ func TestHTMLToDiscordMarkdown_inline(t *testing.T) {
 	}
 }
 
+func TestHTMLToDiscordMarkdown_links(t *testing.T) {
+	// A genuinely labeled link keeps masked markdown: the label is the point,
+	// and the suppressed preview card is intended.
+	if got := HTMLToDiscordMarkdown(`<p><a href="https://example.com">Watch here</a></p>`); !strings.Contains(got, "[Watch here](https://example.com)") {
+		t.Errorf("labeled link should stay masked, got %q", got)
+	}
+
+	// An auto-linked bare URL (visible text IS the href, e.g. the editor
+	// linkified a pasted URL) must be emitted RAW, not as [url](url) - only a
+	// bare URL reliably unfurls a Discord preview card.
+	bare := HTMLToDiscordMarkdown(`<p><a href="https://vbs.lifeway.com/x"><span>https://vbs.lifeway.com/x</span></a></p>`)
+	if strings.Contains(bare, "](") {
+		t.Errorf("bare URL must not be masked markdown, got %q", bare)
+	}
+	if strings.TrimSpace(bare) != "https://vbs.lifeway.com/x" {
+		t.Errorf("bare URL: want raw href, got %q", bare)
+	}
+}
+
 func TestHTMLToDiscordMarkdown_lists(t *testing.T) {
 	bullet := `<ul><li>One</li><li>Two</li></ul>`
 	got := HTMLToDiscordMarkdown(bullet)

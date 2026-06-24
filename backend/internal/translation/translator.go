@@ -21,7 +21,9 @@ import (
 // Model IDs and endpoints. Pinned constants so a model swap is a one-line
 // code change with an obvious diff in `git blame`.
 const (
-	geminiModel      = "gemini-2.0-flash"
+	// 2026-06-24: Google retired gemini-2.0-flash (404 NOT_FOUND on /v1beta).
+	// Bumped to gemini-2.5-flash - same v1beta endpoint shape, drop-in.
+	geminiModel      = "gemini-2.5-flash"
 	claudeModel      = "claude-haiku-4-5-20251001"
 	geminiAPIBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
 	claudeAPIURL     = "https://api.anthropic.com/v1/messages"

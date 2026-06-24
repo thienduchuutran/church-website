@@ -1,13 +1,14 @@
 'use client'
 
 import { Link } from '@/i18n/routing'
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import { useEditModal } from '@/lib/edit-modal'
 import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import PostCard from '@/components/features/posts/PostCard'
 import HeroVideoUpload from '@/components/features/admin/HeroVideoUpload'
+import DiscordLinkCard from '@/components/features/admin/DiscordLinkCard'
 
 const POST_TYPES = [
   { type: 'event', label: 'Event' },
@@ -80,6 +81,12 @@ export default function AdminPage() {
 
       <div className="mb-8">
         <HeroVideoUpload />
+      </div>
+
+      <div className="mb-8">
+        <Suspense fallback={null}>
+          <DiscordLinkCard />
+        </Suspense>
       </div>
 
       <div className="mb-8 space-y-4">

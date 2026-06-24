@@ -7,6 +7,7 @@ import {
 } from '@/lib/post-types'
 import { RichBodyEditor } from '@/components/editor/RichBodyEditor'
 import TagSelector from '@/components/features/gallery/TagSelector'
+import DiscordComposerNote from './DiscordComposerNote'
 
 // touch-manipulation removes iOS's 300ms double-tap delay, which makes the
 // browser less likely to route a "dismiss-picker" tap into a focus event on
@@ -131,6 +132,17 @@ export default function PostFormFields({
             onTagsChange={(tagIds) => onChange({ ...state, tagIds })}
           />
         </div>
+      )}
+
+      {/* Discord delivery preview + @everyone opt-in: create-only. Editing a
+          post re-syncs its Discord message content but never re-pings or
+          re-sends identity, so the note would be misleading there. */}
+      {!postId && (
+        <DiscordComposerNote
+          section={section}
+          notifyEveryone={state.notifyEveryone}
+          onNotifyChange={(next) => onChange({ ...state, notifyEveryone: next })}
+        />
       )}
     </>
   )

@@ -85,12 +85,24 @@ func walkNode(b *strings.Builder, n *html.Node, ls *listState) {
 		b.WriteString("~~")
 
 	case "a":
+		// An auto-linked bare URL (the visible text IS the href, e.g. a URL the
+		// editor linkified on paste) is emitted raw, not as masked [url](url)
+		// markdown - Discord only reliably unfurls a preview card for a bare
+		// URL. A genuinely labeled link (text differs from href) stays masked,
+		// which keeps the nice label and intentionally suppresses the card.
 		href := attrVal(n, "href")
-		b.WriteString("[")
-		walkChildren(b, n, ls)
-		b.WriteString("](")
-		b.WriteString(href)
-		b.WriteString(")")
+		var inner strings.Builder
+		walkChildren(&inner, n, ls)
+		text := inner.String()
+		if strings.TrimSpace(text) == "" || strings.TrimSpace(text) == href {
+			b.WriteString(href)
+		} else {
+			b.WriteString("[")
+			b.WriteString(text)
+			b.WriteString("](")
+			b.WriteString(href)
+			b.WriteString(")")
+		}
 
 	case "ul":
 		for c := n.FirstChild; c != nil; c = c.NextSibling {

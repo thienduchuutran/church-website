@@ -38,28 +38,22 @@ backend/
 │   │   ├── tag.go              ← GET /tags, POST /tags, POST/DELETE /posts/{id}/tags
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
-<<<<<<< HEAD
 │   │   ├── calendar.go         ← GET /calendar (locale-aware), POST/PATCH/DELETE /calendar/events, PUT month note + settings
 │   │   ├── pages.go            ← GET /pages/:slug (locale-aware), PUT /pages/:slug
 │   │   └── admin_translations.go  ← GET list, PATCH approve, POST retranslate (admin review panel)
-=======
 │   │   ├── pages.go            ← GET /pages/:slug, PUT /pages/:slug
 │   │   └── assistant.go        ← POST /assistant/chat
->>>>>>> f457d2f6da2dcd3e0e99857f6c8b96bb7578833e
 │   ├── service/
 │   │   ├── posts.go            ← CreatePost (DB + Discord + translation enqueue), List/Get with locale, Update with diff-based enqueue
 │   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
-<<<<<<< HEAD
 │   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue)
 │   │   ├── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue)
 │   │   └── translation.go      ← List/Approve/Retranslate/CleanupOrphans for the admin review panel; Approve also fire-and-forgets a fine-tuning pair capture
-=======
 │   │   ├── pages.go            ← GetPageContent, UpdatePageContent
 │   │   ├── assistant.go        ← Chat orchestration (RAG pipeline)
 │   │   └── groq.go             ← Thin client for Groq LLM API
->>>>>>> f457d2f6da2dcd3e0e99857f6c8b96bb7578833e
 │   ├── repository/
 │   │   ├── posts.go            ← InsertPost, GetPosts + GetPostByID (both take locale), UpdatePost, DeletePost
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
@@ -115,14 +109,12 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | GET | `/api/v1/reactions/:post_id` | Returns `ReactionSummary` - per-emoji counts + caller's reaction. Optional `?fingerprint=<fp>` query param; when omitted `my_reaction` is null. |
 | POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
-<<<<<<< HEAD
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value }, machine_translated? }` for a static page. `?locale=vi` for translated sections. |
 | GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month. `?locale=vi` for translated event titles/notes and month note content. |
-=======
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value } }` for a static page |
 | GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month |
 | POST | `/api/v1/assistant/chat` | AI assistant chatbox with RAG context (rate-limited per IP) |
->>>>>>> f457d2f6da2dcd3e0e99857f6c8b96bb7578833e
+| GET | `/api/v1/admin/discord/callback` | Discord OAuth redirect target. **Public on purpose** - a browser redirect carries no Bearer token, so trust comes from the HMAC-signed `state`. Links the admin's Discord, then 303-redirects to `{FRONTEND_ORIGIN}/admin?discord=linked\|error`. Do NOT move into the admin group. See `docs/agents/discord.md`. |
 
 > Full request/response shapes and model definitions live in `docs/api.md`.
 
@@ -148,6 +140,8 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | POST | `/api/v1/admin/translations/retranslate/:id` | Delete the current translation + re-enqueue. Returns 202. Used after system-prompt edits to refresh translations. |
 | POST | `/api/v1/admin/translations/retranslate-all` | Bulk: delete every unapproved row and re-enqueue. Returns `{"requeued": N}`. Approved (human-reviewed) translations are skipped. Pair with `scripts/sync-prompt.sh` for prompt iterations. |
 | POST | `/api/v1/admin/translations/cleanup-orphans` | Delete translations (and pending jobs) whose parent record was deleted. Returns `{"deleted_translations": N, "deleted_jobs": N}`. Only known table_names are swept; `fine_tuning_examples` is never touched. |
+| GET | `/api/v1/admin/discord/link` | Returns `{ url }` - the Discord OAuth consent URL. Frontend fetches this *with* the Bearer token, then redirects the browser to `url`. `503` when the OAuth env vars are unset. See `docs/agents/discord.md`. |
+| GET | `/api/v1/admin/discord/status` | `{ linked, discord_username?, discord_avatar_url? }` for the current admin - drives the composer's "posts as ..." note / link nudge. |
 
 ---
 
@@ -273,7 +267,7 @@ public GET /posts?locale=vi  →  PostRepository.GetPosts
 
 ### Model IDs
 
-- General content: `gemini-2.0-flash` via `https://generativelanguage.googleapis.com/v1beta`
+- General content: `gemini-2.5-flash` via `https://generativelanguage.googleapis.com/v1beta` (was `gemini-2.0-flash` until Google retired it 2026-06)
 - Backup for Gemini content: `claude-haiku-4-5-20251001` via `https://api.anthropic.com/v1/messages`
 
 Both clients are raw `net/http`. SDKs were rejected to keep the Docker image and `go.mod` lean.

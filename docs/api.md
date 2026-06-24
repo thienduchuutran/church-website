@@ -246,10 +246,16 @@ Create a new post.
   "title": "Easter Sunday",
   "body": "Join us for service.",
   "event_date": "2026-04-05T10:00:00Z",
-  "external_link": "https://..."
+  "external_link": "https://...",
+  "notify_everyone": false
 }
 ```
 `event_date` is required when `type` is `event`. All other fields except `title` and `type` are optional.
+`notify_everyone` (default `false`) opts this post's Discord message into pinging `@everyone`; it is not persisted.
+
+On success the post is delivered to the matching Discord channel as a single message under the
+writing admin's own Discord identity (best-effort - a Discord failure never fails this request).
+See `docs/agents/discord.md`.
 
 **Response `201`** - created Post object  
 **Response `400`** - validation error  
@@ -273,6 +279,9 @@ Edit an existing post. All fields are optional; only supplied fields are updated
 **Response `200`** - updated Post object  
 **Response `404`** - post not found
 
+If the post was delivered to Discord, its Discord message content is updated in place (best-effort).
+Identity stays as originally sent - Discord ignores username/avatar on edit.
+
 ---
 
 ### `DELETE /api/v1/posts/:id`
@@ -280,6 +289,8 @@ Delete a post and its images.
 
 **Response `204`** - no body  
 **Response `404`** - post not found
+
+If the post was delivered to Discord, the same Discord message is removed (best-effort).
 
 ---
 
@@ -456,6 +467,35 @@ Upsert the per-month styling row. Currently a single field (`accent_color`); the
 **Response `200`** - saved `CalendarMonthSettings` object  
 **Response `400`** - invalid year/month or invalid hex color  
 **Response `401` / `403`** - unauthenticated or not an admin
+
+---
+
+### `GET /api/v1/admin/discord/link`
+Start the one-time Discord account link. Call **with** the Bearer token; returns the Discord
+consent URL, which the frontend then navigates the browser to. (A URL is returned rather than a
+redirect because a top-level browser navigation can't carry the token.)
+
+**Response `200`** - `{ "url": "https://discord.com/api/oauth2/authorize?..." }`  
+**Response `503`** - Discord OAuth is not configured (env vars unset)
+
+---
+
+### `GET /api/v1/admin/discord/status`
+Whether the current admin has linked Discord, for the composer's "posts as ..." note / nudge.
+
+**Response `200`** - `{ "linked": true, "discord_username": "pastorminh", "discord_avatar_url": "https://cdn.discordapp.com/avatars/.../...png" }` (the two `discord_*` fields are omitted when `linked` is `false`)
+
+---
+
+### `GET /api/v1/admin/discord/callback`
+**PUBLIC** (outside the admin group). Discord redirects the browser here after consent; it carries
+no Bearer token, so trust comes from the HMAC-signed `state`. Verifies the state, exchanges the
+`code`, reads `/users/@me`, stores the Discord identity on the admin row, and redirects.
+
+**Query** - `code`, `state` (or `error` if the user declined)  
+**Response `303`** - redirect to `{FRONTEND_ORIGIN}/admin?discord=linked` (or `?discord=error`)
+
+See `docs/agents/discord.md` for the full flow and the security rationale.
 
 ---
 
