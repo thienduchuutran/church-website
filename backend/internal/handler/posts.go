@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -11,14 +12,26 @@ import (
 
 	"github.com/thienduchuutran/church-website/backend/internal/middleware"
 	"github.com/thienduchuutran/church-website/backend/internal/model"
-	"github.com/thienduchuutran/church-website/backend/internal/service"
 )
 
-type PostHandler struct {
-	svc *service.PostService
+// postService is the interface the handler depends on. Keeping it an interface
+// (not the concrete *service.PostService) lets tests inject mockPostService
+// without a real database. *service.PostService satisfies it, so main.go wiring
+// is unchanged.
+type postService interface {
+	Create(ctx context.Context, req model.CreatePostRequest, userID, adminEmail string) (*model.Post, error)
+	List(ctx context.Context, postType *model.PostType, tagIDs []string, limit, offset int, locale string) ([]model.Post, error)
+	Get(ctx context.Context, id, locale string) (*model.Post, error)
+	Update(ctx context.Context, id string, req model.UpdatePostRequest) (*model.Post, error)
+	Delete(ctx context.Context, id string) error
+	SetArchived(ctx context.Context, id string, archived bool) (*model.Post, error)
 }
 
-func NewPostHandler(svc *service.PostService) *PostHandler {
+type PostHandler struct {
+	svc postService
+}
+
+func NewPostHandler(svc postService) *PostHandler {
 	return &PostHandler{svc: svc}
 }
 
@@ -120,6 +133,29 @@ func (h *PostHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	post, err := h.svc.Update(r.Context(), id, req)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "post not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, post)
+}
+
+// Archive handles PATCH /api/v1/posts/{id}/archive. Admin only. A body of
+// {"archived": true} moves an event into the Past section; {"archived": false}
+// returns it to Upcoming. Returns the updated post.
+func (h *PostHandler) Archive(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req model.SetArchivedRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	post, err := h.svc.SetArchived(r.Context(), id, req.Archived)
 	if err != nil {
 		if errors.Is(err, model.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "post not found")

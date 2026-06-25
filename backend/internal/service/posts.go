@@ -196,6 +196,14 @@ func (s *PostService) Update(ctx context.Context, id string, req model.UpdatePos
 	return updated, nil
 }
 
+// SetArchived moves an event between the Upcoming and Past sections by toggling
+// its archived_at flag. Unlike Create/Update it fires no Discord side effect:
+// archiving only changes how the website groups the event, not the content of
+// the Discord message that was already sent.
+func (s *PostService) SetArchived(ctx context.Context, id string, archived bool) (*model.Post, error) {
+	return s.posts.SetArchived(ctx, id, archived)
+}
+
 func (s *PostService) Delete(ctx context.Context, id string) error {
 	// Read the Discord ref BEFORE deleting the row - afterwards the message id
 	// and channel key are gone. Read failure is non-fatal: we just skip the

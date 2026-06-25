@@ -291,7 +291,7 @@ func main() {
 		//     announcements, bible studies, playlists, and gallery without an
 		//     account. Do NOT move these into the RequireAdmin group below - if
 		//     you do, every public page on the site goes blank for non-admins.
-		//   ADMIN-ONLY: POST/PATCH/DELETE /posts, GET /auth/me
+		//   ADMIN-ONLY: POST/PATCH/DELETE /posts, PATCH /posts/{id}/archive, GET /auth/me
 		if postHandler != nil {
 			r.Get("/posts", postHandler.List)
 			r.Get("/posts/{id}", postHandler.Get)
@@ -301,6 +301,7 @@ func main() {
 				r.Get("/auth/me", handler.Me)
 				r.Post("/posts", postHandler.Create)
 				r.Patch("/posts/{id}", postHandler.Update)
+				r.Patch("/posts/{id}/archive", postHandler.Archive)
 				r.Delete("/posts/{id}", postHandler.Delete)
 				if heroVideoHandler != nil {
 					r.Post("/admin/hero-video", heroVideoHandler.UploadVideo)

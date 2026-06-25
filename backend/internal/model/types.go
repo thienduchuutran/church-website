@@ -46,6 +46,11 @@ type Post struct {
 	AdminID      *string         `json:"admin_id"`
 	CreatedAt    time.Time       `json:"created_at"`
 	UpdatedAt    time.Time       `json:"updated_at"`
+	// ArchivedAt records when an admin manually moved an event into the Past
+	// section. NULL means "not manually archived" - the event's section is then
+	// decided by event_date alone. Sent as null (not omitted) so the frontend
+	// can rely on the field always being present. See migration 000007.
+	ArchivedAt   *time.Time      `json:"archived_at"`
 	Images       []PostImage     `json:"images,omitempty"`
 	Reactions    []ReactionCount `json:"reactions,omitempty"`
 	Tags         []Tag           `json:"tags,omitempty"`
@@ -132,6 +137,15 @@ type UpdatePostRequest struct {
 	Body         *string    `json:"body"`
 	EventDate    *time.Time `json:"event_date"`
 	ExternalLink *string    `json:"external_link"`
+}
+
+// SetArchivedRequest is the body for PATCH /posts/{id}/archive. Archived=true
+// moves an event into the Past section; false returns it to Upcoming. Kept
+// separate from UpdatePostRequest because archiving is a section change, not a
+// content edit, and travels through its own repository write (UpdatePost's
+// COALESCE pattern cannot set a column back to NULL, which un-archiving needs).
+type SetArchivedRequest struct {
+	Archived bool `json:"archived"`
 }
 
 type CreateReactionRequest struct {

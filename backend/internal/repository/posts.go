@@ -49,7 +49,7 @@ func (r *PostRepository) GetPosts(ctx context.Context, postType *model.PostType,
 	args := []any{}
 	argIdx := 1
 
-	selectCols := `p.id, p.type, p.title, p.body, p.event_date, p.external_link, p.admin_id, p.created_at, p.updated_at`
+	selectCols := `p.id, p.type, p.title, p.body, p.event_date, p.external_link, p.admin_id, p.created_at, p.updated_at, p.archived_at`
 	if localized {
 		// COALESCE: translated_text when the join hit, else English source.
 		// The machine_translated flag is true when either join produced an
@@ -58,7 +58,7 @@ func (r *PostRepository) GetPosts(ctx context.Context, postType *model.PostType,
 		selectCols = `p.id, p.type,
 		              COALESCE(t_title.translated_text, p.title) AS title,
 		              COALESCE(t_body.translated_text,  p.body)  AS body,
-		              p.event_date, p.external_link, p.admin_id, p.created_at, p.updated_at,
+		              p.event_date, p.external_link, p.admin_id, p.created_at, p.updated_at, p.archived_at,
 		              COALESCE((t_title.id IS NOT NULL AND t_title.is_ai_generated AND t_title.approved_by IS NULL), false)
 		              OR
 		              COALESCE((t_body.id  IS NOT NULL AND t_body.is_ai_generated  AND t_body.approved_by  IS NULL), false)
@@ -106,12 +106,12 @@ func (r *PostRepository) GetPosts(ctx context.Context, postType *model.PostType,
 		var p model.Post
 		if localized {
 			var machine bool
-			if err := rows.Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt, &machine); err != nil {
+			if err := rows.Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt, &machine); err != nil {
 				return nil, err
 			}
 			p.MachineTranslated = machine
 		} else {
-			if err := rows.Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			if err := rows.Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt); err != nil {
 				return nil, err
 			}
 		}
@@ -127,9 +127,9 @@ func (r *PostRepository) GetPostByID(ctx context.Context, id, locale string) (*m
 
 	if !isLocalized(locale) {
 		err := r.pool.QueryRow(ctx,
-			`SELECT id, type, title, body, event_date, external_link, admin_id, created_at, updated_at
+			`SELECT id, type, title, body, event_date, external_link, admin_id, created_at, updated_at, archived_at
 			 FROM posts WHERE id = $1`, id,
-		).Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt)
+		).Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt)
 		if err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {
 				return nil, model.ErrNotFound
@@ -144,7 +144,7 @@ func (r *PostRepository) GetPostByID(ctx context.Context, id, locale string) (*m
 		`SELECT p.id, p.type,
 		        COALESCE(t_title.translated_text, p.title) AS title,
 		        COALESCE(t_body.translated_text,  p.body)  AS body,
-		        p.event_date, p.external_link, p.admin_id, p.created_at, p.updated_at,
+		        p.event_date, p.external_link, p.admin_id, p.created_at, p.updated_at, p.archived_at,
 		        COALESCE((t_title.id IS NOT NULL AND t_title.is_ai_generated AND t_title.approved_by IS NULL), false)
 		        OR
 		        COALESCE((t_body.id  IS NOT NULL AND t_body.is_ai_generated  AND t_body.approved_by  IS NULL), false)
@@ -155,7 +155,7 @@ func (r *PostRepository) GetPostByID(ctx context.Context, id, locale string) (*m
 		 LEFT JOIN translations t_body
 		   ON t_body.record_id  = p.id AND t_body.field_name  = 'body'  AND t_body.locale = $2
 		 WHERE p.id = $1`, id, locale,
-	).Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt, &machine)
+	).Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt, &machine)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, model.ErrNotFound
@@ -177,9 +177,33 @@ func (r *PostRepository) UpdatePost(ctx context.Context, id string, req model.Up
 			external_link = COALESCE($4, external_link),
 			updated_at = now()
 		 WHERE id = $5
-		 RETURNING id, type, title, body, event_date, external_link, admin_id, created_at, updated_at`,
+		 RETURNING id, type, title, body, event_date, external_link, admin_id, created_at, updated_at, archived_at`,
 		req.Title, req.Body, req.EventDate, req.ExternalLink, id,
-	).Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt)
+	).Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, model.ErrNotFound
+		}
+		return nil, err
+	}
+	return &p, nil
+}
+
+// SetArchived flips a post's archived_at: now() when archiving (moving an event
+// to the Past section) or NULL when un-archiving (back to Upcoming). Returns
+// ErrNotFound if the post does not exist. Kept separate from UpdatePost because
+// that path uses COALESCE to leave unspecified columns untouched and so cannot
+// set a column back to NULL - which un-archiving requires.
+func (r *PostRepository) SetArchived(ctx context.Context, id string, archived bool) (*model.Post, error) {
+	var p model.Post
+	err := r.pool.QueryRow(ctx,
+		`UPDATE posts SET
+			archived_at = CASE WHEN $2 THEN now() ELSE NULL END,
+			updated_at = now()
+		 WHERE id = $1
+		 RETURNING id, type, title, body, event_date, external_link, admin_id, created_at, updated_at, archived_at`,
+		id, archived,
+	).Scan(&p.ID, &p.Type, &p.Title, &p.Body, &p.EventDate, &p.ExternalLink, &p.AdminID, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, model.ErrNotFound
