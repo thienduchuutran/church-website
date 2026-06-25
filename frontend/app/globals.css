@@ -183,7 +183,11 @@ body {
 }
 
 /* ─── Rich content read styles (mirrors editor content area) ─── */
-.rich-content { font-size: 15px; line-height: 1.75; }
+/* overflow-wrap: anywhere lets long unbreakable strings (pasted form/links
+   like .../viewform URLs) wrap inside their container instead of spilling out
+   of the card. `anywhere` (not break-word) also shrinks the min-content width,
+   so it stops the string from forcing a grid/flex column wider. */
+.rich-content { font-size: 15px; line-height: 1.75; overflow-wrap: anywhere; }
 .rich-content h1 { font-family: var(--font-serif); font-size: 24px; font-weight: 700; margin: 14px 0 6px; line-height: 1.3; }
 .rich-content h2 { font-family: var(--font-serif); font-size: 18px; font-weight: 600; margin: 10px 0 4px; line-height: 1.3; }
 .rich-content h3 { font-size: 15px; font-weight: 600; margin: 8px 0 3px; }
@@ -203,7 +207,10 @@ body {
 .rich-content code { background: #f2ede8; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 .rich-content pre code { background: transparent; padding: 0; }
 .rich-content hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
-.rich-content a { color: var(--primary); text-decoration: underline; }
+/* word-break: break-all guarantees a long URL (no spaces) splits to fit the
+   column even if overflow-wrap on the parent didn't catch it. Scoped to links
+   so normal prose still wraps on word boundaries. */
+.rich-content a { color: var(--primary); text-decoration: underline; overflow-wrap: anywhere; word-break: break-all; }
 .rich-content mark { padding: 1px 2px; border-radius: 3px; }
 /* Callout blocks in read view */
 .rich-content [data-callout] {
