@@ -21,6 +21,10 @@ export interface Post {
   admin_id: string | null
   created_at: string
   updated_at: string
+  // Timestamp set when an admin manually moves an event into the "Past" section,
+  // null otherwise. Combined with event_date by lib/events.ts to decide whether
+  // an event is Upcoming or Past. Always present (sent as null, not omitted).
+  archived_at: string | null
   // Backend fills `images` from a join on post_images and presigns each storage_url
   // on the fly. The field is omitted (not empty array) when the post has no images.
   images?: PostImage[]

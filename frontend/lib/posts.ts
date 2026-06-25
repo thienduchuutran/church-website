@@ -64,6 +64,13 @@ export async function deletePost(id: string, token: string): Promise<void> {
   await apiDelete(`${POSTS_BASE}/${id}`, token)
 }
 
+// setPostArchived moves an event between the Upcoming and Past sections.
+// archived=true stamps archived_at (moves it to Past); false clears it (back to
+// Upcoming). Admin-only on the backend. Returns the updated post.
+export async function setPostArchived(id: string, archived: boolean, token: string): Promise<Post> {
+  return (await apiPatch(`${POSTS_BASE}/${id}/archive`, { archived }, token)) as Post
+}
+
 export async function listTags(): Promise<Tag[]> {
   return ((await apiGet(TAGS_BASE)) as Tag[]) ?? []
 }
