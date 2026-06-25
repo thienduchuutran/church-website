@@ -4,7 +4,9 @@ import { listPosts } from '@/lib/posts'
 import { getHeroVideo } from '@/lib/hero'
 import type { Post } from '@/lib/types'
 import PostFeed from '@/components/features/posts/PostFeed'
+import PastEventsCarousel from '@/components/features/posts/PastEventsCarousel'
 import HeroVideo from '@/components/features/hero/HeroVideo'
+import { partitionEvents } from '@/lib/events'
 
 /** Hero decorative strip: terracotta to warm gold, PRODUCT-allowed gradient use */
 const HERO_RULE =
@@ -18,7 +20,7 @@ export default async function HomePage() {
   const locale = await getLocale()
   const [announcementsResult, eventsResult, heroVideoResult] = await Promise.allSettled([
     listPosts({ type: 'announcement', limit: 3, locale }),
-    listPosts({ type: 'event', limit: 20, locale }),
+    listPosts({ type: 'event', limit: 30, locale }),
     getHeroVideo(),
   ])
 
@@ -32,12 +34,12 @@ export default async function HomePage() {
   const allEvents: Post[] =
     eventsResult.status === 'fulfilled' ? eventsResult.value : []
 
-  // Show only events that haven't happened yet, soonest first, capped at 2.
-  const nowIso = new Date().toISOString()
-  const eventPosts = allEvents
-    .filter((p) => p.event_date && p.event_date >= nowIso)
-    .sort((a, b) => (a.event_date ?? '').localeCompare(b.event_date ?? ''))
-    .slice(0, 2)
+  // Split events into the two homepage sections via the shared classifier.
+  // Upcoming shows the soonest few (dated and dateless); Past is a swipeable
+  // teaser that links to the full archive on /events.
+  const { upcoming, past } = partitionEvents(allEvents)
+  const upcomingEvents = upcoming.slice(0, 3)
+  const pastEvents = past.slice(0, 10)
 
   const loadErrorMessage =
     announcementsError && eventsError
@@ -145,8 +147,31 @@ export default async function HomePage() {
               View all →
             </Link>
           </div>
-          <PostFeed posts={eventPosts} emptyMessage="No upcoming events." />
+          <PostFeed posts={upcomingEvents} emptyMessage="No upcoming events." />
         </section>
+
+        {pastEvents.length > 0 && (
+          <section
+            aria-labelledby="home-past-events-heading"
+            className="mt-16 scroll-mt-6 sm:mt-20 lg:mt-24"
+          >
+            <div className="mb-4 flex min-w-0 flex-wrap items-baseline justify-between gap-x-6 gap-y-3">
+              <h2
+                id="home-past-events-heading"
+                className="min-w-0 max-w-[min(100%,36rem)] flex-1 break-words font-serif text-xl font-semibold leading-snug tracking-[-0.02em] text-foreground sm:text-2xl sm:leading-tight"
+              >
+                Past Events
+              </h2>
+              <Link
+                href="/events"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center self-end rounded-lg px-3 font-display text-sm font-medium leading-normal text-primary underline-offset-4 hover:underline sm:self-auto"
+              >
+                View all →
+              </Link>
+            </div>
+            <PastEventsCarousel posts={pastEvents} />
+          </section>
+        )}
       </div>
     </div>
   )

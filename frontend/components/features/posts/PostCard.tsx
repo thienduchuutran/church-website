@@ -2,6 +2,7 @@ import Image from 'next/image'
 import type { Post } from '@/lib/types'
 import ReactionBar from './ReactionBar'
 import AdminControls from '@/components/features/admin/AdminControls'
+import EventArchiveButton from '@/components/features/admin/EventArchiveButton'
 import { RichContent } from '@/components/editor/RichContent'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 
@@ -66,7 +67,14 @@ export default function PostCard({
             {formatDate(post.event_date)}
           </time>
         )}
-        <div className="ml-auto">
+        {post.type === 'event' && !post.event_date && (
+          <span className="font-display text-xs font-medium text-muted">
+            <span aria-hidden>📅 </span>
+            Date TBD
+          </span>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          {post.type === 'event' && <EventArchiveButton post={post} />}
           <AdminControls postId={post.id} />
         </div>
       </div>
