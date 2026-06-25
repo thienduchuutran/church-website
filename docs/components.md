@@ -156,7 +156,7 @@ Renders a vertical list of `PostCard` components with an empty-state fallback. E
 ---
 
 #### `PastEventsCarousel`
-Horizontally swipeable strip of past events, rendered below the Upcoming feed on the homepage and `/events`. Uses native CSS scroll-snap (no JS carousel); each slide is ~85% wide on mobile (the next card "peeks" in to signal swipeability) and `340px` on `sm+`. Reuses `PostCard` for each slide. The parent hides the whole section when the list is empty, so this component renders no empty state.
+Horizontally swipeable strip of past events, rendered below the Upcoming feed on the homepage and `/events`. Each slide is a **full-width `PostCard`** - identical to the cards in the vertical feeds - so the section reads like the normal feed except you swipe sideways between past events instead of scrolling down. Uses native CSS scroll-snap (no JS carousel), one card snapping into view at a time. The parent hides the whole section when the list is empty, so this component renders no empty state.
 
 **Props**
 | Prop | Type | Default | Description |
