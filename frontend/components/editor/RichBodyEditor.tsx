@@ -12,6 +12,7 @@ import Color from '@tiptap/extension-color'
 import CharacterCount from '@tiptap/extension-character-count'
 import Placeholder from '@tiptap/extension-placeholder'
 
+import { sanitizeBody } from '@/lib/sanitizeBody'
 import { CalloutBlock } from './extensions/CalloutBlock'
 import { PersistentToolbar } from './toolbar/PersistentToolbar'
 import { BubbleToolbar } from './toolbar/BubbleToolbar'
@@ -71,6 +72,11 @@ export function RichBodyEditor({
         'aria-multiline': 'true',
         'aria-label': 'Post body',
       },
+      // Strip pasted junk (inline color spans, empty wrappers, disallowed tags)
+      // before Tiptap parses it. This is the root-cause fix for the
+      // `color: oklab(...)` markup that came in from churchcenter.com/Gmail and
+      // then got carried verbatim into the Vietnamese translations.
+      transformPastedHTML: (html) => sanitizeBody(html),
     },
     immediatelyRender: false,
   })

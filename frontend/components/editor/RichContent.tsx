@@ -1,12 +1,7 @@
 'use client'
 
 import DOMPurify from 'isomorphic-dompurify'
-
-const ALLOWED_TAGS = [
-  'p', 'h1', 'h2', 'h3', 'h4', 'br', 'strong', 'em', 'u', 's', 'mark', 'a',
-  'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'hr', 'div', 'span',
-]
-const ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'data-callout', 'data-callout-variant', 'style']
+import { sanitizeBody } from '@/lib/sanitizeBody'
 
 interface RichContentProps {
   html: string
@@ -20,11 +15,10 @@ function countWords(html: string): number {
 }
 
 export function RichContent({ html, className, showMeta = false }: RichContentProps) {
-  const clean = DOMPurify.sanitize(html, {
-    ALLOWED_TAGS,
-    ALLOWED_ATTR,
-    FORCE_BODY: false,
-  })
+  // Shared sanitizer: drops every inline style except text-align, so any
+  // legacy `color: oklab(...)` markup still sitting in stored posts renders
+  // clean here without waiting on a data backfill.
+  const clean = sanitizeBody(html)
 
   const wordCount = showMeta ? countWords(html) : 0
   const readMin = showMeta ? Math.max(1, Math.ceil(wordCount / 200)) : 0

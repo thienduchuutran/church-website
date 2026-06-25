@@ -1,4 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPostMultipart } from './api'
+import { sanitizeBody } from './sanitizeBody'
 import type { Post, PostType, Tag } from './types'
 
 const POSTS_BASE = '/api/v1/posts'
@@ -48,8 +49,18 @@ export async function getPost(id: string, locale?: string): Promise<Post> {
   return (await apiGet(`${POSTS_BASE}/${id}${qs}`)) as Post
 }
 
+// Sanitize the body before it leaves the browser so the stored HTML (and
+// everything downstream of it - the translation worker, Discord, the public
+// render) only ever sees the allowed tags with no junk inline styles. The
+// editor's paste handler already strips most of it; this is the authoritative
+// chokepoint for every write.
+function withCleanBody(payload: PostPayload): PostPayload {
+  if (payload.body == null) return payload
+  return { ...payload, body: sanitizeBody(payload.body) }
+}
+
 export async function createPost(payload: PostPayload, token: string): Promise<Post> {
-  return (await apiPost(POSTS_BASE, payload, token)) as Post
+  return (await apiPost(POSTS_BASE, withCleanBody(payload), token)) as Post
 }
 
 export async function updatePost(
@@ -57,7 +68,7 @@ export async function updatePost(
   payload: PostPayload,
   token: string,
 ): Promise<Post> {
-  return (await apiPatch(`${POSTS_BASE}/${id}`, payload, token)) as Post
+  return (await apiPatch(`${POSTS_BASE}/${id}`, withCleanBody(payload), token)) as Post
 }
 
 export async function deletePost(id: string, token: string): Promise<void> {
