@@ -52,6 +52,7 @@ frontend/
 │       ├── posts/
 │       │   ├── PostCard.tsx            ← The "Facebook-style" post card
 │       │   ├── PostFeed.tsx            ← List of PostCards
+│       │   ├── PastEventsCarousel.tsx  ← Swipeable strip of past events (homepage + /events)
 │       │   └── ReactionBar.tsx         ← 👍 ❤️ 🙏 😂 row on each card
 │       ├── gallery/
 │       │   ├── AlbumGrid.tsx           ← Grid of albums
@@ -65,6 +66,7 @@ frontend/
 │           ├── DiscordLinkCard.tsx      ← Dashboard card: one-time Discord OAuth link
 │           ├── EditPostForm.tsx         ← Wraps PostFormFields, PATCHes existing posts
 │           ├── EditPostModal.tsx        ← Modal chrome + portal hosting EditPostForm
+│           ├── EventArchiveButton.tsx   ← Admin "Move to Past/Upcoming" toggle on event cards
 │           └── PostFormFields.tsx       ← Presentational inputs shared by Create/Edit
 │       └── assistant/
 │           ├── ChatBox.tsx             ← Floating AI assistant widget
@@ -75,6 +77,7 @@ frontend/
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
 │   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale)
 │   ├── discord.ts                      ← Discord link API (getDiscordStatus / getDiscordLinkUrl)
+│   ├── events.ts                       ← partitionEvents/isUpcoming/canUnarchive (Upcoming vs Past sectioning)
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
 │   ├── pages.ts                        ← Page-content API service (typed { sections, machine_translated } response)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
@@ -158,6 +161,7 @@ Adding a new locale:
 | `createPost(payload, token)` | `POST /posts` | `CreatePostForm` |
 | `updatePost(id, payload, token)` | `PATCH /posts/{id}` | `EditPostForm` |
 | `deletePost(id, token)` | `DELETE /posts/{id}` | `AdminControls` |
+| `setPostArchived(id, archived, token)` | `PATCH /posts/{id}/archive` | `EventArchiveButton` |
 
 ```ts
 // Server component - cached for 60s

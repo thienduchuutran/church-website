@@ -34,7 +34,7 @@ backend/
 ├── cmd/server/main.go          ← entry point
 ├── internal/
 │   ├── handler/
-│   │   ├── posts.go            ← GET /posts, POST /posts, PATCH /posts/:id, DELETE /posts/:id (locale-aware reads)
+│   │   ├── posts.go            ← GET /posts, POST /posts, PATCH /posts/:id, PATCH /posts/:id/archive, DELETE /posts/:id (locale-aware reads; depends on a postService interface for testability)
 │   │   ├── tag.go              ← GET /tags, POST /tags, POST/DELETE /posts/{id}/tags
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
@@ -44,7 +44,7 @@ backend/
 │   │   ├── pages.go            ← GET /pages/:slug, PUT /pages/:slug
 │   │   └── assistant.go        ← POST /assistant/chat
 │   ├── service/
-│   │   ├── posts.go            ← CreatePost (DB + Discord + translation enqueue), List/Get with locale, Update with diff-based enqueue
+│   │   ├── posts.go            ← CreatePost (DB + Discord + translation enqueue), List/Get with locale, Update with diff-based enqueue, SetArchived (no Discord side effect)
 │   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
@@ -55,7 +55,7 @@ backend/
 │   │   ├── assistant.go        ← Chat orchestration (RAG pipeline)
 │   │   └── groq.go             ← Thin client for Groq LLM API
 │   ├── repository/
-│   │   ├── posts.go            ← InsertPost, GetPosts + GetPostByID (both take locale), UpdatePost, DeletePost
+│   │   ├── posts.go            ← InsertPost, GetPosts + GetPostByID (both take locale), UpdatePost, SetArchived, DeletePost
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
 │   │   ├── reactions.go        ← UpsertReaction, GetReactionCounts, DeleteReaction
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
@@ -124,6 +124,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | GET | `/api/v1/auth/me` | Returns the authenticated admin's identity (sub + email) |
 | POST | `/api/v1/posts` | Create a new post |
 | PATCH | `/api/v1/posts/:id` | Edit a post |
+| PATCH | `/api/v1/posts/:id/archive` | Move an event to/from the Past section. Body `{ "archived": bool }`; sets/clears `archived_at`. No Discord side effect. |
 | DELETE | `/api/v1/posts/:id` | Delete a post |
 | PUT | `/api/v1/pages/:slug` | Upsert sections for a static page |
 | POST | `/api/v1/posts/:id/images` | Upload an image to Cloudflare R2 and attach it to a post. Returns `{ key }`. |

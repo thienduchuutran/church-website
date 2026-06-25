@@ -48,15 +48,17 @@ create table posts (
   discord_message_id  text,          -- id Discord returns on send (?wait=true); edit/delete target this message (000006)
   discord_channel_key text,          -- env var name of the webhook used, e.g. 'DISCORD_WEBHOOK_EVENTS'; edit/delete reuse it
   created_at          timestamptz default now(),
-  updated_at          timestamptz default now()
+  updated_at          timestamptz default now(),
+  archived_at         timestamptz    -- set when an admin moves an event into the "Past" section; null = not archived (000007)
 );
 ```
+> `archived_at` (migration `000007`) is null until an admin manually moves an event into the website's "Past Events" section. An event renders as Past when `archived_at` is set **OR** its `event_date` has already passed; a dateless event stays in "Upcoming" until archived. See `docs/agents/known-quirks.md` → "Dateless events never appeared in the homepage Upcoming list".
 > `discord_message_id` / `discord_channel_key` (migration `000006`) are nullable - they stay null until a post is delivered to Discord (delivery is best-effort). They let the site edit/delete the exact same Discord message it originally sent, through the exact same webhook, even if the post-type→channel mapping later changes. See `docs/agents/discord.md`.
 
 **Type usage guide:**
 | type | title | body | event_date | external_link |
 |------|-------|------|------------|---------------|
-| event | event name | description | required | optional |
+| event | event name | description | optional (dateless = "Upcoming" until archived) | optional |
 | announcement | subject | full message | null | null |
 | bible_study | lesson title | optional notes | null | Google Slides/Docs URL |
 | playlist | event/retreat name | null | null | Spotify URL |
@@ -280,6 +282,7 @@ posts       ──< reactions     (one post has many reactions)
 create index on posts(type);
 create index on posts(created_at desc);
 create index on posts(event_date) where event_date is not null;
+create index posts_archived_at_idx on posts(archived_at) where archived_at is not null;  -- the Past-section read path
 create index on post_images(post_id);
 create index on reactions(post_id);
 create index on page_content(page_slug);
@@ -326,6 +329,10 @@ backend/migrations/
 ├── 000004_translations.down.sql
 ├── 000005_fine_tuning_examples.up.sql  ← fine_tuning_examples (gold pairs captured on translation approval)
 ├── 000005_fine_tuning_examples.down.sql
+├── 000006_discord_identity.up.sql      ← admins += discord_*; posts += discord_message_id/channel_key
+├── 000006_discord_identity.down.sql
+├── 000007_post_archived_at.up.sql      ← posts += archived_at (+ partial index) for the Past-events section
+├── 000007_post_archived_at.down.sql
 └── embed.go                            ← exposes the SQL files as embed.FS to main.go
 ```
 

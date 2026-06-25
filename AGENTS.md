@@ -84,6 +84,7 @@ cd backend && go run ./cmd/server
 | Hosting, deployment, Render, Vercel, R2, CI/CD          | `docs/agents/deployment.md`            |
 | A bug or quirk that was previously solved                 | `docs/agents/known-quirks.md`          |
 | Posts/events/announcements not showing up after a write   | `docs/agents/known-quirks.md` ("Posts created on production don't show up in the UI") |
+| Events not appearing in Upcoming, or the Upcoming/Past split, `archived_at`, the Past carousel | `docs/agents/known-quirks.md` ("Dateless events never appeared in the homepage Upcoming list") + `frontend/lib/events.ts` |
 | FK violation on `posts_admin_id_fkey` or similar          | `docs/agents/known-quirks.md` ("Posting fails with `posts_admin_id_fkey`...") |
 | Vietnamese text showing as `?` after a script/seed on Windows | `docs/agents/known-quirks.md` ("Vietnamese text corrupts to `?` when piped through PowerShell 5.1") |
 | Prerender error on a `/en/*` or `/vi/*` page mentioning `use-intl` / `usePathname`, especially after merging master | `docs/agents/known-quirks.md` ("Merging master resurrects `app/layout.tsx` and breaks the i18n build") |

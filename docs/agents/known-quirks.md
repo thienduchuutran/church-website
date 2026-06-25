@@ -15,6 +15,29 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Dateless events never appeared in the homepage Upcoming list
+**Date solved:** 2026-06-25
+**Symptom:** An event-type post created without a date/time never showed up in
+the homepage "Upcoming Events" section. It existed and was reachable on `/events`,
+but the homepage silently dropped it.
+**Root cause:** The homepage built its list with
+`allEvents.filter((p) => p.event_date && p.event_date >= nowIso)`. The leading
+`p.event_date &&` truthiness check discarded every event whose `event_date` was
+null *before* the date comparison ran - so a dateless event could never qualify as
+"upcoming". Fine for a purely date-sorted teaser, wrong once dateless events were allowed.
+**Fix:** Added a manual `archived_at` flag (migration `000007`) and a shared, pure
+classifier `frontend/lib/events.ts` → `partitionEvents`. An event is Upcoming when it
+is not archived AND (has no date OR its date is still ahead); Past when archived OR its
+date has passed. The homepage and `/events` now render an Upcoming feed plus a swipeable
+Past carousel, and admins move events between the two with `EventArchiveButton`
+(`PATCH /posts/:id/archive`).
+**Files affected:** `backend/migrations/000007_post_archived_at.{up,down}.sql`,
+`backend/internal/{model/types,repository/posts,service/posts,handler/posts}.go`,
+`backend/cmd/server/main.go`, `frontend/lib/{events,posts,types}.ts`,
+`frontend/components/features/posts/{PostCard,PastEventsCarousel}.tsx`,
+`frontend/components/features/admin/EventArchiveButton.tsx`,
+`frontend/app/[locale]/page.tsx`, `frontend/app/[locale]/events/page.tsx`.
+
 ## Merging master resurrects `app/layout.tsx` and breaks the i18n build
 **Date solved:** 2026-06-12
 **Symptom:** Vercel build fails during static generation with

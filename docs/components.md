@@ -136,7 +136,7 @@ Facebook-style card rendered for every post.
 | `showReactions` | `boolean` | `true` | Pass `false` in admin views to hide the reaction bar |
 
 **Anatomy** (top to bottom): date badge → title → body text → optional image(s) → optional external link button → `ReactionBar`  
-Event date line uses a decorative calendar emoji with `aria-hidden` so screen readers read the formatted date only.  
+Event date line uses a decorative calendar emoji with `aria-hidden` so screen readers read the formatted date only. Event cards with no `event_date` show a muted "📅 Date TBD" chip in place of a date; admins also see an `EventArchiveButton` in the header to move the event between the Upcoming and Past sections.  
 **Visual system (PRODUCT):** **`rounded-[14px]`** and warm **`border-border`**; **no shadow at rest**, **`hover:shadow-[0_8px_28px_rgba(28,20,16,0.09)]`** only on hover. **Event** badges use **sage** (`accent`); **announcement** badges use **terracotta** (`primary`). Card titles use **`font-serif font-semibold`**.  
 **Client component:** no (server component; `ReactionBar` inside is client)
 
@@ -150,6 +150,18 @@ Renders a vertical list of `PostCard` components with an empty-state fallback. E
 |------|------|---------|-------------|
 | `posts` | `Post[]` | required | Array of posts to render |
 | `showReactions` | `boolean` | `true` | Forwarded to each `PostCard` |
+
+**Client component:** no
+
+---
+
+#### `PastEventsCarousel`
+Horizontally swipeable strip of past events, rendered below the Upcoming feed on the homepage and `/events`. Uses native CSS scroll-snap (no JS carousel); each slide is ~85% wide on mobile (the next card "peeks" in to signal swipeability) and `340px` on `sm+`. Reuses `PostCard` for each slide. The parent hides the whole section when the list is empty, so this component renders no empty state.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `posts` | `Post[]` | required | Past events to render as slides (already sorted by the parent via `partitionEvents`) |
 
 **Client component:** no
 
@@ -360,6 +372,19 @@ Per-post pencil + trash buttons rendered inside `PostCard`. Visible only to admi
 **Data flow:**
 - Edit click → `useEditModal().openEdit(postId)` → provider mounts `EditPostModal` with the id.
 - Delete click → `confirm(...)` → `deletePost(postId, token)` → `router.refresh()`.
+
+---
+
+#### `EventArchiveButton`
+Admin-only button rendered in the `PostCard` header for `event` posts. Moves the event between the Upcoming and Past sections via `setPostArchived`. Shows "Move to Past" when the event is Upcoming, "Move to Upcoming" when it can be returned (`canUnarchive` in `lib/events.ts`), and renders nothing when neither applies (e.g. an event already past by date - clearing the flag wouldn't move it).
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `post` | `Post` | required | Needs the full post to read `archived_at` + `event_date` for the direction decision |
+
+**Client component:** yes  
+**Data flow:** click → `setPostArchived(post.id, toPast, token)` → `router.refresh()` + `useEditModal().notifyChanged()`.
 
 ---
 

@@ -3,6 +3,35 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-06-25 - Upcoming / Past events redesign (manual archive + swipeable Past carousel)
+
+The homepage and `/events` now split events into an **Upcoming** feed and a horizontally
+swipeable **Past** carousel below it. Two problems drove this: (1) a dateless event used to
+vanish from the homepage entirely (the old filter discarded a null `event_date` before the date
+check), and (2) there was no way to retire an event from "Upcoming" on the admin's terms. The
+model chosen with the owner is **hybrid**: a dated event auto-drops to Past once its date passes,
+and a new manual `archived_at` flag lets an admin move any event (dated or dateless) between
+sections via `EventArchiveButton` on each card. Classification lives in one shared, pure helper
+(`lib/events.ts` → `partitionEvents`) so the two pages can never disagree. Built phase-by-phase
+(DB → backend TDD → frontend logic → UI → docs); `go test ./...`, `tsc`, and eslint all green.
+
+| File | Change | Why |
+|---|---|---|
+| `backend/migrations/000007_post_archived_at.{up,down}.sql` | `posts += archived_at timestamptz` + partial index `where archived_at is not null` | Persistent, shared "moved to Past" state; the timestamp doubles as the Past-carousel sort key |
+| `backend/internal/model/types.go` | `Post.ArchivedAt`; new `SetArchivedRequest` | Surface the flag; archiving is its own request, not a content edit |
+| `backend/internal/repository/posts.go` | `archived_at` in every read; new `SetArchived` (`CASE WHEN $2 THEN now() ELSE NULL END`) | Dedicated write - `UpdatePost`'s COALESCE can't reset a column to NULL |
+| `backend/internal/service/posts.go` | `SetArchived` pass-through, **no Discord side effect** | Archiving changes site grouping only, not the message already sent |
+| `backend/internal/handler/posts.go` + `posts_test.go` | Extracted `postService` interface; `Archive` handler; 5 handler tests | The interface makes the handler mockable (it had no test before) |
+| `backend/cmd/server/main.go` | `PATCH /posts/{id}/archive` inside `RequireAdmin` | Privileged mutation |
+| `frontend/lib/events.ts` | `partitionEvents` / `isUpcoming` / `canUnarchive`, pure | One source of truth for both pages |
+| `frontend/lib/{types,posts}.ts` | `archived_at` on `Post`; `setPostArchived` | Mirror the field + typed call site |
+| `frontend/components/features/posts/{PostCard,PastEventsCarousel}.tsx` | "Date TBD" chip + archive button on cards; native scroll-snap carousel | Visible UI; a dateless event reads as intentional |
+| `frontend/components/features/admin/EventArchiveButton.tsx` | Admin-only "Move to Past/Upcoming" | The manual move control |
+| `frontend/app/[locale]/{page,events/page}.tsx` | Upcoming feed + Past carousel on both | The two-section layout |
+
+Migration `000007` applies on the next backend boot against a DB (local `go run` or the next
+Render deploy) - until then `archived_at` does not physically exist.
+
 ## 2026-06-22 - Discord posts as the real admin (per-admin identity + clean edit/delete) - backend
 
 Replaced the single generic-bot webhook with a system where a post appears in Discord as **one

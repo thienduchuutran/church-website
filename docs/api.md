@@ -250,7 +250,7 @@ Create a new post.
   "notify_everyone": false
 }
 ```
-`event_date` is required when `type` is `event`. All other fields except `title` and `type` are optional.
+`event_date` is **optional** even for events - an event created without one shows in the Upcoming section until an admin archives it. All fields except `title` and `type` are optional.
 `notify_everyone` (default `false`) opts this post's Discord message into pinging `@everyone`; it is not persisted.
 
 On success the post is delivered to the matching Discord channel as a single message under the
@@ -281,6 +281,22 @@ Edit an existing post. All fields are optional; only supplied fields are updated
 
 If the post was delivered to Discord, its Discord message content is updated in place (best-effort).
 Identity stays as originally sent - Discord ignores username/avatar on edit.
+
+---
+
+### `PATCH /api/v1/posts/:id/archive`
+Move an event between the Upcoming and Past sections (admin only). Sets or clears `archived_at`.
+
+**Request body**
+```json
+{ "archived": true }
+```
+`true` stamps `archived_at = now()` (moves the event to Past); `false` clears it (back to Upcoming).
+
+**Response `200`** - updated Post object  
+**Response `404`** - post not found
+
+This does **not** touch Discord - archiving only changes how the website groups the event, not the message already sent. An event whose `event_date` has passed is shown in Past automatically with no archive needed; this manual flag exists for dateless events and for removing an event from Upcoming early.
 
 ---
 
@@ -513,6 +529,7 @@ See `docs/agents/discord.md` for the full flow and the security rationale.
   "admin_id": "uuid",
   "created_at": "2026-04-01T00:00:00Z",
   "updated_at": "2026-04-01T00:00:00Z",
+  "archived_at": null,
   "images": [],
   "reactions": [],
   "tags": [],
@@ -521,6 +538,7 @@ See `docs/agents/discord.md` for the full flow and the security rationale.
 ```
 `admin_id` is the **Supabase JWT `sub` claim** (auth user UUID), not a foreign key to `admins.id`. There is no FK on this column on purpose - see [`backend/migrations/000001_initial_schema.up.sql`](../backend/migrations/000001_initial_schema.up.sql) and `docs/agents/known-quirks.md` if a `posts_admin_id_fkey` ever reappears.  
 `tags` is populated only for `gallery_album` posts; other post types have an empty array.
+`event_date` is **nullable even for events** - an event with no date shows in the Upcoming section until an admin archives it. `archived_at` is a timestamp set when an admin manually moves an event into the Past section, `null` otherwise; it is always present (never omitted). Combined with `event_date` it decides whether an event renders as Upcoming or Past - see the `PATCH /posts/:id/archive` endpoint and `docs/agents/database.md`.
 `machine_translated` is **omitted** from the JSON unless the response is in a non-English locale AND at least one served field (title or body) was an unapproved AI translation. See [Localized reads](#localized-reads-locale).
 
 ### PostImage
