@@ -28,6 +28,60 @@ export interface AdminTranslationListResponse {
   total: number
 }
 
+// A record's fields grouped into one reviewable "document" - e.g. a post's
+// `title` and `body` translations shown together instead of as two unrelated
+// cards. Keyed by (table_name, record_id, locale): the same post in two target
+// locales is two groups, which is correct - each locale is reviewed on its own.
+export interface TranslationRecordGroup {
+  key: string
+  table_name: string
+  record_id: string
+  locale: string
+  record_title: string
+  // Ordered title-first, then body, then any other fields alphabetically -
+  // the order a human reads a post in.
+  fields: AdminTranslation[]
+}
+
+// Lower number sorts first. Anything not listed falls after these, ordered
+// alphabetically among themselves.
+const FIELD_ORDER: Record<string, number> = { title: 0, body: 1 }
+
+function compareFields(a: AdminTranslation, b: AdminTranslation): number {
+  const ra = FIELD_ORDER[a.field_name] ?? 99
+  const rb = FIELD_ORDER[b.field_name] ?? 99
+  if (ra !== rb) return ra - rb
+  return a.field_name.localeCompare(b.field_name)
+}
+
+// groupAdminTranslations buckets a flat list of translation rows into per-record
+// groups, preserving the incoming order of first appearance (the backend sorts
+// newest-first, so the newest record stays on top). Grouping is done here rather
+// than on the backend because the per-field approve/retranslate endpoints are
+// unchanged - this is purely how the rows are presented.
+export function groupAdminTranslations(items: AdminTranslation[]): TranslationRecordGroup[] {
+  const groups = new Map<string, TranslationRecordGroup>()
+  for (const item of items) {
+    const key = `${item.table_name}:${item.record_id}:${item.locale}`
+    const existing = groups.get(key)
+    if (existing) {
+      existing.fields.push(item)
+    } else {
+      groups.set(key, {
+        key,
+        table_name: item.table_name,
+        record_id: item.record_id,
+        locale: item.locale,
+        record_title: item.record_title,
+        fields: [item],
+      })
+    }
+  }
+  const result = Array.from(groups.values())
+  for (const g of result) g.fields.sort(compareFields)
+  return result
+}
+
 export interface AdminTranslationListFilters {
   locale?: string
   // Tri-state: undefined = all, false = needs review, true = approved.

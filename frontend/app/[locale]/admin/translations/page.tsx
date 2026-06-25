@@ -5,12 +5,13 @@ import { useAuth } from '@/lib/auth'
 import {
   approveTranslation,
   cleanupOrphanTranslations,
+  groupAdminTranslations,
   listAdminTranslations,
   retranslateAllTranslations,
   retranslateTranslation,
   type AdminTranslation,
 } from '@/lib/translations'
-import TranslationReviewItem from '@/components/features/admin/TranslationReviewItem'
+import TranslationReviewRecord from '@/components/features/admin/TranslationReviewRecord'
 
 // Filter tab state matches the backend's tri-state `approved` query param:
 //   needs-review → approved=false   (default, the most common task)
@@ -53,6 +54,12 @@ export default function AdminTranslationsPage() {
   const [orphanBusy, setOrphanBusy] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  // Group the flat per-field rows into per-record "documents" so a post's title
+  // and body are reviewed together. Pagination stays row-based on the backend;
+  // at current scale a record's fields are enqueued together and land on the
+  // same page, so grouping the fetched page is reliable.
+  const groups = groupAdminTranslations(items)
 
   // load is exposed so child items can call it after approve/retranslate to
   // refresh the list - simpler than tracking per-item state and rebuilding.
@@ -277,7 +284,13 @@ export default function AdminTranslationsPage() {
           <span>Loading…</span>
         ) : (
           <>
-            {total} {total === 1 ? 'item' : 'items'}
+            {total} {total === 1 ? 'field' : 'fields'}
+            {groups.length > 0 && (
+              <>
+                {' · '}
+                {groups.length} {groups.length === 1 ? 'record' : 'records'} on this page
+              </>
+            )}
             {totalPages > 1 && (
               <>
                 {' · '}Page {page + 1} of {totalPages}
@@ -309,10 +322,10 @@ export default function AdminTranslationsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {items.map((item) => (
-            <TranslationReviewItem
-              key={item.id}
-              item={item}
+          {groups.map((group) => (
+            <TranslationReviewRecord
+              key={group.key}
+              group={group}
               onChange={load}
               onApprove={handleApprove}
               onRetranslate={handleRetranslate}
