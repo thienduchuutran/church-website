@@ -4,6 +4,8 @@ import { useState } from 'react'
 import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
 import { createPost } from '@/lib/posts'
+import { useSessionDraft } from '@/lib/use-session-draft'
+import { useRegisterUnsaved } from '@/lib/unsaved-changes'
 import {
   EMPTY_POST_FORM,
   POST_TYPE_LABELS,
@@ -24,9 +26,20 @@ export default function CreatePostForm({
 }) {
   const { session } = useAuth()
   const router = useRouter()
-  const [state, setState] = useState<PostFormState>(EMPTY_POST_FORM)
+  // Draft persists per section so a half-composed post survives a language
+  // switch (which remounts/closes this modal) or an accidental refresh.
+  const [state, setState, clearDraft] = useSessionDraft<PostFormState>(
+    `post-draft:new:${section}`,
+    EMPTY_POST_FORM,
+  )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  // Dirty once anything has been typed. Drives the discard guard + beforeunload.
+  useRegisterUnsaved(
+    `post-create:${section}`,
+    JSON.stringify(state) !== JSON.stringify(EMPTY_POST_FORM),
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -35,6 +48,7 @@ export default function CreatePostForm({
     setError(null)
     try {
       await createPost(toPostPayload(section, state), session.access_token)
+      clearDraft() // committed - drop the saved draft
       router.refresh()
       if (onSuccess) {
         onSuccess()
@@ -48,6 +62,7 @@ export default function CreatePostForm({
   }
 
   function handleCancel() {
+    clearDraft() // explicit discard - drop the saved draft
     if (onCancel) onCancel()
     else router.back()
   }

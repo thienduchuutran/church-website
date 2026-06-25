@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import type { AdminTranslation, TranslationRecordGroup } from '@/lib/translations'
 import { sanitizeBody } from '@/lib/sanitizeBody'
+import { useSessionDraft } from '@/lib/use-session-draft'
 import { RichContent } from '@/components/editor/RichContent'
 import { RichBodyEditor } from '@/components/editor/RichBodyEditor'
 
@@ -75,7 +76,12 @@ export default function TranslationReviewRecord({
 }: TranslationReviewRecordProps) {
   // edits maps a field id to the reviewer's working copy of the target text.
   // A field is only "edited" once it appears here AND differs from the AI text.
-  const [edits, setEdits] = useState<Record<string, string>>({})
+  // Persisted per record so the reviewer's in-progress edits survive a language
+  // switch (which remounts this page) or a refresh - restored automatically.
+  const [edits, setEdits, clearEditsDraft] = useSessionDraft<Record<string, string>>(
+    `tx-edits:${group.key}`,
+    {},
+  )
   // Which body fields have the rich editor open. Bodies render read-only by
   // default (one Tiptap instance per open editor is heavy) and mount the editor
   // only on demand.
@@ -114,6 +120,7 @@ export default function TranslationReviewRecord({
         }
         await onApprove(f.id, text)
       }
+      clearEditsDraft() // committed - drop the saved draft
       onChange()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Approve failed')

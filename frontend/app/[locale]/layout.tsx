@@ -6,6 +6,7 @@ import { notFound } from 'next/navigation'
 import '../globals.css'
 import { AuthProvider } from '@/lib/auth'
 import { EditModalProvider } from '@/lib/edit-modal'
+import { UnsavedChangesProvider } from '@/lib/unsaved-changes'
 import Navbar from '@/components/ui/Navbar'
 import PageTransition from '@/components/ui/PageTransition'
 import NavigationProgress from '@/components/ui/NavigationProgress'
@@ -96,6 +97,7 @@ export default async function LocaleLayout({
         </a>
         <NextIntlClientProvider>
           <AuthProvider>
+            <UnsavedChangesProvider>
             <EditModalProvider>
               <NavigationProgress />
               <Navbar />
@@ -112,6 +114,7 @@ export default async function LocaleLayout({
               </footer>
               {/* <ChatBox /> */}
             </EditModalProvider>
+            </UnsavedChangesProvider>
           </AuthProvider>
         </NextIntlClientProvider>
       </body>

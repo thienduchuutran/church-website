@@ -1,9 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
 import { updatePost, replaceTags } from '@/lib/posts'
+import { useSessionDraft } from '@/lib/use-session-draft'
+import { useRegisterUnsaved } from '@/lib/unsaved-changes'
 import type { Post } from '@/lib/types'
 import {
   postToFormState,
@@ -25,9 +27,22 @@ export default function EditPostForm({
 }) {
   const { session } = useAuth()
   const router = useRouter()
-  const [state, setState] = useState<PostFormState>(() => postToFormState(post))
+  // The unedited server state, used both as the draft fallback and the dirty
+  // baseline. Memoized so the comparison below is stable across renders.
+  const original = useMemo(() => postToFormState(post), [post])
+  // Draft persists per post id so in-progress edits survive a language switch
+  // (which closes this modal) or a refresh; reopening Edit restores them.
+  const [state, setState, clearDraft] = useSessionDraft<PostFormState>(
+    `post-draft:${post.id}`,
+    original,
+  )
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+
+  useRegisterUnsaved(
+    `post-edit:${post.id}`,
+    JSON.stringify(state) !== JSON.stringify(original),
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -40,6 +55,7 @@ export default function EditPostForm({
       if (post.type === 'gallery_album') {
         await replaceTags(post.id, state.tagIds, session.access_token)
       }
+      clearDraft() // committed - drop the saved draft
       router.refresh()
       onSaved?.()
       onSuccess()
@@ -67,7 +83,7 @@ export default function EditPostForm({
         </button>
         <button
           type="button"
-          onClick={onCancel}
+          onClick={() => { clearDraft(); onCancel() }}
           className="rounded-lg border border-border px-5 py-2.5 font-display text-sm font-medium text-muted transition-colors hover:bg-surface"
         >
           Cancel
