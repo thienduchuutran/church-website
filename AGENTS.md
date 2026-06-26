@@ -88,6 +88,7 @@ cd backend && go run ./cmd/server
 | FK violation on `posts_admin_id_fkey` or similar          | `docs/agents/known-quirks.md` ("Posting fails with `posts_admin_id_fkey`...") |
 | Vietnamese text showing as `?` after a script/seed on Windows | `docs/agents/known-quirks.md` ("Vietnamese text corrupts to `?` when piped through PowerShell 5.1") |
 | Prerender error on a `/en/*` or `/vi/*` page mentioning `use-intl` / `usePathname`, especially after merging master | `docs/agents/known-quirks.md` ("Merging master resurrects `app/layout.tsx` and breaks the i18n build") |
+| Production 500 on all dynamic routes (static pages fine), `ERR_REQUIRE_ESM`, jsdom, `@exodus/bytes`, HTML sanitization, `isomorphic-dompurify` vs `sanitize-html` | `docs/agents/known-quirks.md` ("Whole site 500s on Vercel (`ERR_REQUIRE_ESM` from jsdom) but works locally") |
 | Whether an endpoint should require auth / "should I protect this read?" | `docs/agents/backend.md` → Auth contract + `cmd/server/main.go` route comments. **Default answer: no - public reads are intentional.** |
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |

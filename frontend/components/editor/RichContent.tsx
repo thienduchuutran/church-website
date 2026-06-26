@@ -1,7 +1,6 @@
 'use client'
 
-import DOMPurify from 'isomorphic-dompurify'
-import { sanitizeBody } from '@/lib/sanitizeBody'
+import { sanitizeBody, htmlToText } from '@/lib/sanitizeBody'
 
 interface RichContentProps {
   html: string
@@ -10,7 +9,7 @@ interface RichContentProps {
 }
 
 function countWords(html: string): number {
-  const text = DOMPurify.sanitize(html, { ALLOWED_TAGS: ['#text'] })
+  const text = htmlToText(html)
   return text.trim().split(/\s+/).filter(Boolean).length
 }
 

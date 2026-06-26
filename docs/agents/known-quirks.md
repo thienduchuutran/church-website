@@ -15,6 +15,39 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Whole site 500s on Vercel (`ERR_REQUIRE_ESM` from jsdom) but works locally
+**Date solved:** 2026-06-26
+**Symptom:** Every dynamically server-rendered route on production (`/`, `/vi`,
+`/vi/events`, `/vi/about`, `/announcements`, ...) returned HTTP 500, while
+statically pre-rendered routes (`/vi/gallery`, `/vi/resources`, `/vi/calendar`)
+were fine. The build succeeded and the exact same bundle served 200 on every
+route locally (`next start` and even an `output: 'standalone'` build). Vercel
+runtime logs showed: `Failed to load external module jsdom-...:
+ERR_REQUIRE_ESM: require() of ES Module .../@exodus/bytes/encoding-lite.js from
+.../html-encoding-sniffer/lib/html-encoding-sniffer.js not supported`, thrown at
+module evaluation of an SSR chunk.
+**Root cause:** `lib/sanitizeBody.ts` and `components/editor/RichContent.tsx`
+imported `isomorphic-dompurify`. On the server that drags in `jsdom`, whose
+transitive dep `@exodus/bytes/encoding-lite.js` is an ES Module. Turbopack keeps
+`jsdom` external, so at runtime it is loaded with Node's `require()` - and
+`require()` of an ESM only works on Node >= 22.12. Local Node was 22.22.3 (works);
+Vercel's function ran an older Node, so it threw. Importing that module graph
+crashes the SSR chunk at module-eval, which is why every dynamic page died while
+static pages (which never import it) survived. The pages' own data fetches were
+all guarded, so this looked nothing like a data/backend error.
+**Fix:** Removed `jsdom` from the server entirely. Replaced `isomorphic-dompurify`
+with `sanitize-html` (a parser-based sanitizer, no DOM, no jsdom) in
+`lib/sanitizeBody.ts`, preserving the exact allowed-tags/attrs list and the
+text-align-only inline-style rule. Added `htmlToText()` there for the word count
+and rewired `RichContent.tsx` to it (it had a second direct DOMPurify import).
+Dropped `isomorphic-dompurify` + `@types/dompurify`, added `sanitize-html` +
+`@types/sanitize-html`. (Also pinned `engines.node >= 22.12.0` as a guardrail,
+but the dependency removal is the real fix - it no longer depends on the runtime
+Node version.)
+**Files affected:** `frontend/lib/sanitizeBody.ts`,
+`frontend/components/editor/RichContent.tsx`, `frontend/package.json`,
+`frontend/.nvmrc` (new).
+
 ## Dateless events never appeared in the homepage Upcoming list
 **Date solved:** 2026-06-25
 **Symptom:** An event-type post created without a date/time never showed up in
