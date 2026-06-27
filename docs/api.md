@@ -580,10 +580,11 @@ Tags are reusable labels created by admins and can be applied to multiple galler
 ```json
 {
   "id": "uuid",
-  "date": "2026-05-04",
-  "title": "Bible Study",
-  "event_type": "bible_study",
-  "icon": "book-open",
+  "date": "2026-05-22",
+  "end_date": "2026-05-25",
+  "title": "Youth Camp",
+  "event_type": "general",
+  "icon": "star",
   "private_address": "123 Main St",
   "color": "sky",
   "notes": "Bring your study guide.",
@@ -593,7 +594,7 @@ Tags are reusable labels created by admins and can be applied to multiple galler
   "machine_translated": true
 }
 ```
-`date` is a `YYYY-MM-DD` string (no time component). `event_type` is one of `birthday`, `bible_study`, `general`, `announcement`, `prayer`. `icon` is a Phosphor icon key (one of: `cake`, `book-open`, `bell`, `heart`, `star`, `users`, `music-notes`, `cross`, `flame`, `sparkle`). `color` is one of `slate`, `red`, `amber`, `emerald`, `sky`, `violet`, `rose`, `stone`. `private_address` is **only returned to authenticated admins** - public viewers see `null` for that field even when an address exists in the database. `machine_translated` follows the same rule as on Post.
+`date` is a `YYYY-MM-DD` string (no time component) - the first day of the event. `end_date` is the inclusive last day of a multi-day span (also `YYYY-MM-DD`); it is **omitted/null for a single-day event**, and when set must be `>= date` (enforced by request validation and a DB `CHECK`). A multi-day event renders as a banner ribbon spanning its days, and the month query returns it for **every** month its range overlaps (a span crossing a month boundary appears in both). `event_type` is one of `birthday`, `bible_study`, `general`, `announcement`, `prayer`. `icon` is a Phosphor icon key (one of: `cake`, `book-open`, `bell`, `heart`, `star`, `users`, `music-notes`, `cross`, `flame`, `sparkle`). `color` is one of `slate`, `red`, `amber`, `emerald`, `sky`, `violet`, `rose`, `stone`, `black`. `private_address` is **only returned to authenticated admins** - public viewers see `null` for that field even when an address exists in the database. `machine_translated` follows the same rule as on Post.
 
 ### CalendarMonthNote
 ```json

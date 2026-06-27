@@ -185,14 +185,18 @@ var AllowedCalendarIcons = map[string]bool{
 }
 
 // AllowedCalendarColors is the editorial palette admins may choose from.
+// black is the paper calendars' banner-bar color (near-black ribbon).
 var AllowedCalendarColors = map[string]bool{
 	"slate": true, "red": true, "amber": true, "emerald": true,
-	"sky": true, "violet": true, "rose": true, "stone": true,
+	"sky": true, "violet": true, "rose": true, "stone": true, "black": true,
 }
 
 type CalendarEvent struct {
 	ID        string            `json:"id"`
 	Date      string            `json:"date"` // YYYY-MM-DD
+	// EndDate is the inclusive last day of a multi-day span (YYYY-MM-DD), or
+	// nil for a single-day event. Drives the banner ribbon in the grid.
+	EndDate   *string           `json:"end_date,omitempty"`
 	Title     string            `json:"title"`
 	EventType CalendarEventType `json:"event_type"`
 	Icon           string            `json:"icon"`
@@ -243,6 +247,7 @@ type CalendarMonthResponse struct {
 
 type CreateCalendarEventRequest struct {
 	Date           string            `json:"date"`
+	EndDate        *string           `json:"end_date"`
 	Title          string            `json:"title"`
 	EventType      CalendarEventType `json:"event_type"`
 	Icon           string            `json:"icon"`
@@ -270,11 +275,37 @@ func (r *CreateCalendarEventRequest) Validate() error {
 	if !AllowedCalendarColors[r.Color] {
 		return fmt.Errorf("invalid color: %s", r.Color)
 	}
+	// A multi-day span must end on or after it starts. Both dates are present
+	// on create, so we can fully cross-check here; the DB CHECK is the backstop.
+	if r.EndDate != nil && *r.EndDate != "" {
+		if err := validateDateRange(r.Date, *r.EndDate); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validateDateRange parses two YYYY-MM-DD strings and confirms end is on or
+// after start. Shared by the create and update validators so the rule lives in
+// one place.
+func validateDateRange(start, end string) error {
+	s, err := time.Parse("2006-01-02", start)
+	if err != nil {
+		return fmt.Errorf("invalid date: %s", start)
+	}
+	e, err := time.Parse("2006-01-02", end)
+	if err != nil {
+		return fmt.Errorf("invalid end_date: %s", end)
+	}
+	if e.Before(s) {
+		return errors.New("end_date must be on or after date")
+	}
 	return nil
 }
 
 type UpdateCalendarEventRequest struct {
 	Date           *string            `json:"date"`
+	EndDate        *string            `json:"end_date"`
 	Title          *string            `json:"title"`
 	EventType      *CalendarEventType `json:"event_type"`
 	Icon           *string            `json:"icon"`
@@ -297,6 +328,18 @@ func (r *UpdateCalendarEventRequest) Validate() error {
 	}
 	if r.Color != nil && !AllowedCalendarColors[*r.Color] {
 		return fmt.Errorf("invalid color: %s", *r.Color)
+	}
+	// On a PATCH the start date may be omitted (unchanged). Cross-check the
+	// range when both are present; otherwise just confirm end_date parses. The
+	// DB CHECK still guards the case where only end_date is sent.
+	if r.EndDate != nil && *r.EndDate != "" {
+		if r.Date != nil && *r.Date != "" {
+			if err := validateDateRange(*r.Date, *r.EndDate); err != nil {
+				return err
+			}
+		} else if _, err := time.Parse("2006-01-02", *r.EndDate); err != nil {
+			return fmt.Errorf("invalid end_date: %s", *r.EndDate)
+		}
 	}
 	return nil
 }

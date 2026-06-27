@@ -3,6 +3,9 @@ export type CalendarEventType = 'birthday' | 'bible_study' | 'general' | 'announ
 export interface CalendarEvent {
   id: string
   date: string // YYYY-MM-DD
+  // Inclusive last day of a multi-day span (YYYY-MM-DD). Omitted/null for a
+  // single-day event. Drives the banner ribbon in the grid.
+  end_date?: string | null
   title: string
   event_type: CalendarEventType
   icon: string
@@ -100,6 +103,10 @@ export const COLOR_MAP: Record<string, { dot: string; text: string; bg: string; 
   violet: { dot: '#8b5cf6', text: '#6d28d9', bg: '#f5f3ff', highlight: '#ddd6fe' },
   rose: { dot: '#f43f5e', text: '#be123c', bg: '#fff1f2', highlight: '#fecdd3' },
   stone: { dot: '#78716c', text: '#57534e', bg: '#fafaf9', highlight: '#e7e5e4' },
+  // Black - the paper calendars' banner-bar color. `text` is near-black so a
+  // multi-day ribbon fills near-black with white text; a single-day chip shows
+  // dark text on the light-gray `highlight`.
+  black: { dot: '#171717', text: '#171717', bg: '#fafafa', highlight: '#d4d4d4' },
 }
 
 export const ICON_LABELS: Record<string, string> = {
