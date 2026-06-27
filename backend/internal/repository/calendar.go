@@ -31,9 +31,14 @@ func calendarLocaleIsLocalized(locale string) bool {
 func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month int, locale string) ([]model.CalendarEvent, error) {
 	if !calendarLocaleIsLocalized(locale) {
 		rows, err := r.pool.Query(ctx,
-			`SELECT id, date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at
+			// Overlap, not equality: a multi-day span belongs to this month if
+			// its [date, end_date] range intersects the month - so a camp that
+			// starts in April and ends in May shows up in BOTH months. A
+			// single-day event (end_date NULL) collapses to date via COALESCE.
+			`SELECT id, date::text, end_date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at
 			 FROM calendar_events
-			 WHERE EXTRACT(YEAR FROM date) = $1 AND EXTRACT(MONTH FROM date) = $2
+			 WHERE date < (make_date($1, $2, 1) + interval '1 month')
+			   AND COALESCE(end_date, date) >= make_date($1, $2, 1)
 			 ORDER BY date ASC, created_at ASC`,
 			year, month,
 		)
@@ -45,7 +50,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 		var events []model.CalendarEvent
 		for rows.Next() {
 			var e model.CalendarEvent
-			if err := rows.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
+			if err := rows.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
 				&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt); err != nil {
 				return nil, err
 			}
@@ -58,7 +63,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 	}
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT e.id, e.date::text,
+		`SELECT e.id, e.date::text, e.end_date::text,
 		        COALESCE(t_title.translated_text, e.title) AS title,
 		        e.event_type, e.icon, e.private_address, e.color,
 		        COALESCE(t_notes.translated_text, e.notes) AS notes,
@@ -72,7 +77,8 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 		   ON t_title.record_id = e.id AND t_title.field_name = 'title' AND t_title.locale = $3
 		 LEFT JOIN translations t_notes
 		   ON t_notes.record_id = e.id AND t_notes.field_name = 'notes' AND t_notes.locale = $3
-		 WHERE EXTRACT(YEAR FROM e.date) = $1 AND EXTRACT(MONTH FROM e.date) = $2
+		 WHERE e.date < (make_date($1, $2, 1) + interval '1 month')
+		   AND COALESCE(e.end_date, e.date) >= make_date($1, $2, 1)
 		 ORDER BY e.date ASC, e.created_at ASC`,
 		year, month, locale,
 	)
@@ -87,7 +93,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 			e       model.CalendarEvent
 			machine bool
 		)
-		if err := rows.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
+		if err := rows.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
 			&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &machine); err != nil {
 			return nil, err
 		}
@@ -110,10 +116,10 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 func (r *CalendarRepository) GetEventByID(ctx context.Context, id string) (*model.CalendarEvent, error) {
 	var e model.CalendarEvent
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at
+		`SELECT id, date::text, end_date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at
 		 FROM calendar_events WHERE id = $1`,
 		id,
-	).Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
+	).Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
 		&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, model.ErrNotFound
@@ -171,33 +177,38 @@ func (r *CalendarRepository) GetMonthNote(ctx context.Context, year, month int, 
 // InsertEvent creates a new calendar event and populates generated fields.
 func (r *CalendarRepository) InsertEvent(ctx context.Context, e *model.CalendarEvent) error {
 	return r.pool.QueryRow(ctx,
-		`INSERT INTO calendar_events (date, title, event_type, icon, private_address, color, notes, admin_id)
-		 VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8)
+		`INSERT INTO calendar_events (date, end_date, title, event_type, icon, private_address, color, notes, admin_id)
+		 VALUES ($1::date, $2::date, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING id, created_at, updated_at`,
-		e.Date, e.Title, e.EventType, e.Icon, e.PrivateAddress, e.Color, e.Notes, e.AdminID,
+		e.Date, e.EndDate, e.Title, e.EventType, e.Icon, e.PrivateAddress, e.Color, e.Notes, e.AdminID,
 	).Scan(&e.ID, &e.CreatedAt, &e.UpdatedAt)
 }
 
 // UpdateEvent applies partial updates to a calendar event. Only non-nil fields are changed.
 func (r *CalendarRepository) UpdateEvent(ctx context.Context, id string, req *model.UpdateCalendarEventRequest) (*model.CalendarEvent, error) {
 	row := r.pool.QueryRow(ctx,
+		// end_date is written directly (not COALESCE-guarded like the other
+		// fields) so an edit can both set a span AND clear one back to a single
+		// day. The EventModal always submits the full event (end_date present as
+		// a date or null), so a partial PATCH never accidentally wipes it.
 		`UPDATE calendar_events SET
 		   date            = COALESCE($2::date,                  date),
-		   title           = COALESCE($3,                        title),
-		   event_type      = COALESCE($4::calendar_event_type,   event_type),
-		   icon            = COALESCE($5,                        icon),
-		   private_address = CASE WHEN $6::boolean THEN $7 ELSE private_address END,
-		   color           = COALESCE($8,                        color),
-		   notes           = CASE WHEN $9::boolean THEN $10 ELSE notes END,
+		   end_date        = $3::date,
+		   title           = COALESCE($4,                        title),
+		   event_type      = COALESCE($5::calendar_event_type,   event_type),
+		   icon            = COALESCE($6,                        icon),
+		   private_address = CASE WHEN $7::boolean THEN $8 ELSE private_address END,
+		   color           = COALESCE($9,                        color),
+		   notes           = CASE WHEN $10::boolean THEN $11 ELSE notes END,
 		   updated_at      = now()
 		 WHERE id = $1
-		 RETURNING id, date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at`,
-		id, req.Date, req.Title, req.EventType, req.Icon,
+		 RETURNING id, date::text, end_date::text, title, event_type, icon, private_address, color, notes, admin_id, created_at, updated_at`,
+		id, req.Date, req.EndDate, req.Title, req.EventType, req.Icon,
 		req.PrivateAddress != nil, req.PrivateAddress,
 		req.Color, req.Notes != nil, req.Notes,
 	)
 	var e model.CalendarEvent
-	err := row.Scan(&e.ID, &e.Date, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
+	err := row.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.Color,
 		&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, model.ErrNotFound

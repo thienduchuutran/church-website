@@ -110,7 +110,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | POST | `/api/v1/reactions` | Add or change a reaction (upsert by fingerprint) |
 | DELETE | `/api/v1/reactions/:post_id` | Remove a reaction by fingerprint |
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value }, machine_translated? }` for a static page. `?locale=vi` for translated sections. |
-| GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month. `?locale=vi` for translated event titles/notes and month note content. |
+| GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month. `?locale=vi` for translated event titles/notes and month note content. Events are selected by **range overlap** (`date < first-of-next-month AND COALESCE(end_date, date) >= first-of-month`), so a multi-day event whose span crosses a month boundary is returned for **both** months. |
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value } }` for a static page |
 | GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month |
 | POST | `/api/v1/assistant/chat` | AI assistant chatbox with RAG context (rate-limited per IP) |

@@ -451,9 +451,31 @@ The "highlighter swipe" chip used to render a single calendar event inside a day
 | `tooltip` | `string` | `title` | Native hover tooltip - the desktop grid passes the event's notes so full text is reachable when truncated |
 | `compact` | `boolean` | `false` | Mobile variant: smaller text, tighter padding, no icon for the ~50px columns |
 
-**Data flow:** pure presentational. `CalendarGrid` maps `dayEvents` to `<EventChip>` in both its desktop (full) and mobile (`compact`) grids, so the look stays identical and the PNG export (which renders the desktop grid) matches the live page.
+**Data flow:** pure presentational. `CalendarGrid` maps each **single-day** event to an `<EventChip>` in both its desktop (full) and mobile (`compact`) grids, so the look stays identical and the PNG export (which renders the desktop grid) matches the live page. Multi-day events are rendered as `<EventBanner>` ribbons instead (see below).
+
+**Birthday special case:** when `icon === 'cake'` the full (non-compact) variant renders a standalone layout - a large `<CakeMarker>` (the local Apple cake image) with the name beneath it and **no** highlighter pill - mirroring how the cake simply sits in the day box on the paper calendars.
 
 **Client component:** no (no `"use client"`; renders inside the client `CalendarGrid`)
+
+---
+
+## `EventBanner`
+The multi-day ribbon used to render an event that spans more than one day across the calendar grid - a solid category-colored bar like "Youth Camp May 22-25" on the hand-made paper calendars.
+
+**File:** `components/features/calendar/EventBanner.tsx`
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | required | Event title, centered and truncated within the bar |
+| `color` | `string` | required | Category color key into `COLOR_MAP`; the bar fills with the dark `text` color and uses white text |
+| `roundStart` | `boolean` | required | Round + inset the left end (true only on the segment that begins the span) |
+| `roundEnd` | `boolean` | required | Round + inset the right end (true only on the segment that ends the span) |
+| `tooltip` | `string` | `title` | Native hover tooltip (the event's notes) |
+
+**Data flow:** pure presentational. `CalendarGrid` splits events into single-day (`EventChip`) vs multi-day (`end_date > date`). For each week row it computes per-week banner **segments** (column start/span, lane, and whether each end is a true span end) with a greedy lane assignment, then absolutely positions one `<EventBanner>` per segment over the week's columns. `roundStart`/`roundEnd` keep a run that crosses a week boundary reading as continuous. The banner layer is `pointer-events-none` so a click falls through to the day cell (which opens the day-events list, matched by range).
+
+**Client component:** no (renders inside the client `CalendarGrid`)
 
 ---
 

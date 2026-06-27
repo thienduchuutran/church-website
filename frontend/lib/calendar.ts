@@ -29,6 +29,7 @@ export async function getMonth(
 export async function createEvent(
   payload: {
     date: string
+    end_date?: string | null
     title: string
     event_type: CalendarEventType
     icon: string
@@ -50,6 +51,9 @@ export async function updateEvent(
     color?: string
     private_address?: string | null
     notes?: string | null
+    // Always sent on edit (a date string or null) because the backend writes
+    // end_date directly - omitting it would clear an existing span.
+    end_date?: string | null
   },
   token: string,
 ): Promise<CalendarEvent> {

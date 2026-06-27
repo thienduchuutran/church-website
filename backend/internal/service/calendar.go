@@ -53,6 +53,7 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 	}
 	e := &model.CalendarEvent{
 		Date:           req.Date,
+		EndDate:        req.EndDate,
 		Title:          req.Title,
 		EventType:      req.EventType,
 		Icon:           req.Icon,

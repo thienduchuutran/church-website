@@ -52,6 +52,11 @@ export default function EventModal({
   const [privateAddress, setPrivateAddress] = useState(event?.private_address ?? '')
   const [showAddress, setShowAddress] = useState(!!event?.private_address)
   const [notes, setNotes] = useState(event?.notes ?? '')
+  // Multi-day span. startDate is the event's day (fixed); a span exists only
+  // when an end date past the start is set. Initialized from the loaded event.
+  const startDate = date ?? event?.date ?? ''
+  const [endDate, setEndDate] = useState(event?.end_date ?? '')
+  const [multiDay, setMultiDay] = useState(!!event?.end_date)
   const [noteContent, setNoteContent] = useState(monthNote?.content ?? '')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -105,12 +110,16 @@ export default function EventModal({
     setSaving(true)
     setError(null)
     try {
+      // Store a span whenever the multi-day toggle is on with an end date (it
+      // may equal the start for a one-day banner). Otherwise send null, which
+      // clears any existing span. The end-date picker's min keeps it >= start.
+      const computedEndDate = multiDay && endDate ? endDate : null
       if (mode === 'note') {
         await upsertMonthNote(year, month, noteContent, accessToken)
       } else if (mode === 'create' && date) {
-        await createEvent({ date, title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null }, accessToken)
+        await createEvent({ date, end_date: computedEndDate, title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null }, accessToken)
       } else if (mode === 'edit' && event) {
-        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null }, accessToken)
+        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null, end_date: computedEndDate }, accessToken)
       }
       onSaved()
       handleClose()
@@ -226,6 +235,53 @@ export default function EventModal({
                     </button>
                   ))}
                 </div>
+              </div>
+
+              {/* Dates - optional multi-day span. The start date is the event's
+                  day (shown in the header); the toggle reveals an end-date
+                  picker whose min is capped at the start so a span can't end
+                  before it begins. */}
+              <div className="flex flex-col gap-2">
+                <div className="flex items-center justify-between">
+                  <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
+                    Multi-day event
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setMultiDay((v) => {
+                        const next = !v
+                        if (next && !endDate) setEndDate(startDate)
+                        return next
+                      })
+                    }
+                    role="switch"
+                    aria-checked={multiDay}
+                    className={[
+                      'relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/40',
+                      multiDay ? 'bg-foreground' : 'bg-border',
+                    ].join(' ')}
+                  >
+                    <span
+                      className={[
+                        'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                        multiDay ? 'translate-x-4' : 'translate-x-0',
+                      ].join(' ')}
+                    />
+                  </button>
+                </div>
+                {multiDay && (
+                  <div className="flex items-center gap-2">
+                    <span className="font-display text-xs text-muted shrink-0">Ends on</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      min={startDate || undefined}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Icon picker */}

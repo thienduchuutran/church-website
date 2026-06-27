@@ -51,6 +51,14 @@ const reducedMotionVariants = {
   exit: { opacity: 0 },
 }
 
+// A day "has" an event when the date falls anywhere in the event's span.
+// end_date is always >= date when set; events without one collapse to a single
+// day. YYYY-MM-DD compares lexically.
+function eventCoversDate(e: CalendarEvent, date: string): boolean {
+  const end = e.end_date ?? e.date
+  return e.date <= date && date <= end
+}
+
 interface CalendarShellProps {
   year: number
   month: number
@@ -191,7 +199,7 @@ export default function CalendarShell({
   }
 
   function handleDayClick(date: string) {
-    const eventsOnDay = events.filter(e => e.date === date)
+    const eventsOnDay = events.filter(e => eventCoversDate(e, date))
     if (eventsOnDay.length > 0) {
       // Day has events → show the list popup (works for everyone)
       setDayListDate(date)
@@ -777,7 +785,7 @@ export default function CalendarShell({
       {dayListDate && (
         <DayEventsModal
           date={dayListDate}
-          events={events.filter(e => e.date === dayListDate)}
+          events={events.filter(e => eventCoversDate(e, dayListDate))}
           isAdmin={isAdmin}
           onEdit={handleEditFromList}
           onAddNew={handleAddFromList}

@@ -235,3 +235,37 @@ Migrated the entire stack off AWS while keeping the live site reachable througho
 - Add automated tests for `RequireAdmin` with live mocked JWKS server.
 - Add health endpoint for JWKS status.
 - Add telemetry for token issuer/kid success/failure.
+
+---
+
+## Multi-day calendar events + banner ribbons (Phase 5a)
+
+**Goal:** match the hand-made paper calendars' multi-day banners ("Youth Camp
+May 22-25", "Church renovation"). An event optionally spans a date range and
+renders as a ribbon across the days it covers.
+
+**Design decisions:**
+- **Creation UX:** structured modal, not drag. A "Multi-day event" toggle in
+  `EventModal` reveals an "Ends on" date picker (min capped at the start). One
+  creation flow, identical on desktop and mobile, no separate "mode." Explicitly
+  rejected drag-to-create (discoverability, mobile scroll conflict, edit/a11y
+  cost, highest bug surface) - the structured form fits the "organized, clean"
+  goal better.
+- **Data model:** one event row + nullable `end_date` (migration `000008`), not
+  one row per day or a separate spans table. Keeps edit/delete trivial. `CHECK
+  (end_date IS NULL OR end_date >= date)` is the hard guarantee; request
+  validation + the frontend date-picker `min` are the friendly guards.
+- **Month query → overlap:** `GetEventsByMonth` switched from `EXTRACT(MONTH)`
+  equality to `date < first-of-next-month AND COALESCE(end_date, date) >=
+  first-of-month`, so a span crossing a month boundary appears in both months.
+- **Update writes `end_date` directly** (not COALESCE-guarded) so a span can be
+  set *and* cleared back to single-day; safe because `EventModal` always submits
+  the full event.
+- **Rendering:** `CalendarGrid` splits single-day (`EventChip`) vs multi-day
+  (`EventBanner`). Desktop is now per-week relative rows; banners are absolutely
+  positioned by `grid-column` fraction with greedy lane assignment and per-week
+  segments (round only true span ends). Mobile shows a compact chip on each
+  covered day. `pointer-events-none` banners let clicks fall through to the day
+  (day-click now matches by range).
+
+**Drag-to-create (5b/5c) was dropped** - the modal makes it unnecessary.
