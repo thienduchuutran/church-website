@@ -106,7 +106,14 @@ export default async function LocaleLayout({
         >
           Skip to main content
         </a>
-        <NextIntlClientProvider>
+        {/* Pass `locale` explicitly rather than letting the provider infer it.
+            With `localePrefix: 'as-needed'` the default locale is served at the
+            unprefixed path (`/`), and a client-side switch back to it (`/vi` ->
+            `/`) does not reliably re-init the inferred locale - leaving
+            useLocale() stale at `vi` so the LanguageSwitcher highlights the
+            wrong language and then no-ops. Binding the prop to the resolved
+            segment param forces the client context to track the URL. */}
+        <NextIntlClientProvider locale={locale}>
           <AuthProvider>
             <UnsavedChangesProvider>
             <EditModalProvider>
