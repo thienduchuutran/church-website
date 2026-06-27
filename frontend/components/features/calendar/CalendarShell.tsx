@@ -19,6 +19,22 @@ const MONTH_NAMES = [
   'July', 'August', 'September', 'October', 'November', 'December',
 ]
 
+// Per-letter "nhay nhot" bounce for the month headline. The hand-made paper
+// calendars get their playfulness from letters sitting at slightly different
+// heights with a small tilt - not from the font itself. We cycle this fixed
+// (not random) pattern across the letters so each render is identical and the
+// PNG export matches the live page. Offsets are in em so they scale with the
+// responsive font size. Negative y = floats up.
+const LETTER_BOUNCE: { y: string; r: number }[] = [
+  { y: '-0.04em', r: -2.5 },
+  { y: '0.025em', r: 2 },
+  { y: '-0.025em', r: -1 },
+  { y: '0.035em', r: 2.5 },
+  { y: '-0.035em', r: -2 },
+  { y: '0.015em', r: 1 },
+  { y: '-0.02em', r: -1.5 },
+]
+
 // Direction-aware slide variants. `dir` is +1 (forward in time) or -1 (back).
 // New month enters from the side it's traveling toward; old month exits the
 // opposite side. Subtle distance (48px) keeps the motion as a hint, not a flourish.
@@ -298,10 +314,23 @@ export default function CalendarShell({
                 }}
               >
                 <span
-                  className="font-bold truncate text-4xl @xl:text-5xl @3xl:text-[4.5rem]"
-                  style={{ color: activeAccent }}
+                  aria-label={monthName}
+                  className="font-bold whitespace-nowrap text-[2.75rem] @xl:text-6xl @3xl:text-[5rem] leading-[1.05] pb-2 pt-1"
+                  style={{ color: activeAccent, fontFamily: 'var(--font-marker)', letterSpacing: '0.015em' }}
                 >
-                  {monthName}
+                  {monthName.split('').map((ch, i) => {
+                    const b = LETTER_BOUNCE[i % LETTER_BOUNCE.length]
+                    return (
+                      <span
+                        key={i}
+                        aria-hidden="true"
+                        className="inline-block"
+                        style={{ transform: `translateY(${b.y}) rotate(${b.r}deg)` }}
+                      >
+                        {ch}
+                      </span>
+                    )
+                  })}
                 </span>
                 <span
                   className="font-light text-gray-300 group-hover:text-gray-400 transition-colors text-lg @xl:text-2xl @3xl:text-[2rem]"

@@ -59,28 +59,29 @@ export const ACCENT_PRESETS: { label: string; hex: string }[] = [
   { label: 'Dusk', hex: '#3A5C7C' },
 ]
 
-// All months draw from the site design system: terracotta, sage, gold rotate
-// as the header color so each month has subtle personality without breaking
-// brand consistency. Header text uses the dark base on gold (low contrast
-// with white) and white on terracotta/sage.
-const TERRACOTTA = '#C4663C'
-const SAGE = '#4A7A5C'
-const GOLD = '#C49A3C'
+// Each month gets its own distinct identity color - the way the hand-made
+// paper calendars give May a purple, March a green, December a red. The set is
+// kept vivid-but-earthy so it still reads on-brand (no neon) and mirrors the
+// printout where the congregation already knows the color: Feb pink, Mar
+// green, Apr gold, May purple, Dec red. These are DEFAULTS only - the admin
+// accent picker (DB-backed month_settings) overrides any month it touches.
+// headerText is white except on the lighter gold/amber tones, which take the
+// dark base for contrast.
 const DARK_BASE = '#1C1210'
 
 export const MONTH_THEMES: Record<number, { title: string; header: string; headerText: string }> = {
-  1: { title: TERRACOTTA, header: TERRACOTTA, headerText: '#ffffff' },
-  2: { title: SAGE, header: SAGE, headerText: '#ffffff' },
-  3: { title: GOLD, header: GOLD, headerText: DARK_BASE },
-  4: { title: TERRACOTTA, header: TERRACOTTA, headerText: '#ffffff' },
-  5: { title: SAGE, header: SAGE, headerText: '#ffffff' },
-  6: { title: GOLD, header: GOLD, headerText: DARK_BASE },
-  7: { title: TERRACOTTA, header: TERRACOTTA, headerText: '#ffffff' },
-  8: { title: SAGE, header: SAGE, headerText: '#ffffff' },
-  9: { title: GOLD, header: GOLD, headerText: DARK_BASE },
-  10: { title: TERRACOTTA, header: TERRACOTTA, headerText: '#ffffff' },
-  11: { title: SAGE, header: SAGE, headerText: '#ffffff' },
-  12: { title: GOLD, header: GOLD, headerText: DARK_BASE },
+  1: { title: '#3A5C7C', header: '#3A5C7C', headerText: '#ffffff' }, // Dusk blue - winter
+  2: { title: '#C24E7D', header: '#C24E7D', headerText: '#ffffff' }, // Rose - Valentine's
+  3: { title: '#4A7A5C', header: '#4A7A5C', headerText: '#ffffff' }, // Sage - spring
+  4: { title: '#C49A3C', header: '#C49A3C', headerText: DARK_BASE },  // Gold - Easter
+  5: { title: '#7C5AA6', header: '#7C5AA6', headerText: '#ffffff' }, // Plum - May
+  6: { title: '#C4663C', header: '#C4663C', headerText: '#ffffff' }, // Terracotta - early summer
+  7: { title: '#C2503C', header: '#C2503C', headerText: '#ffffff' }, // Coral red - summer
+  8: { title: '#3C8C82', header: '#3C8C82', headerText: '#ffffff' }, // Teal - late summer
+  9: { title: '#B8742C', header: '#B8742C', headerText: '#ffffff' }, // Amber rust - fall
+  10: { title: '#B85C2E', header: '#B85C2E', headerText: '#ffffff' }, // Pumpkin - October
+  11: { title: '#97463C', header: '#97463C', headerText: '#ffffff' }, // Brick - November
+  12: { title: '#B83C3C', header: '#B83C3C', headerText: '#ffffff' }, // Christmas red - December
 }
 
 // Maps color keys to CSS hex values - used with inline styles to avoid

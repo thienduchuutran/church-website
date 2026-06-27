@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Lora, DM_Sans, Geist_Mono } from 'next/font/google'
+import { Inter, Lora, DM_Sans, Geist_Mono, Fredoka } from 'next/font/google'
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { setRequestLocale } from 'next-intl/server'
 import { notFound } from 'next/navigation'
@@ -37,6 +37,17 @@ const dmSans = DM_Sans({
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
   subsets: ['latin'],
+})
+
+// Fredoka is the calendar's "marker" display face - rounded and friendly so
+// the month headline bounces like the hand-made paper calendars, while still
+// reading as legitimate next to Lora/Inter. Scoped to the calendar masthead;
+// the rest of the site keeps its editorial serif. Self-hosted by next/font so
+// it embeds cleanly in the PNG export.
+const fredoka = Fredoka({
+  variable: '--font-marker',
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
 })
 
 export const metadata: Metadata = {
@@ -86,7 +97,7 @@ export default async function LocaleLayout({
   return (
     <html
       lang={locale}
-      className={`${inter.variable} ${lora.variable} ${dmSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${lora.variable} ${dmSans.variable} ${geistMono.variable} ${fredoka.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <a
