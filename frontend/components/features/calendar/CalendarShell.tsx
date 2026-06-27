@@ -8,7 +8,7 @@ import { getMonth, upsertMonthSettings } from '@/lib/calendar'
 import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP } from './types'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 import CalendarGrid from './CalendarGrid'
-import CalendarIcon from './CalendarIcon'
+import CakeMarker from './CakeMarker'
 import EventModal from './EventModal'
 import DayEventsModal from './DayEventsModal'
 import MonthPicker from './MonthPicker'
@@ -590,7 +590,7 @@ export default function CalendarShell({
                         onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
                         className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                       >
-                        <CalendarIcon iconKey="cake" size={10} color={colors.dot} />
+                        <CakeMarker size={14} />
                         <span className="font-display font-semibold" style={{ color: colors.text }}>{e.title}</span>
                         <span className="font-sans text-gray-400">{day}</span>
                       </div>

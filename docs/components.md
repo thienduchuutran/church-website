@@ -437,6 +437,26 @@ Inline contextual popover that lets an admin pick the accent color for the curre
 
 ---
 
+## `EventChip`
+The "highlighter swipe" chip used to render a single calendar event inside a day cell - bold category-colored text on a saturated marker tint, echoing the hand-made paper calendars.
+
+**File:** `components/features/calendar/EventChip.tsx`
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `title` | `string` | required | Event title shown in the chip (truncates inside narrow cells) |
+| `icon` | `string` | required | Icon key resolved by `CalendarIcon`; rendered only in the full (non-compact) variant |
+| `color` | `string` | required | Category color key into `COLOR_MAP`; supplies the `highlight` tint and `text` color |
+| `tooltip` | `string` | `title` | Native hover tooltip - the desktop grid passes the event's notes so full text is reachable when truncated |
+| `compact` | `boolean` | `false` | Mobile variant: smaller text, tighter padding, no icon for the ~50px columns |
+
+**Data flow:** pure presentational. `CalendarGrid` maps `dayEvents` to `<EventChip>` in both its desktop (full) and mobile (`compact`) grids, so the look stays identical and the PNG export (which renders the desktop grid) matches the live page.
+
+**Client component:** no (no `"use client"`; renders inside the client `CalendarGrid`)
+
+---
+
 ### Assistant (`components/features/assistant/`)
 
 #### `ChatBox`

@@ -1,8 +1,8 @@
 'use client'
 
 import { useMemo } from 'react'
-import { CalendarEvent, COLOR_MAP } from './types'
-import CalendarIcon from './CalendarIcon'
+import { CalendarEvent } from './types'
+import EventChip from './EventChip'
 
 interface CalendarGridProps {
   year: number
@@ -88,7 +88,7 @@ export default function CalendarGrid({
                 <div
                   key={`empty-${idx}`}
                   className={[
-                    'border-t border-gray-900 min-h-[115px] bg-gray-50',
+                    'border-t border-gray-900 min-h-[115px] bg-white',
                     (idx % 7) < 6 ? 'border-r border-gray-900' : '',
                   ].join(' ')}
                 />
@@ -106,7 +106,7 @@ export default function CalendarGrid({
                 key={day}
                 onClick={() => isClickable && onDayClick?.(dateStr)}
                 className={[
-                  'border-t border-gray-900 min-h-[115px] px-1.5 py-1.5 flex flex-col gap-1 bg-white',
+                  'group border-t border-gray-900 min-h-[115px] px-1.5 py-1.5 flex flex-col gap-1 bg-white',
                   (idx % 7) < 6 ? 'border-r border-gray-900' : '',
                   isClickable ? 'cursor-pointer hover:bg-gray-50 transition-colors' : '',
                 ].join(' ')}
@@ -123,28 +123,20 @@ export default function CalendarGrid({
                   {day}
                 </span>
 
-                {/* Events */}
-                {dayEvents.map((e) => {
-                  const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
-                  return (
-                    <div
-                      key={e.id}
-                      className="flex items-center gap-1 min-w-0 rounded px-1.5 py-0.5 font-display text-[11px] font-semibold leading-tight"
-                      title={e.notes ?? e.title}
-                      style={{
-                        backgroundColor: colors.bg,
-                        borderLeft: `2.5px solid ${colors.dot}`,
-                        color: colors.text,
-                      }}
-                    >
-                      <CalendarIcon iconKey={e.icon} size={10} color={colors.dot} />
-                      <span className="truncate">{e.title}</span>
-                    </div>
-                  )
-                })}
+                {/* Events - highlighter-swipe chips, shared with the mobile
+                    grid and the PNG export so the look stays identical. */}
+                {dayEvents.map((e) => (
+                  <EventChip
+                    key={e.id}
+                    title={e.title}
+                    icon={e.icon}
+                    color={e.color}
+                    tooltip={e.notes ?? e.title}
+                  />
+                ))}
 
                 {isAdmin && dayEvents.length === 0 && (
-                  <span className="font-sans text-[9px] text-gray-300 mt-auto">+</span>
+                  <span className="font-sans text-[9px] text-gray-300 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">+</span>
                 )}
               </div>
             )
@@ -229,27 +221,14 @@ export default function CalendarGrid({
                   )}
                 </div>
 
-                {/* Event chips - lighter than the desktop version: no bg
-                    fill, just a colored left-border accent and the title.
-                    Mx-0.5 gives a hint of side padding without boxing the
-                    content; truncation kicks in past ~8 chars. */}
+                {/* Event chips - the compact EventChip variant: same
+                    highlighter tint as desktop but smaller and icon-less so it
+                    fits the ~50px mobile columns; truncates past ~8 chars. */}
                 {visibleEvents.length > 0 && (
                   <div className="flex flex-col gap-[3px] mt-auto min-w-0">
-                    {visibleEvents.map((e) => {
-                      const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
-                      return (
-                        <div
-                          key={e.id}
-                          className="mx-0.5 pl-1 pr-0.5 font-display text-[10px] font-medium leading-tight truncate"
-                          style={{
-                            borderLeft: `2px solid ${colors.dot}`,
-                            color: colors.text,
-                          }}
-                        >
-                          {e.title}
-                        </div>
-                      )
-                    })}
+                    {visibleEvents.map((e) => (
+                      <EventChip key={e.id} title={e.title} icon={e.icon} color={e.color} compact />
+                    ))}
                     {overflow > 0 && (
                       <span className="font-sans text-[9px] text-gray-500 leading-none mx-0.5 mt-0.5">
                         +{overflow} more

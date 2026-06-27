@@ -86,15 +86,20 @@ export const MONTH_THEMES: Record<number, { title: string; header: string; heade
 
 // Maps color keys to CSS hex values - used with inline styles to avoid
 // Tailwind purging dynamically-constructed class names.
-export const COLOR_MAP: Record<string, { dot: string; text: string; bg: string }> = {
-  slate: { dot: '#64748b', text: '#475569', bg: '#f1f5f9' },
-  red: { dot: '#ef4444', text: '#dc2626', bg: '#fef2f2' },
-  amber: { dot: '#f59e0b', text: '#d97706', bg: '#fffbeb' },
-  emerald: { dot: '#10b981', text: '#059669', bg: '#ecfdf5' },
-  sky: { dot: '#0ea5e9', text: '#0284c7', bg: '#f0f9ff' },
-  violet: { dot: '#8b5cf6', text: '#7c3aed', bg: '#f5f3ff' },
-  rose: { dot: '#f43f5e', text: '#e11d48', bg: '#fff1f2' },
-  stone: { dot: '#78716c', text: '#57534e', bg: '#fafaf9' },
+//   dot       - the saturated category color (legend dots, accents)
+//   text      - bold body text; 700-level so it reads on the highlight tint
+//   bg        - faint 50-level wash (kept for any low-emphasis surface)
+//   highlight - the "highlighter swipe" marker tint (200-level) behind event
+//               titles in the grid, echoing the hand-made paper calendars
+export const COLOR_MAP: Record<string, { dot: string; text: string; bg: string; highlight: string }> = {
+  slate: { dot: '#64748b', text: '#475569', bg: '#f1f5f9', highlight: '#cbd5e1' },
+  red: { dot: '#ef4444', text: '#b91c1c', bg: '#fef2f2', highlight: '#fecaca' },
+  amber: { dot: '#f59e0b', text: '#b45309', bg: '#fffbeb', highlight: '#fde68a' },
+  emerald: { dot: '#10b981', text: '#047857', bg: '#ecfdf5', highlight: '#a7f3d0' },
+  sky: { dot: '#0ea5e9', text: '#0369a1', bg: '#f0f9ff', highlight: '#bae6fd' },
+  violet: { dot: '#8b5cf6', text: '#6d28d9', bg: '#f5f3ff', highlight: '#ddd6fe' },
+  rose: { dot: '#f43f5e', text: '#be123c', bg: '#fff1f2', highlight: '#fecdd3' },
+  stone: { dot: '#78716c', text: '#57534e', bg: '#fafaf9', highlight: '#e7e5e4' },
 }
 
 export const ICON_LABELS: Record<string, string> = {
