@@ -1,4 +1,4 @@
-export type CalendarEventType = 'birthday' | 'bible_study' | 'general' | 'announcement' | 'prayer'
+export type CalendarEventType = 'birthday' | 'bible_study' | 'general' | 'announcement' | 'prayer' | 'graduation'
 
 export interface CalendarEvent {
   id: string
@@ -120,6 +120,7 @@ export const ICON_LABELS: Record<string, string> = {
   'cross': 'Service',
   'flame': 'Prayer',
   'sparkle': 'Special',
+  'graduation-cap': 'Graduation',
 }
 
 export const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
@@ -128,4 +129,5 @@ export const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
   general: 'General',
   announcement: 'Announcement',
   prayer: 'Prayer',
+  graduation: 'Graduation',
 }

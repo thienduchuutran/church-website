@@ -100,6 +100,7 @@ export default function EventModal({
       prayer: { icon: 'flame', color: 'violet' },
       announcement: { icon: 'bell', color: 'amber' },
       general: { icon: 'star', color: 'slate' },
+      graduation: { icon: 'graduation-cap', color: 'amber' },
     }
     setIcon(defaults[t].icon)
     setColor(defaults[t].color)

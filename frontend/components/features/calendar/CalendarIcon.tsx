@@ -11,6 +11,7 @@ import {
   Cross,
   Flame,
   Sparkle,
+  GraduationCap,
 } from '@phosphor-icons/react'
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -24,6 +25,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   'cross':       Cross,
   'flame':       Flame,
   'sparkle':     Sparkle,
+  'graduation-cap': GraduationCap,
 }
 
 interface CalendarIconProps {
