@@ -586,6 +586,7 @@ Tags are reusable labels created by admins and can be applied to multiple galler
   "event_type": "general",
   "icon": "star",
   "private_address": "123 Main St",
+  "address_public": false,
   "color": "sky",
   "notes": "Bring your study guide.",
   "admin_id": "uuid",
@@ -594,7 +595,7 @@ Tags are reusable labels created by admins and can be applied to multiple galler
   "machine_translated": true
 }
 ```
-`date` is a `YYYY-MM-DD` string (no time component) - the first day of the event. `end_date` is the inclusive last day of a multi-day span (also `YYYY-MM-DD`); it is **omitted/null for a single-day event**, and when set must be `>= date` (enforced by request validation and a DB `CHECK`). A multi-day event renders as a banner ribbon spanning its days, and the month query returns it for **every** month its range overlaps (a span crossing a month boundary appears in both). `event_type` is one of `birthday`, `bible_study`, `general`, `announcement`, `prayer`, `graduation`. `icon` is a Phosphor icon key (one of: `cake`, `book-open`, `bell`, `heart`, `star`, `users`, `music-notes`, `cross`, `flame`, `sparkle`, `graduation-cap`). `color` is one of `slate`, `red`, `amber`, `emerald`, `sky`, `violet`, `rose`, `stone`, `black`. `private_address` is **only returned to authenticated admins** - public viewers see `null` for that field even when an address exists in the database. `machine_translated` follows the same rule as on Post.
+`date` is a `YYYY-MM-DD` string (no time component) - the first day of the event. `end_date` is the inclusive last day of a multi-day span (also `YYYY-MM-DD`); it is **omitted/null for a single-day event**, and when set must be `>= date` (enforced by request validation and a DB `CHECK`). A multi-day event renders as a banner ribbon spanning its days, and the month query returns it for **every** month its range overlaps (a span crossing a month boundary appears in both). `event_type` is one of `birthday`, `bible_study`, `general`, `announcement`, `prayer`, `graduation`. `icon` is a Phosphor icon key (one of: `cake`, `book-open`, `bell`, `heart`, `star`, `users`, `music-notes`, `cross`, `flame`, `sparkle`, `graduation-cap`). `color` is one of `slate`, `red`, `amber`, `emerald`, `sky`, `violet`, `rose`, `stone`, `black`. `private_address` is returned to admins always, and to the public **only when `address_public` is `true`**; otherwise public viewers see `null` even when an address exists. `address_public` defaults to `false` (privacy-safe). The PNG export is admin-driven, so it always includes the address regardless of this flag. `machine_translated` follows the same rule as on Post.
 
 ### CalendarMonthNote
 ```json

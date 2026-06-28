@@ -11,6 +11,9 @@ export interface CalendarEvent {
   icon: string
   color: string
   private_address: string | null
+  // Whether private_address is shown on the public website. The export always
+  // includes the address regardless of this flag.
+  address_public?: boolean
   notes: string | null
   admin_id: string | null
   created_at: string

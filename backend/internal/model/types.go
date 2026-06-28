@@ -203,6 +203,9 @@ type CalendarEvent struct {
 	EventType CalendarEventType `json:"event_type"`
 	Icon           string            `json:"icon"`
 	PrivateAddress *string           `json:"private_address,omitempty"`
+	// AddressPublic controls whether private_address is shown on the public
+	// website. The PNG export always includes the address regardless.
+	AddressPublic  bool              `json:"address_public"`
 	Color          string            `json:"color"`
 	Notes     *string           `json:"notes"`
 	AdminID   *string           `json:"admin_id"`
@@ -254,6 +257,7 @@ type CreateCalendarEventRequest struct {
 	EventType      CalendarEventType `json:"event_type"`
 	Icon           string            `json:"icon"`
 	PrivateAddress *string           `json:"private_address"`
+	AddressPublic  bool              `json:"address_public"`
 	Color          string            `json:"color"`
 	Notes          *string           `json:"notes"`
 }
@@ -313,6 +317,9 @@ type UpdateCalendarEventRequest struct {
 	EventType      *CalendarEventType `json:"event_type"`
 	Icon           *string            `json:"icon"`
 	PrivateAddress *string            `json:"private_address"`
+	// AddressPublic is written directly (the EventModal always submits the full
+	// event), so a partial PATCH never silently flips visibility.
+	AddressPublic  bool               `json:"address_public"`
 	Color          *string            `json:"color"`
 	Notes          *string            `json:"notes"`
 }

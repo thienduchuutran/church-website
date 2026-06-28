@@ -33,9 +33,14 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load calendar")
 		return
 	}
+	// Non-admins only see an address when it's explicitly marked public on the
+	// site. Admins always see every address (and so does the PNG export, which
+	// is admin-driven). private_address marked non-public is stripped here.
 	if middleware.AdminEmailFromContext(r.Context()) == "" {
 		for i := range resp.Events {
-			resp.Events[i].PrivateAddress = nil
+			if !resp.Events[i].AddressPublic {
+				resp.Events[i].PrivateAddress = nil
+			}
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

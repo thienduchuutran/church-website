@@ -35,6 +35,7 @@ export async function createEvent(
     icon: string
     color: string
     private_address?: string | null
+    address_public?: boolean
     notes: string | null
   },
   token: string,
@@ -50,6 +51,7 @@ export async function updateEvent(
     icon?: string
     color?: string
     private_address?: string | null
+    address_public?: boolean
     notes?: string | null
     // Always sent on edit (a date string or null) because the backend writes
     // end_date directly - omitting it would clear an existing span.

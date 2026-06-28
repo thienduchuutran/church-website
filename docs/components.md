@@ -479,6 +479,23 @@ The multi-day ribbon used to render an event that spans more than one day across
 
 ---
 
+## `InfoTip`
+A small "?" circle that opens a tasteful info popover on click - a reusable explainer for any setting that needs a note.
+
+**File:** `components/ui/InfoTip.tsx`
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `children` | `ReactNode` | required | The explanation rendered inside the popover |
+| `label` | `string` | `'More info'` | Accessible label for the trigger button |
+
+**Behavior:** the popover is rendered through a **portal** and positioned with `fixed` coordinates from the trigger's rect, so it never gets clipped by an ancestor's `overflow` (e.g. inside the scrolling `EventModal` body). Closes on outside click, Escape, or scroll. First used for the calendar's "Show on website" address toggle to explain that the flag only affects the public site - the export always includes the address.
+
+**Client component:** yes (state, portal, outside-click/scroll listeners)
+
+---
+
 ### Assistant (`components/features/assistant/`)
 
 #### `ChatBox`

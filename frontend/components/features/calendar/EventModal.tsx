@@ -13,6 +13,7 @@ import {
   ICON_LABELS,
 } from './types'
 import CalendarIcon from './CalendarIcon'
+import InfoTip from '@/components/ui/InfoTip'
 
 type ModalMode = 'create' | 'edit' | 'note'
 
@@ -51,6 +52,9 @@ export default function EventModal({
   const [color, setColor] = useState(event?.color ?? 'slate')
   const [privateAddress, setPrivateAddress] = useState(event?.private_address ?? '')
   const [showAddress, setShowAddress] = useState(!!event?.private_address)
+  // Whether the address is shown on the public website (the export always shows
+  // it). Defaults to private; admin opts each address in.
+  const [addressPublic, setAddressPublic] = useState(event?.address_public ?? false)
   const [notes, setNotes] = useState(event?.notes ?? '')
   // Multi-day span. startDate is the event's day (fixed); a span exists only
   // when an end date past the start is set. Initialized from the loaded event.
@@ -118,9 +122,9 @@ export default function EventModal({
       if (mode === 'note') {
         await upsertMonthNote(year, month, noteContent, accessToken)
       } else if (mode === 'create' && date) {
-        await createEvent({ date, end_date: computedEndDate, title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null }, accessToken)
+        await createEvent({ date, end_date: computedEndDate, title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, address_public: showAddress ? addressPublic : false, notes: notes || null }, accessToken)
       } else if (mode === 'edit' && event) {
-        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, notes: notes || null, end_date: computedEndDate }, accessToken)
+        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, address_public: showAddress ? addressPublic : false, notes: notes || null, end_date: computedEndDate }, accessToken)
       }
       onSaved()
       handleClose()
@@ -342,8 +346,7 @@ export default function EventModal({
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
-                    Location address{' '}
-                    <span className="normal-case font-normal">- private, admin only</span>
+                    Location address
                   </label>
                   <button
                     type="button"
@@ -364,13 +367,45 @@ export default function EventModal({
                   </button>
                 </div>
                 {showAddress && (
-                  <textarea
-                    value={privateAddress}
-                    onChange={(e) => setPrivateAddress(e.target.value)}
-                    rows={2}
-                    placeholder="123 Street, City"
-                    className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
-                  />
+                  <>
+                    <textarea
+                      value={privateAddress}
+                      onChange={(e) => setPrivateAddress(e.target.value)}
+                      rows={2}
+                      placeholder="123 Street, City"
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                    />
+                    <div className="flex items-center justify-between">
+                      <span className="flex items-center gap-1.5 font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
+                        Show on website
+                        <InfoTip label="About address visibility">
+                          <p className="font-sans text-xs leading-relaxed text-muted">
+                            <strong className="font-semibold text-foreground">Show on website</strong> only controls whether this address appears on the public calendar.
+                          </p>
+                          <p className="mt-1.5 font-sans text-xs leading-relaxed text-muted">
+                            The exported image for Discord <strong className="font-semibold text-foreground">always</strong> includes it, no matter this setting.
+                          </p>
+                        </InfoTip>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setAddressPublic(v => !v)}
+                        role="switch"
+                        aria-checked={addressPublic}
+                        className={[
+                          'relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/40',
+                          addressPublic ? 'bg-foreground' : 'bg-border',
+                        ].join(' ')}
+                      >
+                        <span
+                          className={[
+                            'pointer-events-none inline-block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200',
+                            addressPublic ? 'translate-x-4' : 'translate-x-0',
+                          ].join(' ')}
+                        />
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
 

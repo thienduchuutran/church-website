@@ -577,7 +577,7 @@ export default function CalendarShell({
         </div>
 
         {/* Info strip below grid - compact 3 columns */}
-        {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin) && (
+        {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin || eventsWithAddress.length > 0) && (
           <div
             className="grid grid-cols-1 @xl:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-2 border-gray-900 mt-4 @3xl:mt-0 @3xl:border-t-0"
             style={{ backgroundColor: '#fafafa' }}
@@ -668,7 +668,7 @@ export default function CalendarShell({
             </div>
 
             {/* Locations - admin only, full-width row after the 3 columns, entries flow inline */}
-            {isAdmin && eventsWithAddress.length > 0 && (
+            {eventsWithAddress.length > 0 && (
               <div className="@xl:col-span-3 min-w-0 border-t border-gray-200 pt-2">
                 <p className="font-display text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                   Locations
@@ -680,13 +680,18 @@ export default function CalendarShell({
                     return (
                       <div
                         key={e.id}
-                        onClick={() => handleEditFromStrip(e)}
-                        className="flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 cursor-pointer hover:bg-gray-100"
+                        onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
+                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
                         <span className="font-display font-semibold text-gray-700">{day} {e.title}</span>
                         <span className="font-sans text-gray-400">-</span>
                         <span className="font-sans text-gray-500">{e.private_address}</span>
+                        {/* Admin-only cue: this address is hidden from the public
+                            site (it still prints in the export). */}
+                        {isAdmin && !e.address_public && (
+                          <span className="font-sans text-[9px] uppercase tracking-wide text-gray-400 italic" data-export-hide>hidden</span>
+                        )}
                       </div>
                     )
                   })}

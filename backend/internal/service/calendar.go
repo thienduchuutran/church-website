@@ -58,6 +58,7 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 		EventType:      req.EventType,
 		Icon:           req.Icon,
 		PrivateAddress: req.PrivateAddress,
+		AddressPublic:  req.AddressPublic,
 		Color:          req.Color,
 		Notes:          req.Notes,
 		AdminID:        &adminID,
