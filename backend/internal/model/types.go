@@ -176,12 +176,14 @@ const (
 	CalendarEventTypeGeneral      CalendarEventType = "general"
 	CalendarEventTypeAnnouncement CalendarEventType = "announcement"
 	CalendarEventTypePrayer       CalendarEventType = "prayer"
+	CalendarEventTypeGraduation   CalendarEventType = "graduation"
 )
 
 // AllowedCalendarIcons is the curated Phosphor icon key set admins may choose from.
 var AllowedCalendarIcons = map[string]bool{
 	"cake": true, "book-open": true, "bell": true, "heart": true, "star": true,
 	"users": true, "music-notes": true, "cross": true, "flame": true, "sparkle": true,
+	"graduation-cap": true,
 }
 
 // AllowedCalendarColors is the editorial palette admins may choose from.
@@ -265,7 +267,8 @@ func (r *CreateCalendarEventRequest) Validate() error {
 	}
 	switch r.EventType {
 	case CalendarEventTypeBirthday, CalendarEventTypeBibleStudy,
-		CalendarEventTypeGeneral, CalendarEventTypeAnnouncement, CalendarEventTypePrayer:
+		CalendarEventTypeGeneral, CalendarEventTypeAnnouncement, CalendarEventTypePrayer,
+		CalendarEventTypeGraduation:
 	default:
 		return fmt.Errorf("invalid event_type: %s", r.EventType)
 	}
@@ -318,7 +321,8 @@ func (r *UpdateCalendarEventRequest) Validate() error {
 	if r.EventType != nil {
 		switch *r.EventType {
 		case CalendarEventTypeBirthday, CalendarEventTypeBibleStudy,
-			CalendarEventTypeGeneral, CalendarEventTypeAnnouncement, CalendarEventTypePrayer:
+			CalendarEventTypeGeneral, CalendarEventTypeAnnouncement, CalendarEventTypePrayer,
+		CalendarEventTypeGraduation:
 		default:
 			return fmt.Errorf("invalid event_type: %s", *r.EventType)
 		}

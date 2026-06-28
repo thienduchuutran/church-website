@@ -1,0 +1,3 @@
+-- No-op: Postgres cannot remove a value from an enum without recreating the
+-- type and rewriting every dependent column. Rolling the feature back leaves the
+-- unused 'graduation' value in place, which is harmless.
