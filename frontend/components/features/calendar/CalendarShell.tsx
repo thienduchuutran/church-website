@@ -646,6 +646,7 @@ export default function CalendarShell({
                 </p>
                 {isAdmin && (
                   <button
+                    data-export-hide
                     onClick={() => { setEditingNote(true); setModalOpen(true) }}
                     className="font-display text-[9px] text-gray-400 hover:text-gray-700 underline underline-offset-2 transition-colors"
                   >
@@ -686,7 +687,7 @@ export default function CalendarShell({
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
                         <span className="font-display font-semibold text-gray-700">{day} {e.title}</span>
                         <span className="font-sans text-gray-400">-</span>
-                        <span className="font-sans text-gray-500">{e.private_address}</span>
+                        <span className="font-sans text-sky-700">{e.private_address}</span>
                         {/* Admin-only cue: this address is hidden from the public
                             site (it still prints in the export). */}
                         {isAdmin && !e.address_public && (
@@ -701,8 +702,10 @@ export default function CalendarShell({
           </div>
         )}
 
-        {/* Legend - inline, compact */}
-        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+        {/* Legend - inline, compact. Shown on the live site as a color key, but
+            hidden from the PNG export so the shared image reads like the paper
+            calendar (which has no legend) rather than the admin tool. */}
+        <div data-export-hide className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
           {[
             { color: 'rose', label: 'Birthday' },
             { color: 'sky', label: 'Bible Study' },

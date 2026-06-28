@@ -236,7 +236,7 @@ export default function CalendarGrid({
                   ))}
 
                   {isAdmin && chips.length === 0 && (
-                    <span className="font-sans text-[9px] text-gray-300 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">+</span>
+                    <span data-export-hide className="font-sans text-[9px] text-gray-300 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">+</span>
                   )}
                 </div>
               )
