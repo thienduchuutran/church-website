@@ -1,14 +1,14 @@
 'use client'
 
-import { useEffect, useTransition } from 'react'
+import { useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { useRouter, usePathname, routing, type Locale } from '@/i18n/routing'
+import { usePathname, getPathname, routing, type Locale } from '@/i18n/routing'
 import { markLocaleSwitch } from '@/lib/locale-transition'
 import { useUnsavedChanges } from '@/lib/unsaved-changes'
 
 // LanguageSwitcher renders the EN / VI toggle in the navbar. It is a "true"
-// client component because it owns interaction state (useTransition) and reads
-// the current locale at render time to highlight the active option.
+// client component because it owns interaction state and reads the current
+// locale at render time to highlight the active option.
 //
 // Why a visible toggle rather than a hamburger-only switcher:
 // per `feedback_legitimacy_over_thumbzone`, the pre-launch site prioritizes
@@ -18,30 +18,27 @@ import { useUnsavedChanges } from '@/lib/unsaved-changes'
 // menu. So both options are shown on the chrome at every breakpoint, even
 // at the cost of mobile horizontal real estate.
 //
-// next-intl's router strips/adds the locale prefix automatically, so:
-//   - on /vi/events, usePathname() returns '/events'
-//   - router.replace('/events', { locale: 'en' }) navigates to '/events'
-//   - router.replace('/events', { locale: 'vi' }) navigates to '/vi/events'
-// The middleware sets the NEXT_LOCALE cookie on the response, so the
-// preference sticks across visits.
+// Why a hard navigation (window.location) instead of next-intl's soft
+// router.replace: with `localePrefix: 'as-needed'` the default locale (en) is
+// served at the UNPREFIXED path (`/`, `/events`). A client-side soft-nav back
+// to it (`/vi` -> `/`) reuses the cached `[locale]` layout segment in a
+// production build, so the NextIntlClientProvider keeps its old `vi` value -
+// useLocale() goes stale, the toggle highlights the wrong language, and
+// because `active` is then wrong every subsequent click no-ops and the
+// switcher appears frozen. (Reproduces only in a prod build, not in dev where
+// the layout re-renders eagerly.) A full document load re-runs the middleware
+// and re-renders the layout from scratch, so the locale can never be stale.
+// We trade the SPA-feel prefetch optimization - which `as-needed` makes
+// unreliable for the default locale - for correctness.
 export default function LanguageSwitcher({ className = '' }: { className?: string }) {
   const active = useLocale() as Locale
-  const router = useRouter()
   const pathname = usePathname()
   const t = useTranslations('Language')
-  const [isPending, startTransition] = useTransition()
+  // Local pending flag: a hard nav unloads the page, so we just disable the
+  // controls for the brief moment before the browser takes over (also guards
+  // against a double-click firing two navigations).
+  const [isSwitching, setIsSwitching] = useState(false)
   const { confirmDiscard } = useUnsavedChanges()
-
-  // Warm the client Router Cache with the other locale(s) of the current page,
-  // so a switch reads the already-rendered page from memory instead of waiting
-  // on a backend round-trip. Re-runs when the page (pathname) changes. This is
-  // the "cache the other language" piece - prefetch is idempotent, so doing it
-  // on every relevant render is cheap.
-  useEffect(() => {
-    for (const code of routing.locales) {
-      if (code !== active) router.prefetch(pathname, { locale: code as Locale })
-    }
-  }, [pathname, active, router])
 
   function switchTo(target: Locale) {
     if (target === active) return
@@ -50,20 +47,23 @@ export default function LanguageSwitcher({ className = '' }: { className?: strin
     if (!confirmDiscard('Switch language now? Unsaved changes in the open editor will be lost.')) {
       return
     }
-    // Tier 1: record scroll so the remounted tree lands in the same place and
-    // skips the entry fade - the switch should feel in-place, not like a reload.
+    // Tier 1: record scroll so the reloaded tree lands in the same place and
+    // skips the entry fade. sessionStorage survives a same-tab full reload, so
+    // PageTransition still consumes this signal after the hard nav - the switch
+    // restores scroll position rather than jumping to the top.
     markLocaleSwitch(window.scrollY)
-    startTransition(() => {
-      router.replace(pathname, { locale: target })
-    })
+    setIsSwitching(true)
+    // getPathname applies the correct prefix for the target locale (unprefixed
+    // for en, `/vi/...` for vi); preserve any query/hash on the current URL.
+    const targetPath = getPathname({ href: pathname, locale: target })
+    window.location.assign(targetPath + window.location.search + window.location.hash)
   }
 
   return (
     <>
-      {/* Pending feedback: useTransition keeps the old page interactive while
-          the new-locale tree loads, so a thin top bar reassures the user the
-          switch is in flight (the button row also dims via opacity below). */}
-      {isPending && (
+      {/* Pending feedback: a thin top bar reassures the user the switch is in
+          flight during the brief beat before the browser starts the reload. */}
+      {isSwitching && (
         <span className="fixed inset-x-0 top-0 z-[9999] block h-[2px] overflow-hidden bg-primary/20" aria-hidden>
           <span className="animate-nav-progress block h-full w-full origin-left bg-primary" />
         </span>
@@ -92,12 +92,12 @@ export default function LanguageSwitcher({ className = '' }: { className?: strin
             aria-pressed={isActive}
             aria-label={t('switchTo', { language: fullName })}
             title={fullName}
-            disabled={isPending}
+            disabled={isSwitching}
             className={`${responsiveVisibility} h-11 min-w-11 items-center justify-center px-2.5 font-display text-xs font-semibold uppercase tracking-wider transition-colors ${
               isActive
                 ? 'cursor-default bg-primary/10 text-primary'
                 : 'text-muted hover:bg-primary/5 hover:text-primary'
-            } ${isPending && !isActive ? 'opacity-60' : ''}`}
+            } ${isSwitching && !isActive ? 'opacity-60' : ''}`}
           >
             {code}
           </button>
