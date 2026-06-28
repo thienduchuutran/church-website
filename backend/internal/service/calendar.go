@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
@@ -72,7 +74,71 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 		"notes": e.Notes,
 	})
 
+	// Prefill the month's footer note with a line for this event ("prefill then
+	// edit"). Best-effort: it never blocks or fails the create.
+	s.seedMonthNote(ctx, e, adminID)
+
 	return e, nil
+}
+
+// buildSeedLine renders a one-line summary of an event for the month note, e.g.
+// "• May 22-25: Youth Camp" or "• May 22: Game Night". Uses a hyphen for date
+// ranges (same-month "May 22-25", cross-month "May 30 - Jun 2").
+func buildSeedLine(e *model.CalendarEvent) string {
+	start, err := time.Parse("2006-01-02", e.Date)
+	if err != nil {
+		return "• " + e.Title
+	}
+	datePart := start.Format("Jan 2")
+	if e.EndDate != nil && *e.EndDate != "" && *e.EndDate != e.Date {
+		if end, err := time.Parse("2006-01-02", *e.EndDate); err == nil {
+			if end.Month() == start.Month() && end.Year() == start.Year() {
+				datePart = fmt.Sprintf("%s-%d", start.Format("Jan 2"), end.Day())
+			} else {
+				datePart = fmt.Sprintf("%s - %s", start.Format("Jan 2"), end.Format("Jan 2"))
+			}
+		}
+	}
+	return fmt.Sprintf("• %s: %s", datePart, e.Title)
+}
+
+// seedMonthNote appends a one-line summary of a newly created event to that
+// month's note. It is KEEP-EDIT: it only ever appends a new line and never
+// rewrites existing text, so an admin's curation is never clobbered. Best-effort
+// - any failure here is swallowed so it can't fail event creation (the event is
+// already persisted by the time this runs).
+func (s *CalendarService) seedMonthNote(ctx context.Context, e *model.CalendarEvent, adminID string) {
+	start, err := time.Parse("2006-01-02", e.Date)
+	if err != nil {
+		return
+	}
+	year, month := start.Year(), int(start.Month())
+
+	line := buildSeedLine(e)
+
+	existing, err := s.repo.GetMonthNote(ctx, year, month, "")
+	if err != nil {
+		return
+	}
+	current := ""
+	if existing != nil {
+		current = existing.Content
+	}
+	// Dedupe so a retry (or a duplicate event) doesn't append the same line twice.
+	if strings.Contains(current, line) {
+		return
+	}
+
+	newContent := line
+	if strings.TrimSpace(current) != "" {
+		newContent = current + "\n" + line
+	}
+
+	saved, err := s.repo.UpsertMonthNote(ctx, year, month, newContent, &adminID)
+	if err != nil {
+		return
+	}
+	s.enqueueOne("calendar_month_notes", saved.ID, "content", newContent)
 }
 
 // UpdateEvent validates the request, fetches the existing event for diffing,

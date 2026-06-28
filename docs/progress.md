@@ -269,3 +269,11 @@ renders as a ribbon across the days it covers.
   (day-click now matches by range).
 
 **Drag-to-create (5b/5c) was dropped** - the modal makes it unnecessary.
+
+---
+
+## Calendar: graduation category, address privacy, auto-seeded footer notes
+
+- **Graduation category** (migration `000009`, enum `ADD VALUE`): new event type with a `graduation-cap` icon, default amber.
+- **Address public/private** (migration `000010`, `address_public bool` default false): an address is shown to the public site only when `address_public` is true; admins always see it; the PNG export always includes it (admin-driven). EventModal has a "Show on website" toggle + a reusable `InfoTip` ("?") explaining the export-always rule. Footer shows public addresses to everyone; admins see all with a `data-export-hide` "hidden" cue.
+- **Auto-seeded footer notes (C2, keep-edit):** `CalendarService.CreateEvent` appends a one-line summary of every newly created event to that month's note (`buildSeedLine` → "• May 22-25: Youth Camp"). **Keep-edit:** append-only, deduped, never rewrites - so admin edits are never clobbered. Best-effort (never fails the create). Only NEW events seed (no retroactive backfill). Reuses `calendar_month_notes` (no new storage); the footer's `line-clamp-3` was removed so the full list shows. Decision: **every** event seeds (not just spans).

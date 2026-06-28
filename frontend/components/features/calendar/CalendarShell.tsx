@@ -655,7 +655,7 @@ export default function CalendarShell({
               </div>
               {monthNote?.content ? (
                 <>
-                  <p className="font-sans text-[11px] text-gray-600 leading-snug whitespace-pre-wrap line-clamp-3">{monthNote.content}</p>
+                  <p className="font-sans text-[11px] text-gray-600 leading-snug whitespace-pre-wrap">{monthNote.content}</p>
                   {monthNote.machine_translated && (
                     <div className="mt-1">
                       <MachineTranslatedBadge />
