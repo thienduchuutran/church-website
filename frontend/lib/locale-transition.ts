@@ -26,15 +26,18 @@ export function markLocaleSwitch(scrollY: number): void {
 // Read the signal WITHOUT clearing it. Used at render time to decide whether to
 // skip the entry fade. Returns null when there is no recent signal, so it is
 // safe to call in a useState initializer (idempotent, no side effects) and on
-// the server (returns null -> no hydration mismatch). A 5s staleness guard
-// stops a leftover flag from a restored tab suppressing a legitimate fade.
+// the server (returns null -> no hydration mismatch). A staleness guard stops a
+// leftover flag from a restored tab suppressing a legitimate fade. The window is
+// 15s (not 5s) because the switch is a full document reload now: a cold backend
+// or slow network can push the new page's mount past 5s, which would silently
+// drop the saved scroll position.
 export function peekLocaleSwitch(): { scrollY: number } | null {
   if (typeof window === 'undefined') return null
   try {
     const raw = sessionStorage.getItem(KEY)
     if (!raw) return null
     const sig = JSON.parse(raw) as LocaleSwitchSignal
-    if (Date.now() - sig.ts > 5000) {
+    if (Date.now() - sig.ts > 15000) {
       sessionStorage.removeItem(KEY)
       return null
     }

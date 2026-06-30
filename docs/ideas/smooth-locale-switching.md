@@ -1,12 +1,19 @@
 # Idea: smooth, reload-free language switching (deferred)
 
 > **Status:** DEFERRED - idea, not built. Captured 2026-06-27.
-> **Interim fix that shipped instead:** the language switch is now a **hard
-> navigation** (`window.location`) in `frontend/components/ui/LanguageSwitcher.tsx`.
-> Correct and unbreakable, but it reloads the page on every switch.
-> **Pick this up only if** the reload flash becomes a real, voiced complaint from
-> actual visitors. For a pre-launch ~100-member site it very likely won't - so
-> don't build this out of guilt. Build it because someone asked for it.
+> **What actually shipped (2026-06-27):** `localePrefix` was changed from
+> `'as-needed'` to `'always'` - i.e. the "cheaper middle option" in section 7
+> below is what we adopted, not the hard-nav-on-`as-needed` plan. Every locale
+> is now explicitly prefixed (`/en`, `/vi`), which removed the unprefixed-default
+> ambiguity that caused the whole bug cascade (freeze, stale `useLocale`,
+> `usePathname` not stripping, "reloads but doesn't change"). The switch is still
+> a hard navigation (`window.location`) to an always-prefixed URL, so it reloads
+> on every switch. Cost paid: English URLs now carry an `/en` prefix and bare `/`
+> 301s to `/en`.
+> **Pick THIS (the custom layer) up only if** the reload flash becomes a real,
+> voiced complaint from actual visitors. For a pre-launch ~100-member site it
+> very likely won't - so don't build it out of guilt. Build it because someone
+> asked for it.
 
 Hey future me. This is the plan for getting *instant, in-place* language
 switching back **without** giving up the SEO-friendly `/vi/` URLs. Everything you

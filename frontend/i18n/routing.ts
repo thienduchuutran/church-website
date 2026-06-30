@@ -9,12 +9,17 @@ import { createNavigation } from 'next-intl/navigation'
 export const routing = defineRouting({
   locales: ['en', 'vi'],
   defaultLocale: 'en',
-  // 'as-needed' means the default locale (en) is served at /, /events, /about
-  // - no /en prefix. Vietnamese is served at /vi, /vi/events, /vi/about. The
-  // tradeoff: the canonical URL for English visitors stays clean. The cost:
-  // we cannot share a URL with another locale's translation without manually
-  // adding the prefix; users switch language via the Navbar switcher (Phase 4c).
-  localePrefix: 'as-needed',
+  // 'always' prefixes EVERY locale: English at /en, /en/events; Vietnamese at
+  // /vi, /vi/events; bare / redirects to /en. We deliberately moved off
+  // 'as-needed' (which left English unprefixed) because that asymmetry was the
+  // root of a cascade of language-switch bugs: switching to the unprefixed
+  // default reused the cached [locale] layout (stale useLocale -> frozen
+  // switcher), next-intl's usePathname() failed to strip the prefix in a prod
+  // build, and the locale at '/' was ambiguous. With every locale prefixed the
+  // URL is the single, unambiguous source of truth, so that whole class of bugs
+  // disappears. Cost: English URLs now carry an /en prefix (the canonical URL),
+  // and bare / 301s to /en. See docs/ideas/smooth-locale-switching.md.
+  localePrefix: 'always',
   // Persist the user's last choice in a cookie so a visitor who picks Vietnamese
   // does not get bounced back to English on the next page navigation.
   localeCookie: {

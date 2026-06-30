@@ -2,9 +2,22 @@
 
 import { useState } from 'react'
 import { useLocale, useTranslations } from 'next-intl'
-import { usePathname, getPathname, routing, type Locale } from '@/i18n/routing'
+import { routing, type Locale } from '@/i18n/routing'
 import { markLocaleSwitch } from '@/lib/locale-transition'
 import { useUnsavedChanges } from '@/lib/unsaved-changes'
+
+// Strip a leading locale segment (`/vi`, `/en`) from a raw pathname, returning a
+// locale-agnostic path that always starts with `/`. Deliberately computed OFF
+// next-intl: under `localePrefix: 'as-needed'` in a prod build, next-intl's
+// usePathname() does not reliably strip the prefix, which silently broke the
+// switch back to the default locale (see switchTo for the full story).
+function stripLocalePrefix(path: string): string {
+  for (const loc of routing.locales) {
+    if (path === `/${loc}`) return '/'
+    if (path.startsWith(`/${loc}/`)) return path.slice(loc.length + 1)
+  }
+  return path
+}
 
 // LanguageSwitcher renders the EN / VI toggle in the navbar. It is a "true"
 // client component because it owns interaction state and reads the current
@@ -32,7 +45,6 @@ import { useUnsavedChanges } from '@/lib/unsaved-changes'
 // unreliable for the default locale - for correctness.
 export default function LanguageSwitcher({ className = '' }: { className?: string }) {
   const active = useLocale() as Locale
-  const pathname = usePathname()
   const t = useTranslations('Language')
   // Local pending flag: a hard nav unloads the page, so we just disable the
   // controls for the brief moment before the browser takes over (also guards
@@ -53,9 +65,13 @@ export default function LanguageSwitcher({ className = '' }: { className?: strin
     // restores scroll position rather than jumping to the top.
     markLocaleSwitch(window.scrollY)
     setIsSwitching(true)
-    // getPathname applies the correct prefix for the target locale (unprefixed
-    // for en, `/vi/...` for vi); preserve any query/hash on the current URL.
-    const targetPath = getPathname({ href: pathname, locale: target })
+    // Build the target URL from the RAW browser path. `localePrefix: 'always'`
+    // means EVERY locale is prefixed (/en/..., /vi/...), so we strip whatever
+    // locale prefix is on the current path and add the target's. Using the raw
+    // window.location.pathname (not next-intl's usePathname) keeps this immune
+    // to the prefix-stripping quirks that bit us under the old 'as-needed' setup.
+    const bare = stripLocalePrefix(window.location.pathname)
+    const targetPath = `/${target}` + (bare === '/' ? '' : bare)
     window.location.assign(targetPath + window.location.search + window.location.hash)
   }
 
