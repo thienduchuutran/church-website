@@ -155,6 +155,7 @@ func main() {
 	var reactionHandler *handler.ReactionHandler
 	var pageHandler *handler.PageHandler
 	var galleryHandler *handler.GalleryHandler
+	var uploadHandler *handler.UploadHandler
 	var calendarHandler *handler.CalendarHandler
 	var heroVideoHandler *handler.HeroVideoHandler
 	var adminTranslationsHandler *handler.AdminTranslationsHandler
@@ -184,6 +185,11 @@ func main() {
 			s3Client = c
 			gallerySvc := service.NewGalleryService(s3Client, galleryRepo)
 			galleryHandler = handler.NewGalleryHandler(gallerySvc)
+
+			// Editor image uploads: store body images under a public prefix and
+			// return a permanent URL the editor embeds as <img>. Requires
+			// R2_PUBLIC_URL (the service errors on upload if it is unset).
+			uploadHandler = handler.NewUploadHandler(service.NewUploadService(s3Client))
 		}
 
 		// PostService takes a presigner (for non-gallery images) and a public
@@ -373,6 +379,17 @@ func main() {
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Post("/posts/{id}/images", galleryHandler.UploadImage)
+			})
+		}
+
+		// Editor image uploads:
+		//   ADMIN-ONLY: POST /uploads/image - store a body image in R2 and return
+		//   its permanent public URL for the editor to embed. Not tied to a post
+		//   (a new post has no id yet) and not recorded in post_images.
+		if uploadHandler != nil {
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Post("/uploads/image", uploadHandler.UploadImage)
 			})
 		}
 
