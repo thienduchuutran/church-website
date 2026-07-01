@@ -245,6 +245,12 @@ func (s *PostService) dispatchDiscordCreate(post model.Post, adminEmail string, 
 	identity := s.identityFor(ctx, adminEmail)
 	msg.Username = identity.Username
 	msg.AvatarURL = identity.AvatarURL
+	// Inline body images ride along as attachments, rendered after the text
+	// (Discord can't interleave them - option a). Best-effort: FilesFromURLs
+	// skips any that fail to download and caps at Discord's 10-attachment limit.
+	if post.Body != nil {
+		msg.Files = discord.FilesFromURLs(discord.ExtractImageURLs(*post.Body))
+	}
 
 	messageID, err := discord.Send(url, msg)
 	if err != nil {
