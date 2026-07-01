@@ -116,3 +116,36 @@ func TestDelete_successOn204(t *testing.T) {
 		t.Errorf("Delete on 204 = %v, want nil", err)
 	}
 }
+
+func TestSend_withFilesUsesMultipart(t *testing.T) {
+	var gotContentType, gotBody string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotContentType = r.Header.Get("Content-Type")
+		b, _ := io.ReadAll(r.Body)
+		gotBody = string(b)
+		w.WriteHeader(http.StatusOK)
+		io.WriteString(w, `{"id":"999"}`)
+	}))
+	defer srv.Close()
+
+	id, err := Send(srv.URL, OutboundMessage{
+		Content:         "hello",
+		Username:        "pastorminh",
+		AllowedMentions: NoMentions(),
+		Files:           []FileAttachment{{Filename: "a.png", ContentType: "image/png", Data: []byte("PNGDATA")}},
+	})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	if id != "999" {
+		t.Errorf("id = %q, want 999", id)
+	}
+	if !strings.HasPrefix(gotContentType, "multipart/form-data") {
+		t.Errorf("content-type = %q, want multipart/form-data", gotContentType)
+	}
+	for _, want := range []string{"payload_json", `"filename":"a.png"`, "PNGDATA", "hello"} {
+		if !strings.Contains(gotBody, want) {
+			t.Errorf("multipart body missing %q; body=%s", want, gotBody)
+		}
+	}
+}

@@ -4,16 +4,27 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
+	"mime/multipart"
 	"net/http"
 )
 
 // OutboundMessage is everything needed to post (or edit) one webhook message:
-// the rendered content plus the per-message identity and mention policy.
+// the rendered content plus the per-message identity, mention policy, and any
+// image attachments (rendered by Discord after the text - option a).
 type OutboundMessage struct {
 	Content         string
 	Username        string
 	AvatarURL       string
 	AllowedMentions AllowedMentions
+	Files           []FileAttachment
+}
+
+// FileAttachment is one file (an inline post image) sent with a message.
+type FileAttachment struct {
+	Filename    string
+	ContentType string
+	Data        []byte
 }
 
 // sendPayload is the JSON body for a webhook POST. allowed_mentions is always
@@ -45,21 +56,16 @@ type sentMessage struct {
 // body, so we would never learn the message id and could never edit or delete
 // the message afterwards.
 func Send(webhookURL string, msg OutboundMessage) (string, error) {
-	body, err := json.Marshal(sendPayload{
-		Content:         msg.Content,
-		Username:        msg.Username,
-		AvatarURL:       msg.AvatarURL,
-		AllowedMentions: normalizeMentions(msg.AllowedMentions),
-	})
+	body, contentType, err := buildSendBody(msg)
 	if err != nil {
-		return "", fmt.Errorf("marshal send payload: %w", err)
+		return "", err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, webhookURL+"?wait=true", bytes.NewReader(body))
+	req, err := http.NewRequest(http.MethodPost, webhookURL+"?wait=true", body)
 	if err != nil {
 		return "", fmt.Errorf("build send request: %w", err)
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Content-Type", contentType)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -79,6 +85,73 @@ func Send(webhookURL string, msg OutboundMessage) (string, error) {
 		return "", fmt.Errorf("discord send returned no message id (was ?wait=true honored?)")
 	}
 	return sent.ID, nil
+}
+
+// buildSendBody produces the request body + Content-Type for a send: a plain
+// JSON body when there are no files, or multipart/form-data (payload_json plus
+// files[n]) when the message carries image attachments.
+func buildSendBody(msg OutboundMessage) (io.Reader, string, error) {
+	if len(msg.Files) == 0 {
+		b, err := json.Marshal(sendPayload{
+			Content:         msg.Content,
+			Username:        msg.Username,
+			AvatarURL:       msg.AvatarURL,
+			AllowedMentions: normalizeMentions(msg.AllowedMentions),
+		})
+		if err != nil {
+			return nil, "", fmt.Errorf("marshal send payload: %w", err)
+		}
+		return bytes.NewReader(b), "application/json", nil
+	}
+	return buildMultipart(msg)
+}
+
+// buildMultipart assembles a multipart body: a payload_json part carrying the
+// message fields plus an attachments manifest, and one files[i] part per image.
+// Discord matches each manifest entry's id to the files[i] index.
+func buildMultipart(msg OutboundMessage) (io.Reader, string, error) {
+	type attachmentMeta struct {
+		ID       int    `json:"id"`
+		Filename string `json:"filename"`
+	}
+	payload := struct {
+		Content         string           `json:"content"`
+		Username        string           `json:"username,omitempty"`
+		AvatarURL       string           `json:"avatar_url,omitempty"`
+		AllowedMentions AllowedMentions  `json:"allowed_mentions"`
+		Attachments     []attachmentMeta `json:"attachments"`
+	}{
+		Content:         msg.Content,
+		Username:        msg.Username,
+		AvatarURL:       msg.AvatarURL,
+		AllowedMentions: normalizeMentions(msg.AllowedMentions),
+	}
+	for i, f := range msg.Files {
+		payload.Attachments = append(payload.Attachments, attachmentMeta{ID: i, Filename: f.Filename})
+	}
+	pj, err := json.Marshal(payload)
+	if err != nil {
+		return nil, "", fmt.Errorf("marshal payload_json: %w", err)
+	}
+
+	var buf bytes.Buffer
+	mw := multipart.NewWriter(&buf)
+	if err := mw.WriteField("payload_json", string(pj)); err != nil {
+		return nil, "", err
+	}
+	for i, f := range msg.Files {
+		part, err := mw.CreateFormFile(fmt.Sprintf("files[%d]", i), f.Filename)
+		if err != nil {
+			return nil, "", err
+		}
+		if _, err := part.Write(f.Data); err != nil {
+			return nil, "", err
+		}
+	}
+	if err := mw.Close(); err != nil {
+		return nil, "", err
+	}
+	return &buf, mw.FormDataContentType(), nil
 }
 
 // Edit updates the content of a message previously sent through this webhook.
