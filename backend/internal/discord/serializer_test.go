@@ -62,6 +62,32 @@ func TestHTMLToDiscordMarkdown_links(t *testing.T) {
 	}
 }
 
+func TestExtractImageURLs(t *testing.T) {
+	body := `<p>intro</p><img src="https://r2/pub/a.png"><p>mid</p><img src="https://r2/pub/b.jpg"/><img>`
+	got := ExtractImageURLs(body)
+	want := []string{"https://r2/pub/a.png", "https://r2/pub/b.jpg"}
+	if len(got) != len(want) {
+		t.Fatalf("got %d urls %v, want %d %v", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("url[%d] = %q, want %q (document order, src-less <img> skipped)", i, got[i], want[i])
+		}
+	}
+	if ExtractImageURLs("") != nil {
+		t.Error("empty input should return nil")
+	}
+}
+
+func TestHTMLToDiscordMarkdown_imgContributesNoText(t *testing.T) {
+	// Images go to Discord as attachments, so their URL must not leak into the
+	// text body.
+	got := HTMLToDiscordMarkdown(`<p>hi</p><img src="https://r2/pub/x.png">`)
+	if strings.Contains(got, "x.png") || strings.Contains(got, "http") {
+		t.Errorf("image url leaked into text body: %q", got)
+	}
+}
+
 func TestHTMLToDiscordMarkdown_lists(t *testing.T) {
 	bullet := `<ul><li>One</li><li>Two</li></ul>`
 	got := HTMLToDiscordMarkdown(bullet)

@@ -30,6 +30,34 @@ type listState struct {
 	olCounter int
 }
 
+// ExtractImageURLs returns the src of every <img> in the body HTML, in document
+// order. A post's inline images are sent to Discord as attachments after the
+// text (Discord can't interleave them like the website), so the delivery path
+// pulls the image URLs out here. Returns nil for empty/unparseable input.
+func ExtractImageURLs(rawHTML string) []string {
+	if rawHTML == "" {
+		return nil
+	}
+	doc, err := html.Parse(strings.NewReader(rawHTML))
+	if err != nil {
+		return nil
+	}
+	var urls []string
+	var walk func(n *html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && strings.ToLower(n.Data) == "img" {
+			if src := attrVal(n, "src"); src != "" {
+				urls = append(urls, src)
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(doc)
+	return urls
+}
+
 func walkNode(b *strings.Builder, n *html.Node, ls *listState) {
 	if n.Type == html.TextNode {
 		b.WriteString(n.Data)
@@ -161,6 +189,11 @@ func walkNode(b *strings.Builder, n *html.Node, ls *listState) {
 	case "mark":
 		// Discord has no highlight — emit plain text.
 		walkChildren(b, n, ls)
+
+	case "img":
+		// Inline images are delivered to Discord as file attachments (they
+		// render after the text - Discord can't interleave them), so they
+		// contribute nothing to the text body. See ExtractImageURLs.
 
 	case "div":
 		// Callout blocks: <div data-callout data-callout-variant="...">
