@@ -324,6 +324,28 @@ Upload an image file and attach it to a post. The file is stored in Cloudflare R
 ```
 Store this key if needed. To display the image, fetch the post - the backend generates a fresh presigned URL on each read.
 
+---
+
+### `POST /api/v1/uploads/image`
+Upload an image dropped into the **post body editor** (inline images), and get back its
+**permanent public URL** to embed as an `<img>` in the body HTML. Unlike `/posts/:id/images`
+this is **not tied to a post** (a new post has no id yet at compose time) and is **not** recorded
+in `post_images` - inline images live in the body HTML, not the gallery. Admin only.
+
+**Request** - `multipart/form-data`
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `image` | file | Yes | Image file. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/gif`. Max 10 MB. |
+
+**Response `201`**
+```json
+{ "url": "https://<r2-public-host>/images/body/1714000000000.jpg" }
+```
+Requires `R2_PUBLIC_URL` to be configured - the URL is baked into saved HTML, so a presigned
+(expiring) URL would be unusable. Returns `500` when no public URL can be minted.
+
+On create, a post's inline images are also sent to Discord as attachments (see `docs/agents/discord.md`).
+
 **Response `400`** - missing file or unsupported content type  
 **Response `401` / `403`** - unauthenticated or not an admin  
 **Response `500`** - object storage or database failure

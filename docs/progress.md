@@ -3,6 +3,35 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-06-25 - Inline images in post bodies (+ images ride along to Discord)
+
+Post bodies can now hold **inline images**, positioned anywhere in the text flow (drop / paste /
+toolbar), unlimited on the website. An image dropped into the editor shows **instantly** (a blob-URL
+placeholder at the cursor), uploads to a public R2 prefix, then swaps to its permanent URL. On
+**create**, a post's inline images are also sent to its Discord message as **file attachments** -
+rendered after the text (Discord can't interleave them; "option a"), capped at Discord's
+**10-attachment** limit, best-effort. The External Link field is unchanged (kept per the owner's
+call). **No DB change** - images live as `<img>` in the body HTML.
+
+Backend:
+- `POST /uploads/image` (admin): store a body image under `images/body/` (public prefix), return its
+  permanent public URL. Not tied to a post, not in `post_images`. Requires `R2_PUBLIC_URL`.
+- discord `serializer.go` strips `<img>` from the text + `ExtractImageURLs`; `attachments.go`
+  `FilesFromURLs` downloads them from R2; `send.go` gained a multipart path; the post service
+  attaches them on create.
+
+Frontend:
+- `@tiptap/extension-image` (pinned `3.23.1` to match core); `RichBodyEditor` gained the image node,
+  drop/paste/toolbar upload, and the placeholder-swap UX with an "uploading… wait to save" note.
+- `sanitizeBody.ts` allows `<img>` with `src`/`alt`, scheme locked to **https** (blocks
+  `data:`/`javascript:`/http mixed-content). Body images styled in `globals.css` + the editor module.
+
+Known edges (deferred): saving mid-upload drops a not-yet-swapped blob image (the banner warns);
+orphaned R2 objects on image removal / post delete aren't cleaned up; Discord images are fixed at
+create (edit updates text only) and don't interleave between paragraphs.
+
+Verified: backend `go build`/`test`/`vet` green; frontend `tsc`/`eslint`/`next build` green.
+
 ## 2026-06-25 - Upcoming / Past events redesign (manual archive + swipeable Past carousel)
 
 The homepage and `/events` now split events into an **Upcoming** feed and a horizontally

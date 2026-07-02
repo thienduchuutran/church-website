@@ -128,6 +128,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | DELETE | `/api/v1/posts/:id` | Delete a post |
 | PUT | `/api/v1/pages/:slug` | Upsert sections for a static page |
 | POST | `/api/v1/posts/:id/images` | Upload an image to Cloudflare R2 and attach it to a post. Returns `{ key }`. |
+| POST | `/api/v1/uploads/image` | Upload an inline **body** image; returns `{ url }` (permanent public URL) to embed as `<img>`. Not tied to a post, not in `post_images`. Requires `R2_PUBLIC_URL`. |
 | POST | `/api/v1/tags` | Create a new tag (label) for gallery albums |
 | POST | `/api/v1/posts/:id/tags` | Replace all tags on a gallery album |
 | DELETE | `/api/v1/posts/:id/tags/:tag_id` | Remove a single tag from a gallery album |

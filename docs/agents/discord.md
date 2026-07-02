@@ -53,6 +53,16 @@ Content is truncated to Discord's 2000-codepoint limit.
 Tiptap HTML -> markdown conversion lives in `serializer.go` (`HTMLToDiscordMarkdown`): headings,
 bold/italic/underline/strike, links, lists, blockquotes, code, and the callout blocks.
 
+### Inline body images -> attachments (text then images)
+Inline `<img>` in a post body are **stripped from the text** and sent as **file attachments**, so a
+Discord message reads as **text, then images below it** (option a). Discord cannot interleave images
+between paragraphs like the website does, so exact positioning is a website-only capability.
+
+- `serializer.go` drops `<img>` from the text; `ExtractImageURLs(html)` collects the srcs in order.
+- `attachments.go` `FilesFromURLs` downloads each image from its public R2 URL and attaches it.
+- Cap of **10** attachments per message (Discord's limit) - extra images stay on the website only.
+- Best-effort: an image that fails to download is skipped; sent on **create**, images are fixed on edit.
+
 ---
 
 ## Per-admin identity
