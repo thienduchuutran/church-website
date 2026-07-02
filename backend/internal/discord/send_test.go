@@ -61,6 +61,29 @@ func TestSend_errorOnNon2xx(t *testing.T) {
 	}
 }
 
+// TestSend_429SurfacesBodyAndRetryAfter locks in the diagnostic: a 429 must
+// carry Discord's Retry-After header and (a capped, whitespace-collapsed slice
+// of) the response body into the error, so a prod-only rate limit can be told
+// apart - transient bucket limit vs Cloudflare IP block - from the log alone.
+func TestSend_429SurfacesBodyAndRetryAfter(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Retry-After", "42")
+		w.WriteHeader(http.StatusTooManyRequests)
+		io.WriteString(w, `{"message":"You are being rate limited.","retry_after":42,"global":false}`)
+	}))
+	defer srv.Close()
+
+	_, err := Send(srv.URL, OutboundMessage{Content: "x", AllowedMentions: NoMentions()})
+	if err == nil {
+		t.Fatal("expected error on 429, got nil")
+	}
+	for _, want := range []string{"status 429", `retry_after="42"`, "You are being rate limited", "global"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("429 error missing %q; got: %v", want, err)
+		}
+	}
+}
+
 func TestEdit_patchesMessageByID(t *testing.T) {
 	var gotMethod, gotPath, gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

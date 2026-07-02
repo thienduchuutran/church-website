@@ -7,6 +7,7 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"strings"
 )
 
 // OutboundMessage is everything needed to post (or edit) one webhook message:
@@ -74,7 +75,7 @@ func Send(webhookURL string, msg OutboundMessage) (string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("discord send returned status %d", resp.StatusCode)
+		return "", statusError("send", resp)
 	}
 
 	var sent sentMessage
@@ -178,7 +179,7 @@ func Edit(webhookURL, messageID string, msg OutboundMessage) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("discord edit returned status %d", resp.StatusCode)
+		return statusError("edit", resp)
 	}
 	return nil
 }
@@ -202,9 +203,24 @@ func Delete(webhookURL, messageID string) error {
 		return nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return fmt.Errorf("discord delete returned status %d", resp.StatusCode)
+		return statusError("delete", resp)
 	}
 	return nil
+}
+
+// statusError builds the error for a non-2xx webhook response, reading a capped
+// slice of the body plus the Retry-After header. Discord's 429 comes in two very
+// different shapes and the status code alone can't tell them apart: a transient
+// per-route bucket limit (JSON body, tiny retry_after, worth retrying) versus a
+// Cloudflare IP-level block (HTML "error 1015" body, large Retry-After, a retry
+// won't help). Capturing the body + header is what makes that distinction - and
+// diagnosing prod-only 429s - possible. The body is capped so a huge HTML error
+// page can't bloat the log line.
+func statusError(action string, resp *http.Response) error {
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+	snippet := strings.Join(strings.Fields(string(body)), " ")
+	return fmt.Errorf("discord %s returned status %d (retry_after=%q body=%q)",
+		action, resp.StatusCode, resp.Header.Get("Retry-After"), snippet)
 }
 
 // normalizeMentions guards against a nil Parse slice marshaling to JSON null
