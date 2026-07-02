@@ -139,6 +139,44 @@
 .churchPill:hover { opacity: 0.8; }
 .churchPill:focus-visible { outline: 2px solid var(--te); outline-offset: 1px; }
 
+/* Labeled "Image" action - more discoverable than a bare icon. */
+.imageBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1.5px solid var(--te);
+  background: var(--te-light);
+  color: var(--te);
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  min-height: 30px;
+  transition: background 0.12s, opacity 0.12s;
+}
+.imageBtn:hover { background: #efe1d8; }
+.imageBtn:focus-visible { outline: 2px solid var(--te); outline-offset: 1px; }
+
+/* Drop-zone highlight: dashed terracotta border + ring while an image file is
+   dragged over the editor, so it reads as a target. */
+.dropActive {
+  border-color: var(--te);
+  border-style: dashed;
+  box-shadow: 0 0 0 3px var(--te-light);
+}
+
+/* Persistent hint so people know images can be dropped/pasted inline. */
+.imageHint {
+  font-family: var(--font-body);
+  font-size: 11px;
+  color: var(--muted, #8a8178);
+  padding: 4px 12px 8px;
+}
+
 /* Hide on mobile */
 .desktopOnly { display: none !important; }
 @media (min-width: 640px) {
@@ -154,6 +192,18 @@
   min-height: 160px;
   padding: 14px 16px;
   outline: none;
+}
+/* Inline images inside the editor: constrain, round, and highlight when selected. */
+.editorContent img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  margin: 10px 0;
+  display: block;
+}
+.editorContent img.ProseMirror-selectednode {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
 }
 @media (max-width: 639px) {
   /* iOS Safari auto-zooms any focused editable region < 16px.

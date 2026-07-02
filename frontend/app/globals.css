@@ -208,6 +208,8 @@ body {
 .rich-content code { background: #f2ede8; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 .rich-content pre code { background: transparent; padding: 0; }
 .rich-content hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+/* Inline body images: never overflow the column, keep aspect ratio. */
+.rich-content img { max-width: 100%; height: auto; border-radius: 8px; margin: 10px 0; display: block; }
 /* word-break: break-all guarantees a long URL (no spaces) splits to fit the
    column even if overflow-wrap on the parent didn't catch it. Scoped to links
    so normal prose still wraps on word boundaries. */

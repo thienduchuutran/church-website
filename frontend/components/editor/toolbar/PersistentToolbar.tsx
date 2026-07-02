@@ -7,6 +7,7 @@ import styles from '../RichBodyEditor.module.css'
 interface PersistentToolbarProps {
   editor: Editor | null
   onEmojiClick: () => void
+  onImageClick: () => void
 }
 
 const HIGHLIGHT_COLORS = [
@@ -21,7 +22,7 @@ const TEXT_ALIGNS = [
   { align: 'right',   icon: '➡' },
 ]
 
-export function PersistentToolbar({ editor, onEmojiClick }: PersistentToolbarProps) {
+export function PersistentToolbar({ editor, onEmojiClick, onImageClick }: PersistentToolbarProps) {
   if (!editor) return null
 
   const currentLevel: number =
@@ -198,6 +199,17 @@ export function PersistentToolbar({ editor, onEmojiClick }: PersistentToolbarPro
       ))}
 
       <span className={styles.toolbarSpacer} aria-hidden />
+
+      {/* Insert image - labeled so it reads as an action, not a mystery glyph */}
+      <button
+        type="button"
+        onClick={onImageClick}
+        className={styles.imageBtn}
+        aria-label="Insert image"
+        title="Insert image - or drag &amp; drop / paste into the text"
+      >
+        &#128444;&nbsp;Image
+      </button>
 
       {/* Emoji */}
       <button
