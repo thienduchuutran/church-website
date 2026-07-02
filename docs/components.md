@@ -293,6 +293,16 @@ Pure presentational. Renders Title plus the conditional Body / Event Date / Exte
 
 ---
 
+#### `RichBodyEditor` - inline images
+The body editor (`components/editor/RichBodyEditor.tsx`, rendered inside `PostFormFields` for body-having types) supports **inline images** positioned anywhere in the text:
+- Insert via the toolbar **🖼 Image** button, **drag & drop**, or **paste** - each lands at the cursor / drop point.
+- On insert, an instant blob-URL placeholder appears, the file uploads via `uploadEditorImage` (`lib/uploads.ts` → `POST /api/v1/uploads/image`), then the placeholder's `src` swaps to the permanent R2 URL (removed on failure). An "uploading… wait to save" note shows while any upload is in flight; dragging an image file over the editor highlights it as a drop zone.
+- Stored as `<img>` in the body HTML; `sanitizeBody.ts` allows `<img>` with `src`/`alt`, scheme locked to **https**.
+
+**Rendering:** `RichContent` (`components/editor/RichContent.tsx`) runs all body HTML through `sanitizeBody`, so inline images render on the public site (`PostCard`) automatically, styled via `.rich-content img` in `globals.css`. On post **create**, a post's inline images are also delivered to Discord as attachments (text, then images; see `docs/agents/discord.md`).
+
+---
+
 #### `DiscordComposerNote`
 Shown under the form **only when creating** (`!postId`). Tells the admin which Discord channel the post will go to and under whose identity, and exposes the "Notify @everyone" opt-in. Self-contained: fetches the admin's link status so `PostFormFields` stays presentational.
 

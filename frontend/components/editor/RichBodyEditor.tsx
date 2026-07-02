@@ -240,7 +240,7 @@ export function RichBodyEditor({
       {editor && (
         <>
           <BubbleToolbar editor={editor} />
-          <SlashMenu editor={editor} />
+          <SlashMenu editor={editor} onInsertImage={() => fileInputRef.current?.click()} />
           <EmojiMenu
             editor={editor}
             open={emojiOpen}

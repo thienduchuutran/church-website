@@ -13,7 +13,13 @@ function getSlashQuery(editor: Editor): string | null {
   return text.startsWith('/') ? text.slice(1) : null
 }
 
-export function SlashMenu({ editor }: { editor: Editor | null }) {
+export function SlashMenu({
+  editor,
+  onInsertImage,
+}: {
+  editor: Editor | null
+  onInsertImage?: () => void
+}) {
   const [query, setQuery] = useState<string | null>(null)
   const [selectedIdx, setSelectedIdx] = useState(0)
   const listRef = useRef<HTMLDivElement>(null)
@@ -43,7 +49,13 @@ export function SlashMenu({ editor }: { editor: Editor | null }) {
     if (text.startsWith('/')) {
       editor.commands.deleteRange({ from: $from.start(), to: $from.pos })
     }
-    item.action(editor)
+    // Image opens the editor's file picker (upload needs the auth token that
+    // lives in RichBodyEditor); everything else runs its editor command.
+    if (item.image) {
+      onInsertImage?.()
+    } else {
+      item.action(editor)
+    }
   }
 
   // Keep refs in sync for the stable keydown handler

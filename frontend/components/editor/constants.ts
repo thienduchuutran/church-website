@@ -19,6 +19,9 @@ export interface SlashItem {
   desc: string
   action: (editor: Editor) => void
   church?: boolean
+  // image items open the editor's file picker instead of running `action`
+  // (the upload needs the auth token, which lives in RichBodyEditor).
+  image?: boolean
 }
 
 export const SLASH_ITEMS: SlashItem[] = [
@@ -34,6 +37,7 @@ export const SLASH_ITEMS: SlashItem[] = [
   { group: 'Content', icon: '❝',   label: 'Quote',          desc: 'Block quotation',       action: (e) => e.chain().focus().toggleBlockquote().run() },
   { group: 'Content', icon: '</>',  label: 'Code Block',     desc: 'Preformatted code',     action: (e) => e.chain().focus().toggleCodeBlock().run() },
   { group: 'Content', icon: '-',    label: 'Divider',        desc: 'Horizontal rule',       action: (e) => e.chain().focus().setHorizontalRule().run() },
+  { group: 'Content', icon: '🖼',  label: 'Image',          desc: 'Upload from your device', action: () => {}, image: true },
   // Church
   { group: 'Church',  icon: '📣',  label: 'Announcement',   desc: 'Church announcement',   action: (e) => e.chain().focus().insertContent({ type: 'calloutBlock', attrs: { variant: 'announcement' } }).run(), church: true },
   { group: 'Church',  icon: '🙏',  label: 'Prayer Request', desc: 'Prayer highlight',      action: (e) => e.chain().focus().insertContent({ type: 'calloutBlock', attrs: { variant: 'prayer' } }).run(), church: true },

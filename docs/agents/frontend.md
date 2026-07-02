@@ -86,7 +86,8 @@ frontend/
 │   ├── assistant.ts                    ← AI Assistant API service (chat endpoint)
 │   ├── social.ts                       ← SOCIAL_LINKS constant (YouTube/Facebook/Instagram URLs)
 │   ├── supabase.ts                     ← Supabase client (auth + direct public reads)
-│   └── translations.ts                 ← Admin translation review API (list/approve/retranslate/retranslate-all/cleanup-orphans)
+│   ├── translations.ts                 ← Admin translation review API (list/approve/retranslate/retranslate-all/cleanup-orphans)
+│   └── uploads.ts                      ← Editor inline-image upload (uploadEditorImage → POST /uploads/image, returns permanent R2 URL)
 ├── public/
 ├── .env.local
 └── next.config.ts
