@@ -17,14 +17,16 @@ import sanitizeHtml from 'sanitize-html'
 // Underline/Link/Highlight/Color/TextAlign + the CalloutBlock div).
 export const BODY_ALLOWED_TAGS = [
   'p', 'h1', 'h2', 'h3', 'h4', 'br', 'strong', 'em', 'u', 's', 'mark', 'a',
-  'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'hr', 'div', 'span',
+  'ul', 'ol', 'li', 'blockquote', 'pre', 'code', 'hr', 'div', 'span', 'img',
 ]
 
 // Attributes kept on any tag. href/target/rel are flat (allowed on every tag,
 // matching the previous DOMPurify ALLOWED_ATTR) so a Tiptap <a> keeps its link
-// and the safe-rel hardening it already carries.
+// and the safe-rel hardening it already carries. src/alt let inline <img> (post
+// body images uploaded to R2) survive - the img scheme is locked to https below.
 export const BODY_ALLOWED_ATTR = [
   'href', 'target', 'rel', 'class', 'data-callout', 'data-callout-variant', 'style',
+  'src', 'alt',
 ]
 
 // sanitizeBody returns body HTML containing only the allowed tags/attributes,
@@ -51,6 +53,10 @@ export function sanitizeBody(html: string): string {
     // Strip dangerous URL schemes (javascript:, data:, etc.) on links; keep the
     // schemes the editor actually produces.
     allowedSchemes: ['http', 'https', 'mailto', 'tel'],
+    // Images must be https specifically: it blocks javascript:/data: (XSS) and
+    // http mixed-content, and matches the permanent R2 URLs the upload endpoint
+    // returns. An <img> with any other scheme is dropped.
+    allowedSchemesByTag: { img: ['https'] },
     // Keep the text content of any disallowed tag instead of nuking it, matching
     // DOMPurify's KEEP_CONTENT default.
     disallowedTagsMode: 'discard',
