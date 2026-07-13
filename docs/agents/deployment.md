@@ -68,9 +68,13 @@ DISCORD_OAUTH_CLIENT_ID=
 DISCORD_OAUTH_CLIENT_SECRET=
 DISCORD_OAUTH_REDIRECT_URI=
 DISCORD_OAUTH_STATE_SECRET
+DISCORD_PROXY_BASE            https://discord-webhook-proxy.<subdomain>.workers.dev
+DISCORD_PROXY_SECRET          <shared key, matches the Worker's PROXY_KEY>   [Secret]
 ```
 
 > **`DATABASE_URL` uses single `%40` for the `@` in the password** (URL encoding). Render does not have systemd's specifier quirk - do not double the `%` here.
+
+> **`DISCORD_PROXY_BASE` is required on prod, not local.** Discord rate-limits by source IP and Render's shared free-tier egress IP gets globally blocked (`429`). These two vars route sends through the Cloudflare Worker in `discord-proxy/` (clean IP). Deploy steps live in `discord-proxy/README.md`. Leave both blank locally so dev talks to Discord directly.
 
 ### Viewing logs / manual deploy
 - **Logs**: Render dashboard → service → Logs tab. Streams in real time. Filterable by severity.

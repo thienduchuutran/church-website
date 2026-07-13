@@ -151,6 +151,22 @@ webhook env key used). Both nullable - null until a post is delivered to Discord
 | `DISCORD_OAUTH_REDIRECT_URI` | must equal the `/api/v1/admin/discord/callback` URL registered on the Discord app |
 | `DISCORD_OAUTH_STATE_SECRET` | HMAC secret for the signed OAuth `state` |
 | `FRONTEND_ORIGIN` | base URL the callback redirects back to (reused from CORS) |
+| `DISCORD_PROXY_BASE` | **prod only** - Cloudflare Worker base URL to route sends through (empty = talk to Discord directly) |
+| `DISCORD_PROXY_SECRET` | shared key the proxy validates (matches the Worker's `PROXY_KEY`) |
 
 When the OAuth vars are unset the link flow returns `503` and the rest of the app is unaffected;
 when a webhook var is unset, that type's posts simply skip Discord delivery (logged).
+
+### Why prod sends go through a proxy (`DISCORD_PROXY_BASE`)
+
+Discord globally rate-limits by **source IP**. Render's free tier shares one NAT egress IP
+across many tenants, which collectively trip Discord's global limit, so Discord blocks that IP
+(`429`, "exceeding global rate limits", ~35-min bans) - our single request per post gets caught
+in the shared ban. Local dev (a clean home IP) is unaffected, which is why sends work locally but
+not on prod.
+
+Fix: when `DISCORD_PROXY_BASE` is set, `send.go` rewrites each `https://discord.com/api/webhooks/...`
+call to `{DISCORD_PROXY_BASE}/api/webhooks/...` (path preserved) and adds an `X-Webhook-Proxy-Key`
+header. The Worker (see `discord-proxy/`) forwards the request from Cloudflare's clean IP and
+returns Discord's response verbatim (message id, status, `Retry-After` all intact). Empty env =
+direct-to-Discord, so local dev is unchanged.
