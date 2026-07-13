@@ -7,8 +7,46 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 )
+
+// Discord globally rate-limits by SOURCE IP, and shared cloud-host egress IPs
+// (Render's free tier) get blocked collectively. When DISCORD_PROXY_BASE is set,
+// every webhook request is routed through that base (a Cloudflare Worker with a
+// clean egress IP) as a transparent same-path forward instead of hitting
+// discord.com directly. DISCORD_PROXY_SECRET is a shared key the proxy checks so
+// it can't be used as an open Discord relay. Both unset in local dev, where the
+// home IP talks to Discord directly.
+const (
+	proxyBaseEnv = "DISCORD_PROXY_BASE"
+	proxyKeyEnv  = "DISCORD_PROXY_SECRET"
+)
+
+// proxied rewrites a discord.com webhook URL to go through DISCORD_PROXY_BASE,
+// preserving the path so the proxy is a transparent forwarder (callers still
+// append "?wait=true" or "/messages/{id}" afterwards). Returns the URL unchanged
+// when no proxy is configured.
+func proxied(webhookURL string) (string, error) {
+	base := strings.TrimRight(os.Getenv(proxyBaseEnv), "/")
+	if base == "" {
+		return webhookURL, nil
+	}
+	u, err := url.Parse(webhookURL)
+	if err != nil {
+		return "", fmt.Errorf("parse webhook url: %w", err)
+	}
+	return base + u.RequestURI(), nil
+}
+
+// setProxyAuth attaches the shared secret the proxy validates. No-op when no
+// secret is configured, so a direct-to-Discord request stays clean.
+func setProxyAuth(req *http.Request) {
+	if key := os.Getenv(proxyKeyEnv); key != "" {
+		req.Header.Set("X-Webhook-Proxy-Key", key)
+	}
+}
 
 // OutboundMessage is everything needed to post (or edit) one webhook message:
 // the rendered content plus the per-message identity, mention policy, and any
@@ -62,11 +100,16 @@ func Send(webhookURL string, msg OutboundMessage) (string, error) {
 		return "", err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, webhookURL+"?wait=true", body)
+	target, err := proxied(webhookURL)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequest(http.MethodPost, target+"?wait=true", body)
 	if err != nil {
 		return "", fmt.Errorf("build send request: %w", err)
 	}
 	req.Header.Set("Content-Type", contentType)
+	setProxyAuth(req)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -166,11 +209,16 @@ func Edit(webhookURL, messageID string, msg OutboundMessage) error {
 		return fmt.Errorf("marshal edit payload: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPatch, webhookURL+"/messages/"+messageID, bytes.NewReader(body))
+	target, err := proxied(webhookURL)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodPatch, target+"/messages/"+messageID, bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("build edit request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	setProxyAuth(req)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -188,10 +236,15 @@ func Edit(webhookURL, messageID string, msg OutboundMessage) error {
 // treated as success: the message is already gone, which is the desired end
 // state, so re-deleting (or deleting a manually-removed message) is a no-op.
 func Delete(webhookURL, messageID string) error {
-	req, err := http.NewRequest(http.MethodDelete, webhookURL+"/messages/"+messageID, nil)
+	target, err := proxied(webhookURL)
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequest(http.MethodDelete, target+"/messages/"+messageID, nil)
 	if err != nil {
 		return fmt.Errorf("build delete request: %w", err)
 	}
+	setProxyAuth(req)
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
