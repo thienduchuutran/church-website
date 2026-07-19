@@ -15,16 +15,15 @@ package translation
 
 import "time"
 
-// ContentType routes a job to the appropriate model. General content (events,
-// announcements) goes to Gemini for cost. Pastoral content (prayer requests,
-// theological reflections) goes to Claude for nuance. Stored as plain text in
-// translation_jobs.content_type - adding new types later does not require a
-// schema migration.
+// ContentType labels a job in translation_jobs.content_type. Every job is
+// 'general' and every translation goes to Gemini - a planned 'pastoral' type
+// (Claude routing for sermon-like content) was removed in 2026-07 because the
+// site never translates sermons. The type survives as plain text so adding a
+// real second type later does not require a schema migration.
 type ContentType string
 
 const (
-	ContentTypeGeneral  ContentType = "general"
-	ContentTypePastoral ContentType = "pastoral"
+	ContentTypeGeneral ContentType = "general"
 )
 
 // TranslationJob mirrors a row in translation_jobs. Fields is the {field_name

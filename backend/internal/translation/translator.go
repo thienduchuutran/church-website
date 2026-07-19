@@ -24,10 +24,7 @@ const (
 	// 2026-06-24: Google retired gemini-2.0-flash (404 NOT_FOUND on /v1beta).
 	// Bumped to gemini-2.5-flash - same v1beta endpoint shape, drop-in.
 	geminiModel      = "gemini-2.5-flash"
-	claudeModel      = "claude-haiku-4-5-20251001"
 	geminiAPIBaseURL = "https://generativelanguage.googleapis.com/v1beta/models"
-	claudeAPIURL     = "https://api.anthropic.com/v1/messages"
-	claudeAPIVersion = "2023-06-01"
 
 	httpTimeout = 30 * time.Second
 
@@ -53,14 +50,17 @@ type Translator struct {
 	promptCache *PromptCache
 	httpClient  *http.Client
 	geminiKey   string
-	claudeKey   string
 	supported   map[string]bool
+
+	// API endpoint as a field, not a const, so tests can point the client at
+	// an httptest server and prove truncated responses are rejected.
+	geminiBaseURL string
 }
 
 // NewTranslator builds a translator. supportedLocales defaults to ["vi"] when
 // the slice is empty, so callers that have not yet wired SUPPORTED_LOCALES
 // from env still get sane behavior.
-func NewTranslator(pool *pgxpool.Pool, geminiKey, claudeKey string, supportedLocales []string) *Translator {
+func NewTranslator(pool *pgxpool.Pool, geminiKey string, supportedLocales []string) *Translator {
 	if len(supportedLocales) == 0 {
 		supportedLocales = []string{"vi"}
 	}
@@ -69,12 +69,12 @@ func NewTranslator(pool *pgxpool.Pool, geminiKey, claudeKey string, supportedLoc
 		set[strings.TrimSpace(l)] = true
 	}
 	return &Translator{
-		pool:        pool,
-		promptCache: NewPromptCache(),
-		httpClient:  &http.Client{Timeout: httpTimeout},
-		geminiKey:   geminiKey,
-		claudeKey:   claudeKey,
-		supported:   set,
+		pool:          pool,
+		promptCache:   NewPromptCache(),
+		httpClient:    &http.Client{Timeout: httpTimeout},
+		geminiKey:     geminiKey,
+		supported:     set,
+		geminiBaseURL: geminiAPIBaseURL,
 	}
 }
 
@@ -90,15 +90,13 @@ func NewTranslator(pool *pgxpool.Pool, geminiKey, claudeKey string, supportedLoc
 //     with the same hash + locale. A cache hit reuses the translated text
 //     and only writes a new row keyed by record_id/field_name. This is what
 //     makes a phrase repeated across posts a one-time cost.
-//  4. On cache miss, load the system prompt, pick a model based on
-//     contentType, and call the API.
+//  4. On cache miss, load the system prompt and call Gemini.
 //  5. Upsert by (record_id, field_name, locale). When the source has changed,
 //     the new hash overrides the old translation and clears human approval -
 //     intended behavior: human approvals only apply to the text they reviewed.
 func (t *Translator) TranslateField(
 	ctx context.Context,
 	tableName, recordID, fieldName, sourceText, targetLocale string,
-	contentType ContentType,
 ) (string, error) {
 	if targetLocale == "" || targetLocale == "en" {
 		return sourceText, nil
@@ -125,18 +123,7 @@ func (t *Translator) TranslateField(
 		return "", err
 	}
 
-	var (
-		translated string
-		modelUsed  string
-	)
-	switch contentType {
-	case ContentTypePastoral:
-		translated, err = t.callClaude(ctx, systemPrompt, trimmed, maxOutputTokens)
-		modelUsed = claudeModel
-	default:
-		translated, err = t.callGemini(ctx, systemPrompt, trimmed, maxOutputTokens)
-		modelUsed = geminiModel
-	}
+	translated, err := t.callGemini(ctx, systemPrompt, trimmed, maxOutputTokens)
 	if err != nil {
 		return "", err
 	}
@@ -144,7 +131,7 @@ func (t *Translator) TranslateField(
 	if translated == "" {
 		return "", errors.New("translation API returned empty result")
 	}
-	log.Printf("translation_api field=%s locale=%s model=%s chars=%d", fieldName, targetLocale, modelUsed, len(translated))
+	log.Printf("translation_api field=%s locale=%s model=%s chars=%d", fieldName, targetLocale, geminiModel, len(translated))
 
 	if err := t.upsertTranslation(ctx, tableName, recordID, fieldName, targetLocale, hash, trimmed, translated); err != nil {
 		return translated, fmt.Errorf("persist translation: %w", err)
@@ -168,7 +155,7 @@ func (t *Translator) TranslateRecord(ctx context.Context, job TranslationJob) er
 			continue
 		}
 		for field, source := range job.Fields {
-			if _, err := t.TranslateField(ctx, job.TableName, job.RecordID, field, source, locale, job.ContentType); err != nil {
+			if _, err := t.TranslateField(ctx, job.TableName, job.RecordID, field, source, locale); err != nil {
 				log.Printf("translation field failed (job=%s field=%s locale=%s): %v", job.ID, field, locale, err)
 				if firstErr == nil {
 					firstErr = err
@@ -256,7 +243,7 @@ func (t *Translator) callGemini(ctx context.Context, system, user string, maxTok
 	if err != nil {
 		return "", err
 	}
-	url := fmt.Sprintf("%s/%s:generateContent?key=%s", geminiAPIBaseURL, geminiModel, t.geminiKey)
+	url := fmt.Sprintf("%s/%s:generateContent?key=%s", t.geminiBaseURL, geminiModel, t.geminiKey)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(raw))
 	if err != nil {
 		return "", err
@@ -275,9 +262,11 @@ func (t *Translator) callGemini(ctx context.Context, system, user string, maxTok
 
 	var out struct {
 		Candidates []struct {
-			Content struct {
+			FinishReason string `json:"finishReason"`
+			Content      struct {
 				Parts []struct {
-					Text string `json:"text"`
+					Text    string `json:"text"`
+					Thought bool   `json:"thought"`
 				} `json:"parts"`
 			} `json:"content"`
 		} `json:"candidates"`
@@ -285,63 +274,32 @@ func (t *Translator) callGemini(ctx context.Context, system, user string, maxTok
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
 		return "", fmt.Errorf("decode gemini response: %w", err)
 	}
-	if len(out.Candidates) == 0 || len(out.Candidates[0].Content.Parts) == 0 {
+	if len(out.Candidates) == 0 {
 		return "", errors.New("gemini returned no candidates")
 	}
-	return out.Candidates[0].Content.Parts[0].Text, nil
-}
+	cand := out.Candidates[0]
 
-// callClaude sends one translate request to Anthropic's /v1/messages endpoint.
-func (t *Translator) callClaude(ctx context.Context, system, user string, maxTokens int) (string, error) {
-	if t.claudeKey == "" {
-		return "", errors.New("ANTHROPIC_API_KEY not configured")
-	}
-	body := map[string]any{
-		"model":       claudeModel,
-		"max_tokens":  maxTokens,
-		"temperature": 0.2,
-		"system":      system,
-		"messages": []map[string]string{
-			{"role": "user", "content": user},
-		},
-	}
-	raw, err := json.Marshal(body)
-	if err != nil {
-		return "", err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, claudeAPIURL, bytes.NewReader(raw))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("x-api-key", t.claudeKey)
-	req.Header.Set("anthropic-version", claudeAPIVersion)
-
-	resp, err := t.httpClient.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("claude request: %w", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(resp.Body)
-		return "", fmt.Errorf("claude %d: %s", resp.StatusCode, truncate(string(b), 300))
+	// Truncation and blocking arrive inside an HTTP 200 - the finish reason
+	// is the only truthful success signal. Anything but STOP (MAX_TOKENS,
+	// SAFETY, RECITATION, ...) means the text is not a faithful translation
+	// and must never reach the database. This is the detector for the
+	// "VBS T-Shirt!" -> "Áo" bug; see docs/agents/known-quirks.md.
+	if cand.FinishReason != "STOP" {
+		return "", fmt.Errorf("gemini finishReason=%s: partial or blocked output rejected", cand.FinishReason)
 	}
 
-	var out struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return "", fmt.Errorf("decode claude response: %w", err)
-	}
-	for _, c := range out.Content {
-		if c.Type == "text" && c.Text != "" {
-			return c.Text, nil
+	// Join every non-thought part - long answers can be split across parts,
+	// and taking only the first would be one more silent-truncation path.
+	var sb strings.Builder
+	for _, p := range cand.Content.Parts {
+		if !p.Thought {
+			sb.WriteString(p.Text)
 		}
 	}
-	return "", errors.New("claude returned no text content")
+	if sb.Len() == 0 {
+		return "", errors.New("gemini returned no text parts")
+	}
+	return sb.String(), nil
 }
 
 func truncate(s string, n int) string {

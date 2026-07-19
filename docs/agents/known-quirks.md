@@ -16,7 +16,7 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 -->
 
 ## Vietnamese AI translations truncated to a single word ("VBS T-Shirt!" -> "Áo")
-**Date solved:** 2026-07-19 (root cause; cache purge + stop-reason detector follow in separate commits)
+**Date solved:** 2026-07-19 (three commits: root cause, cache repair tool, stop-reason detector)
 **Symptom:** Post titles translated to Vietnamese came back as one word and were
 served that way on the site: "VBS T-Shirt!" -> "Áo", "VANE Leadership Conference
 in New Jersey!" -> "Hội". No errors anywhere - the backend logged normal
@@ -32,12 +32,22 @@ against `maxOutputTokens`. Reproduced live: with a 64-token cap the model spent
 `callGemini` never read `finishReason`, so the stump was persisted (and cached
 by source hash) as a valid translation. Thinking usage is also unpredictable
 (777 tokens observed for a 12-char title), so no input-scaled formula can work.
-**Fix:** Replaced the scaled formula with a fixed generous `maxOutputTokens =
-16384` constant passed to both providers (thinking left on for quality).
-Follow-ups: purge poisoned `is_ai_generated AND approved_by IS NULL` cache rows
-so they re-translate, and fail loudly on `MAX_TOKENS`/`stop_reason` before
-persisting so the next silent truncation surfaces on day one.
-**Files affected:** `backend/internal/translation/translator.go`
+**Fix:** Three parts, in order. (1) Root cause: replaced the scaled formula
+with a fixed generous `maxOutputTokens = 16384` constant passed to both
+providers (thinking left on for quality). (2) Damage repair:
+`cmd/repair-translations` purges `is_ai_generated AND approved_by IS NULL`
+rows and atomically re-enqueues jobs rebuilt from the purged rows; executed
+against prod on 2026-07-19 AFTER the fixed backend deployed (ordering matters -
+the old worker would have re-poisoned the rows within its 5s poll). (3)
+Detector: `callGemini` now rejects any response whose `finishReason != STOP`,
+and joins all parts instead of taking the first, so the next silent truncation
+fails loudly instead of persisting. The API endpoint became an injectable
+Translator field so httptest-backed unit tests pin this behavior. (The Claude
+path got the same detector, then was removed entirely later the same day -
+the "pastoral" content tier it served never had real content.)
+**Files affected:** `backend/internal/translation/translator.go`,
+`backend/internal/translation/translator_test.go`,
+`backend/cmd/repair-translations/main.go`
 
 ## Whole site 500s on Vercel (`ERR_REQUIRE_ESM` from jsdom) but works locally
 **Date solved:** 2026-06-26

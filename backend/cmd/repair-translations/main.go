@@ -56,9 +56,8 @@ func main() {
 
 	// One statement, atomic by definition: the jobs are aggregated from the
 	// exact rows the DELETE returns, so nothing can slip between the purge
-	// and the re-enqueue. content_type is forced to 'general' because the
-	// Claude fallback path requires ANTHROPIC_API_KEY, which this environment
-	// does not have - a 'pastoral' job would just fail its 3 retries.
+	// and the re-enqueue. content_type is 'general' - the only type the
+	// engine has (all translation goes to Gemini).
 	var deleted, enqueued int
 	err = pool.QueryRow(ctx, `
 		WITH purged AS (

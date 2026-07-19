@@ -66,7 +66,7 @@ backend/
 │   ├── translation/            ← Async EN→VI translation engine. See "Translation engine" section below.
 │   │   ├── models.go           ← TranslationJob, Translation, ContentType
 │   │   ├── prompt.go           ← PromptCache (5min TTL, falls back to stale on DB hiccup)
-│   │   ├── translator.go       ← TranslateField/TranslateRecord, Gemini + Claude HTTP calls, sha256 cache lookup
+│   │   ├── translator.go       ← TranslateField/TranslateRecord, Gemini HTTP call, sha256 cache lookup
 │   │   ├── queue.go            ← EnqueueTranslation helper + EnqueueFn function type
 │   │   └── worker.go           ← Background poller (FOR UPDATE SKIP LOCKED, 3-retry policy)
 │   ├── middleware/
@@ -241,7 +241,7 @@ admin POST /posts  →  PostService.Create
                                   ▼
                             Translator.TranslateRecord
                                   ├─ sha256(source) lookup in `translations` (cache)
-                                  ├─ on miss: Gemini (general) or Claude (no pastoral content, just a backup for gemini)
+                                  ├─ on miss: Gemini (sole provider - Claude path removed 2026-07)
                                   └─ upsert by (record_id, field_name, locale)
 
 public GET /posts?locale=vi  →  PostRepository.GetPosts
@@ -253,9 +253,9 @@ public GET /posts?locale=vi  →  PostRepository.GetPosts
 
 | File | Responsibility |
 |---|---|
-| `models.go` | `TranslationJob`, `Translation`, `ContentType` constants (`general`, `backup for Gemini, no pastoral content`) |
+| `models.go` | `TranslationJob`, `Translation`, `ContentType` (only `general` exists - the planned `pastoral`/Claude type was removed 2026-07, the site never translates sermons) |
 | `prompt.go` | `PromptCache` - in-memory cache of the system prompt body, 5-minute TTL, falls back to stale on Supabase hiccup |
-| `translator.go` | `Translator` - per-field translate-and-store, sha256 cache, raw HTTP to Gemini v1beta + Claude `/v1/messages`, upsert that resets `approved_by` on source change |
+| `translator.go` | `Translator` - per-field translate-and-store, sha256 cache, raw HTTP to Gemini v1beta, upsert that resets `approved_by` on source change. Rejects any response with `finishReason != STOP` (truncation/blocking arrive inside HTTP 200 - see known-quirks) and joins multi-part answers |
 | `queue.go` | `EnqueueTranslation` package-level helper + `EnqueueFn` function type that content services depend on |
 | `worker.go` | `Worker` - background goroutine, polls every 5s, batches up to 5 jobs per tick, `FOR UPDATE SKIP LOCKED` for safe horizontal scaling, retries up to 3 times before marking `failed` |
 
@@ -263,16 +263,15 @@ public GET /posts?locale=vi  →  PostRepository.GetPosts
 
 - Content services depend on `translation.EnqueueFn` (a `func(TranslationJob)`), **not** on `*pgxpool.Pool`. Wiring happens in `main.go` via setters: `postSvc.SetTranslationQueue(enqueueTranslation)` etc.
 - The enqueue closure in `main.go` launches its own goroutine and uses `context.Background()` (not the request context) so the calling HTTP request can return before the job-insert SQL runs.
-- The closure is built whenever `dbPool != nil`. Whether the **worker** runs is gated separately on `GEMINI_API_KEY` / `ANTHROPIC_API_KEY`: jobs always enqueue cleanly, but they only drain when at least one AI key is configured. Restarting the backend after adding a key picks up any backlog.
+- The closure is built whenever `dbPool != nil`. Whether the **worker** runs is gated separately on `GEMINI_API_KEY`: jobs always enqueue cleanly, but they only drain when the key is configured. Restarting the backend after adding the key picks up any backlog.
 - Update handlers always **diff old vs new** before enqueuing. A PATCH that doesn't change a translatable field produces no translation job. See `PostService.Update`, `CalendarService.UpdateEvent`, `PageService.UpdatePageContent`.
 - Locale flows through as a string query param (`?locale=vi`). The repository decides whether to add the `LEFT JOIN translations` clauses. English / missing locale uses the plain query path - **zero** translation joins on en, so unilingual visitors pay no overhead.
 
 ### Model IDs
 
-- General content: `gemini-2.5-flash` via `https://generativelanguage.googleapis.com/v1beta` (was `gemini-2.0-flash` until Google retired it 2026-06)
-- Backup for Gemini content: `claude-haiku-4-5-20251001` via `https://api.anthropic.com/v1/messages`
+- All content: `gemini-2.5-flash` via `https://generativelanguage.googleapis.com/v1beta` (was `gemini-2.0-flash` until Google retired it 2026-06). A Claude fallback (`claude-haiku-4-5`) existed until 2026-07 and was removed - one provider, one code path.
 
-Both clients are raw `net/http`. SDKs were rejected to keep the Docker image and `go.mod` lean.
+The client is raw `net/http`. SDKs were rejected to keep the Docker image and `go.mod` lean.
 
 ### Prompt versioning workflow
 
@@ -343,8 +342,7 @@ AWS_ACCESS_KEY_ID=...                              # R2 access key (R2 has no IA
 AWS_SECRET_ACCESS_KEY=...                          # R2 secret access key
 
 # Translation engine (Phase 2 onwards)
-GEMINI_API_KEY=...                                 # General content translations. Worker stays disabled when both AI keys are empty.
-ANTHROPIC_API_KEY=...                              # Backup for Gemini content + Gemini fallback (see Phase 7).
+GEMINI_API_KEY=...                                 # All translations. Worker stays disabled when empty.
 SUPPORTED_LOCALES=vi                               # Comma-separated. Defaults to "vi" when empty.
 TRANSLATION_WORKER_INTERVAL=5                      # Poll interval in seconds. Defaults to 5.
 ```

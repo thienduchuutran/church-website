@@ -74,10 +74,8 @@ func (s *TranslationService) captureFinetuningExample(t *model.Translation) {
 	ex := repository.FinetuningExample{
 		SourceEN:   t.SourceText,
 		ApprovedVI: t.TranslatedText,
-		// The translations row does not carry the job's content_type, and the
-		// engine currently routes everything as general (Retranslate below
-		// re-enqueues with ContentTypeGeneral for the same reason). Revisit
-		// when pastoral routing carries through to the translations table.
+		// 'general' is the engine's only content type - everything routes to
+		// Gemini (Retranslate below re-enqueues with ContentTypeGeneral too).
 		ContentType: string(translation.ContentTypeGeneral),
 		SourceField: t.FieldName,
 		RecordTable: t.TableName,

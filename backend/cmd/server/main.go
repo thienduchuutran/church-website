@@ -113,8 +113,7 @@ func main() {
 		}
 
 		geminiKey := os.Getenv("GEMINI_API_KEY")
-		claudeKey := os.Getenv("ANTHROPIC_API_KEY")
-		if geminiKey != "" || claudeKey != "" {
+		if geminiKey != "" {
 			supported := []string{"vi"}
 			if raw := os.Getenv("SUPPORTED_LOCALES"); raw != "" {
 				supported = strings.Split(raw, ",")
@@ -125,13 +124,13 @@ func main() {
 					interval = time.Duration(secs) * time.Second
 				}
 			}
-			translator := translation.NewTranslator(dbPool, geminiKey, claudeKey, supported)
+			translator := translation.NewTranslator(dbPool, geminiKey, supported)
 			translationWorker = translation.NewWorker(translator, dbPool, interval)
 			translationWorker.Start(ctx)
 			defer translationWorker.Stop()
-			log.Printf("translation worker enabled (gemini=%t claude=%t)", geminiKey != "", claudeKey != "")
+			log.Println("translation worker enabled (gemini)")
 		} else {
-			log.Println("translation worker disabled (no GEMINI_API_KEY or ANTHROPIC_API_KEY) - jobs will enqueue but not drain")
+			log.Println("translation worker disabled (no GEMINI_API_KEY) - jobs will enqueue but not drain")
 		}
 	}
 

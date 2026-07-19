@@ -12,7 +12,7 @@ import (
 type FinetuningExample struct {
 	SourceEN    string // the English text the AI translated from
 	ApprovedVI  string // the Vietnamese text as finalized by the human reviewer
-	ContentType string // 'general' or 'pastoral' - mirrors translation.ContentType
+	ContentType string // always 'general' today - mirrors translation.ContentType
 	SourceField string // 'title', 'body', 'content', 'notes', ...
 	RecordTable string // 'posts', 'page_content', 'calendar_events', ...
 	RecordID    string

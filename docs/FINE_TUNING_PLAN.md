@@ -2,9 +2,11 @@
 
 ## Why we're doing this
 
-The translation engine today calls two commercial APIs: Gemini 2.0 Flash for
-general content and Claude Haiku for content that needs more nuance. That
-works, but every translation is a metered API call, and no general-purpose
+The translation engine today calls one commercial API: Gemini 2.5 Flash for
+all content (a Claude Haiku fallback existed until 2026-07 and was removed -
+the site never translates sermons, so the "pastoral" routing tier it served
+had no real content). That works, but every translation is a metered API
+call, and no general-purpose
 model ships with a feel for this congregation's specific register - Southern
 Vietnamese, warm, communal, church-family vocabulary.
 
@@ -15,10 +17,10 @@ especially every edit-then-approve - is a bilingual admin saying "this is how
 our community actually says this."
 
 The plan: progressively build a fine-tuned open-source model on those
-admin-approved pairs, improving Southern Vietnamese pastoral register quality
+admin-approved pairs, improving Southern Vietnamese church-register quality
 and reducing API dependency over time. The fine-tuned model is **not**
-replacing the APIs immediately - it gets added as a third route alongside
-Gemini and Claude, with the API fallback preserved indefinitely. The async
+replacing the API immediately - it gets added as a second route alongside
+Gemini, with the API fallback preserved indefinitely. The async
 queue + fallback architecture is what makes the site robust; the local model
 slots into it, it does not replace it.
 
@@ -112,7 +114,7 @@ Before any adapter touches production, run it against a held-out eval set:
    comparable across rounds.
 2. Score the adapter's output with **chrF** (via the `sacrebleu` Python
    library) against the held-out gold Vietnamese.
-3. Have the bilingual admin **spot-check 10 pastoral outputs** for register
+3. Have the bilingual admin **spot-check 10 outputs** for register
    quality - chrF measures surface overlap, not whether it sounds like a
    trusted elder or a government memo.
 4. **Promote only if** chrF >= baseline **and** the admin finds no register
@@ -125,15 +127,14 @@ Before any adapter touches production, run it against a held-out eval set:
 **When to start:** after a Phase 1 adapter passes the eval gate.
 
 No changes to the existing queue/worker/caching architecture - only
-`translator.go` learns a new route, exactly like adding a third API.
+`translator.go` learns a new route, exactly like adding a second API.
 
 ### Routing (models.go / translator.go)
 
 Add a `LOCAL_MODEL_ENABLED` env var (consistent with the engine's existing
 opt-in-by-env-var rule). When set, `translator.go` attempts the local model
 first for `ContentTypeGeneral`; on failure, empty response, or when unset, it
-falls back to Gemini exactly as today. Pastoral content stays on Claude until
-the local model demonstrates pastoral quality through the eval gate.
+falls back to Gemini exactly as today.
 
 (Alternative considered: a `ContentTypeLocal` constant. Rejected - content
 type describes *what the text is*, not *which model serves it*. The env var
@@ -143,8 +144,6 @@ keeps routing an infrastructure concern.)
 ContentTypeGeneral + LOCAL_MODEL_ENABLED:
   1. Try callLocal()
   2. On error or empty response -> fallback to callGemini()
-ContentTypePastoral:
-  1. callClaude() (until the local model proves pastoral quality)
 ```
 
 ### Local model server
@@ -156,7 +155,7 @@ ContentTypePastoral:
 - `GET /health` for liveness
 - Deploy on a g4dn.xlarge AWS spot instance (single T4 GPU, ~$0.16/hr), or
   use HuggingFace Inference Endpoints (pay-per-call, zero infra management)
-- `translator.go` gets a `callLocal()` that mirrors `callGemini`/`callClaude`:
+- `translator.go` gets a `callLocal()` that mirrors `callGemini`:
   raw `net/http`, no SDK, same timeout and error-handling pattern
 
 ### Important: the cache still works the same
@@ -193,7 +192,7 @@ approved pairs accumulate.
 
 ### What compounds over rounds
 
-Each round the model has seen more Southern Vietnamese pastoral examples.
+Each round the model has seen more Southern Vietnamese church-register examples.
 Over time the system prompt can shrink as behavior gets baked into weights -
 vocabulary rules that needed explicit prompt lines become defaults. Keep a
 retraining log in the style of `prompts/CHANGELOG.md`: one entry per round
@@ -212,7 +211,7 @@ log records why weights changed.
 - **Do not retrain more often than every 2 months.** LoRA adapters need
   enough new examples to generalize. Retraining on 10 new pairs produces
   overfitting, not improvement.
-- **Do not remove the Gemini/Claude fallback**, even after the local model is
+- **Do not remove the Gemini fallback**, even after the local model is
   live and good. The async queue + API fallback is what makes the site robust
   to ML infra failures - a dead spot instance must degrade to "Gemini handles
   it," never to "translations stop."

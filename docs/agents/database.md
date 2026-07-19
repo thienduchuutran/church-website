@@ -227,7 +227,7 @@ create table translation_jobs (
   record_id      uuid not null,
   fields         jsonb not null,                  -- {"title": "<source>", "body": "<source>"}
   target_locales text[] not null,                 -- {'vi'}
-  content_type   text not null default 'general', -- 'general' (Gemini) | 'pastoral' (Claude)
+  content_type   text not null default 'general', -- always 'general' (the 'pastoral'/Claude tier was removed 2026-07; column kept for future types)
   status         text not null default 'pending', -- 'pending' | 'processing' | 'done' | 'failed'
   error          text,
   attempts       int not null default 0,
@@ -248,7 +248,7 @@ create table if not exists fine_tuning_examples (
   id               uuid primary key default gen_random_uuid(),
   source_en        text not null,        -- the English the AI translated from
   approved_vi      text not null,        -- the Vietnamese as finalized by the human
-  content_type     text not null check (content_type in ('general', 'pastoral')),
+  content_type     text not null check (content_type in ('general', 'pastoral')),  -- only 'general' is ever written; 'pastoral' allowed by the applied migration but unused since 2026-07
   source_field     text not null,        -- 'title', 'body', 'content', 'notes', ...
   record_table     text not null,        -- 'posts', 'page_content', ...
   record_id        uuid not null,
