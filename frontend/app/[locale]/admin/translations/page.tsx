@@ -226,11 +226,6 @@ export default function AdminTranslationsPage() {
           since it's the surprising part - reviewers shouldn't have to read the
           confirm dialog to learn it. */}
       <div className="mb-6 flex flex-wrap items-center gap-3 rounded-lg border border-dashed border-border bg-surface/40 px-4 py-3">
-        <div className="mr-auto font-sans text-xs text-muted">
-          After updating <span className="font-mono">prompts/vi_translation_system_prompt.md</span> and running{' '}
-          <span className="font-mono">scripts/sync-prompt.sh</span>, re-queue every unapproved translation so
-          the new prompt takes effect. Approved (human-edited) translations are never touched.
-        </div>
         {bulkMessage && (
           <span className="font-sans text-xs font-medium text-emerald-700" role="status">
             {bulkMessage}
@@ -265,11 +260,10 @@ export default function AdminTranslationsPage() {
               type="button"
               onClick={() => handleTabChange(value)}
               aria-pressed={active}
-              className={`-mb-px border-b-2 px-4 py-2 font-display text-sm font-medium transition-colors ${
-                active
+              className={`-mb-px border-b-2 px-4 py-2 font-display text-sm font-medium transition-colors ${active
                   ? 'border-primary text-primary'
                   : 'border-transparent text-muted hover:text-foreground'
-              }`}
+                }`}
             >
               {label}
             </button>

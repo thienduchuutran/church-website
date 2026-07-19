@@ -15,6 +15,30 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Vietnamese AI translations truncated to a single word ("VBS T-Shirt!" -> "Áo")
+**Date solved:** 2026-07-19 (root cause; cache purge + stop-reason detector follow in separate commits)
+**Symptom:** Post titles translated to Vietnamese came back as one word and were
+served that way on the site: "VBS T-Shirt!" -> "Áo", "VANE Leadership Conference
+in New Jersey!" -> "Hội". No errors anywhere - the backend logged normal
+`translation_api` lines and the rows landed in `translations` looking successful.
+**Root cause:** Two changes interacting. (1) `TranslateField` computed the output
+budget as `len(trimmed) * 2` with a floor of 64 - a byte count pretending to be a
+token count, tuned for `gemini-2.0-flash`. (2) The 2026-06-24 bump to
+`gemini-2.5-flash` (after Google retired 2.0) was treated as drop-in, but 2.5 is
+a thinking model with thinking ON by default, and its thinking tokens count
+against `maxOutputTokens`. Reproduced live: with a 64-token cap the model spent
+59 tokens thinking, emitted 1 answer token ("Á"), and stopped with
+`finishReason: MAX_TOKENS`. Truncation is delivered inside an HTTP 200, and
+`callGemini` never read `finishReason`, so the stump was persisted (and cached
+by source hash) as a valid translation. Thinking usage is also unpredictable
+(777 tokens observed for a 12-char title), so no input-scaled formula can work.
+**Fix:** Replaced the scaled formula with a fixed generous `maxOutputTokens =
+16384` constant passed to both providers (thinking left on for quality).
+Follow-ups: purge poisoned `is_ai_generated AND approved_by IS NULL` cache rows
+so they re-translate, and fail loudly on `MAX_TOKENS`/`stop_reason` before
+persisting so the next silent truncation surfaces on day one.
+**Files affected:** `backend/internal/translation/translator.go`
+
 ## Whole site 500s on Vercel (`ERR_REQUIRE_ESM` from jsdom) but works locally
 **Date solved:** 2026-06-26
 **Symptom:** Every dynamically server-rendered route on production (`/`, `/vi`,

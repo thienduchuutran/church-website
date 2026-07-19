@@ -31,6 +31,15 @@ const (
 
 	httpTimeout = 30 * time.Second
 
+	// Output cap for translate calls. A fixed generous ceiling on purpose -
+	// never scaled from source length. Gemini 2.5+ thinks by default and its
+	// thinking tokens count against maxOutputTokens, so a tight budget starves
+	// the visible answer: a 64-token cap left 1 answer token after 59 thinking
+	// tokens, which is how "VBS T-Shirt!" became just "Áo" in production.
+	// 16384 covers the longest post body plus thinking headroom and is well
+	// under both models' output limits.
+	maxOutputTokens = 16384
+
 	// Min source length to translate. One- or two-character strings are
 	// usually punctuation or numbers - translating them wastes API calls
 	// and confuses the model.
@@ -116,21 +125,16 @@ func (t *Translator) TranslateField(
 		return "", err
 	}
 
-	maxTokens := len(trimmed) * 2
-	if maxTokens < 64 {
-		maxTokens = 64
-	}
-
 	var (
 		translated string
 		modelUsed  string
 	)
 	switch contentType {
 	case ContentTypePastoral:
-		translated, err = t.callClaude(ctx, systemPrompt, trimmed, maxTokens)
+		translated, err = t.callClaude(ctx, systemPrompt, trimmed, maxOutputTokens)
 		modelUsed = claudeModel
 	default:
-		translated, err = t.callGemini(ctx, systemPrompt, trimmed, maxTokens)
+		translated, err = t.callGemini(ctx, systemPrompt, trimmed, maxOutputTokens)
 		modelUsed = geminiModel
 	}
 	if err != nil {
