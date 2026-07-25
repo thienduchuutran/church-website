@@ -3,7 +3,7 @@
 import { useAuth } from '@/lib/auth'
 import CalendarShell from '@/components/features/calendar/CalendarShell'
 import ExportButton, { exportCalendarToPng } from '@/components/features/calendar/ExportButton'
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 interface CalendarPageClientProps {
   initialYear: number
@@ -16,6 +16,31 @@ export default function CalendarPageClient({ initialYear, initialMonth }: Calend
   const [year, setYear] = useState(initialYear)
   const [month, setMonth] = useState(initialMonth)
   const [exporting, setExporting] = useState(false)
+
+  // Mirror the viewed month into the URL (?y=&m=) so it survives full reloads -
+  // the locale switch is a hard nav that forwards window.location.search, and
+  // page.tsx reads these params back as initialYear/initialMonth. Native
+  // history.replaceState (not the Next router) keeps this cosmetic: no server
+  // round-trip, no route transition, no history-stack spam from arrow clicks.
+  // On the current month the params are dropped so the default view keeps a
+  // clean, shareable /calendar URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const now = new Date()
+    if (year === now.getFullYear() && month === now.getMonth() + 1) {
+      params.delete('y')
+      params.delete('m')
+    } else {
+      params.set('y', String(year))
+      params.set('m', String(month))
+    }
+    const query = params.toString()
+    window.history.replaceState(
+      null,
+      '',
+      window.location.pathname + (query ? `?${query}` : '') + window.location.hash
+    )
+  }, [year, month])
 
   // CalendarShell's FAB action sheet calls this; the inline ExportButton on
   // desktop calls its own copy of the same function. Centralizing the state
