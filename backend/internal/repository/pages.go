@@ -142,6 +142,14 @@ func (r *PageRepository) UpsertSections(ctx context.Context, slug string, sectio
 // locale-aware title and content via COALESCE joins on the translations table.
 // machineTranslated is true when at least one block's title or content was
 // served from an unapproved AI translation.
+//
+// section_key is the ORDER BY tiebreaker, not decoration. `position` defaults
+// to 0, so any row the block migration did not explicitly place - a differently
+// seeded database, or a row inserted by hand - collides at 0, and a bare
+// `ORDER BY position` would then return sections in whatever order the scan
+// happened to produce and reshuffle the page between requests. Saving the page
+// once from the admin editor reassigns positions by array index and settles it
+// permanently; the tiebreaker keeps the order stable until then.
 func (r *PageRepository) GetBlocks(ctx context.Context, slug, locale string) ([]model.PageBlock, bool, error) {
 	if !pageLocaleIsLocalized(locale) {
 		return r.getBlocksEnglish(ctx, slug)
@@ -155,7 +163,7 @@ func (r *PageRepository) getBlocksEnglish(ctx context.Context, slug string) ([]m
 		`SELECT id, block_type, position, title, content, props
 		 FROM page_content
 		 WHERE page_slug = $1
-		 ORDER BY position`,
+		 ORDER BY position, section_key`,
 		slug,
 	)
 	if err != nil {
@@ -200,7 +208,7 @@ func (r *PageRepository) getBlocksLocalized(ctx context.Context, slug, locale st
 		 LEFT JOIN translations tc
 		   ON tc.record_id = pc.id AND tc.field_name = 'content' AND tc.locale = $2
 		 WHERE pc.page_slug = $1
-		 ORDER BY pc.position`,
+		 ORDER BY pc.position, pc.section_key`,
 		slug, locale,
 	)
 	if err != nil {
