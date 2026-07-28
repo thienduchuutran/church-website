@@ -38,7 +38,7 @@ backend/
 │   │   ├── tag.go              ← GET /tags, POST /tags, POST/DELETE /posts/{id}/tags
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
-│   │   ├── calendar.go         ← GET /calendar (locale-aware), POST/PATCH/DELETE /calendar/events, PUT month note + settings
+│   │   ├── calendar.go         ← GET /calendar (locale-aware), POST/PATCH/DELETE /calendar/events, GET/POST /calendar/event-types, GET/POST/DELETE /calendar/palette, PUT month note + settings
 │   │   ├── pages.go            ← GET /pages/:slug (locale-aware, returns sections + blocks), PUT /pages/:slug (sections OR blocks)
 │   │   └── admin_translations.go  ← GET list, PATCH approve, POST retranslate (admin review panel)
 │   │   ├── pages.go            ← GET /pages/:slug, PUT /pages/:slug
@@ -48,7 +48,7 @@ backend/
 │   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
-│   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue)
+│   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue), List/CreateEventType (slugify + get-or-create), List/Create/DeletePaletteColor
 │   │   ├── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue), GetPageBlocks, ReplacePageBlocks (with diff-based enqueue of title+content)
 │   │   └── translation.go      ← List/Approve/Retranslate/CleanupOrphans for the admin review panel; Approve also fire-and-forgets a fine-tuning pair capture
 │   │   ├── pages.go            ← GetPageContent, UpdatePageContent
@@ -59,7 +59,7 @@ backend/
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
 │   │   ├── reactions.go        ← UpsertReaction, GetReactionCounts, DeleteReaction
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
-│   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings
+│   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings, event-type + palette queries
 │   │   ├── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections, GetBlocks (locale-aware, ordered by position, two COALESCE joins), ReplaceBlocks (transactional upsert + delete with translation cleanup)
 │   │   ├── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete, orphan sweeps (DeleteOrphanedTranslations/PendingJobs)
 │   │   └── finetuning.go       ← CaptureFinetuningExample: idempotent INSERT of gold (en, vi) pairs into fine_tuning_examples
@@ -113,6 +113,8 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month. `?locale=vi` for translated event titles/notes and month note content. Events are selected by **range overlap** (`date < first-of-next-month AND COALESCE(end_date, date) >= first-of-month`), so a multi-day event whose span crosses a month boundary is returned for **both** months. |
 | GET | `/api/v1/pages/:slug` | Returns `{ sections: { key: value } }` for a static page |
 | GET | `/api/v1/calendar` | Returns events + month note + per-month settings for a given month |
+| GET | `/api/v1/calendar/event-types` | The admin-growable event-type vocabulary (labels + per-type default icon/color) |
+| GET | `/api/v1/calendar/palette` | The shared custom color swatches saved by admins |
 | POST | `/api/v1/assistant/chat` | AI assistant chatbox with RAG context (rate-limited per IP) |
 | GET | `/api/v1/admin/discord/callback` | Discord OAuth redirect target. **Public on purpose** - a browser redirect carries no Bearer token, so trust comes from the HMAC-signed `state`. Links the admin's Discord, then 303-redirects to `{FRONTEND_ORIGIN}/admin?discord=linked\|error`. Do NOT move into the admin group. See `docs/agents/discord.md`. |
 
@@ -135,6 +137,9 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | POST | `/api/v1/calendar/events` | Create a calendar event |
 | PATCH | `/api/v1/calendar/events/:id` | Edit a calendar event |
 | DELETE | `/api/v1/calendar/events/:id` | Delete a calendar event |
+| POST | `/api/v1/calendar/event-types` | Create a reusable event type from a label (get-or-create; slug derived server-side) |
+| POST | `/api/v1/calendar/palette` | Save a custom hex as a shared swatch (idempotent) |
+| DELETE | `/api/v1/calendar/palette/:id` | Remove a saved swatch (does not affect events already using that hex) |
 | PUT | `/api/v1/calendar/months/:year/:month/note` | Upsert the month's sidebar note |
 | PUT | `/api/v1/calendar/months/:year/:month/settings` | Upsert the month's per-month styling (accent color) |
 | GET | `/api/v1/admin/translations` | List translations for the review panel. Query params: `?locale=vi`, `?approved=false\|true`, `?limit=20`, `?offset=0`. Response includes `record_title` synthesized from a JOIN to each possible parent table. |

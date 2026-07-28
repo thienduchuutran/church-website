@@ -96,6 +96,78 @@ func (h *CalendarHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ListEventTypes handles GET /api/v1/calendar/event-types.
+// Public, like GET /calendar: the category vocabulary is not sensitive, and the
+// day modal needs the labels to render an event's category to visitors.
+func (h *CalendarHandler) ListEventTypes(w http.ResponseWriter, r *http.Request) {
+	types, err := h.svc.ListEventTypes(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load event types")
+		return
+	}
+	writeJSON(w, http.StatusOK, types)
+}
+
+// CreateEventType handles POST /api/v1/calendar/event-types (admin only).
+// Behaves as get-or-create, so an admin who re-types an existing label gets
+// that type back with 200 rather than a duplicate error.
+func (h *CalendarHandler) CreateEventType(w http.ResponseWriter, r *http.Request) {
+	var req model.CreateEventTypeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := middleware.UserIDFromContext(r.Context())
+	t, err := h.svc.CreateEventType(r.Context(), req, userID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, t)
+}
+
+// ListPaletteColors handles GET /api/v1/calendar/palette.
+// Public for the same reason as the event types - it is a list of hex strings,
+// and keeping it ungated means the picker has one less auth path to get wrong.
+func (h *CalendarHandler) ListPaletteColors(w http.ResponseWriter, r *http.Request) {
+	colors, err := h.svc.ListPaletteColors(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load palette")
+		return
+	}
+	writeJSON(w, http.StatusOK, colors)
+}
+
+// CreatePaletteColor handles POST /api/v1/calendar/palette (admin only).
+func (h *CalendarHandler) CreatePaletteColor(w http.ResponseWriter, r *http.Request) {
+	var req model.CreatePaletteColorRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := middleware.UserIDFromContext(r.Context())
+	c, err := h.svc.CreatePaletteColor(r.Context(), req, userID)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, c)
+}
+
+// DeletePaletteColor handles DELETE /api/v1/calendar/palette/{id} (admin only).
+func (h *CalendarHandler) DeletePaletteColor(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := h.svc.DeletePaletteColor(r.Context(), id); err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "color not found")
+			return
+		}
+		writeError(w, http.StatusInternalServerError, "failed to delete color")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // UpsertMonthNote handles PUT /api/v1/calendar/months/{year}/{month}/note (admin only).
 func (h *CalendarHandler) UpsertMonthNote(w http.ResponseWriter, r *http.Request) {
 	yearStr := chi.URLParam(r, "year")

@@ -412,17 +412,26 @@ func main() {
 		}
 
 		// Calendar:
-		//   PUBLIC (no auth, intentional): GET /calendar
+		//   PUBLIC (no auth, intentional): GET /calendar, GET /calendar/event-types,
+		//     GET /calendar/palette
 		//     Anyone can view the church calendar (birthdays, bible studies, etc.).
-		//   ADMIN-ONLY: every mutation below.
+		//     The event-type vocabulary and the saved color palette are read-only
+		//     lists of labels and hex strings - nothing sensitive, and the public
+		//     day modal needs the type labels to name an event's category.
+		//   ADMIN-ONLY: every mutation below, including growing those two lists.
 		if calendarHandler != nil {
 			r.With(appMiddleware.OptionalAdmin(adminRepo, jwksCache)).Get("/calendar", calendarHandler.GetMonth)
+			r.Get("/calendar/event-types", calendarHandler.ListEventTypes)
+			r.Get("/calendar/palette", calendarHandler.ListPaletteColors)
 
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Post("/calendar/events", calendarHandler.CreateEvent)
 				r.Patch("/calendar/events/{id}", calendarHandler.UpdateEvent)
 				r.Delete("/calendar/events/{id}", calendarHandler.DeleteEvent)
+				r.Post("/calendar/event-types", calendarHandler.CreateEventType)
+				r.Post("/calendar/palette", calendarHandler.CreatePaletteColor)
+				r.Delete("/calendar/palette/{id}", calendarHandler.DeletePaletteColor)
 				r.Put("/calendar/months/{year}/{month}/note", calendarHandler.UpsertMonthNote)
 				r.Put("/calendar/months/{year}/{month}/settings", calendarHandler.UpsertMonthSettings)
 			})
