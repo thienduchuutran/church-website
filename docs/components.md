@@ -555,6 +555,68 @@ The block builder for prose pages. Lets an admin add, remove and reorder page se
 
 ---
 
+## `EventModal`
+The admin create/edit sheet for a calendar event, and the "Monthly Note" editor (same component, three modes: `create`, `edit`, `note`).
+
+**File:** `components/features/calendar/EventModal.tsx`
+
+**Props**
+| Prop | Type | Description |
+|------|------|-------------|
+| `mode` | `'create' \| 'edit' \| 'note'` | Which form to render |
+| `date` | `string \| null` | `YYYY-MM-DD` for `create` |
+| `event` | `CalendarEvent \| null` | The event being edited, for `edit` |
+| `monthNote` | `CalendarMonthNote \| null` | Existing note content, for `note` |
+| `year` / `month` | `number` | Target month for `note` mode |
+| `accessToken` | `string \| null` | Bearer token for every write |
+| `onSaved` | `() => void` | Tells `CalendarShell` to refetch the month |
+| `onClose` | `() => void` | Unmount after the exit animation |
+
+### The three growable pickers
+
+All three sets used to be closed and could only grow via a deploy. Since migration `000012` an admin grows them at runtime.
+
+**Type** - chips come from `GET /calendar/event-types`, with `EVENT_TYPE_LABELS` as the pre-fetch fallback so the row never flashes empty. A trailing dashed `+ Add` chip swaps into an inline text input; Enter calls `POST /calendar/event-types` (the Linear/Airtable creatable-combobox pattern). The new type **inherits the icon and color currently selected**, so it is born looking like the event being built. The slug is derived server-side, making creation get-or-create.
+
+**Icon** - `ICON_LABELS` leads with `ICON_NONE`, so a dashed **"None"** tile is naturally the first cell in the grid. It is a selectable state in the radio group, not a separate clear button - the Notion/Asana convention.
+
+**Color** - built-in swatches, then the shared custom palette from `GET /calendar/palette`, then a dashed `+` that opens `CustomColorPopover`. An **Edit** toggle (shown only when saved swatches exist) reveals per-swatch remove badges; it is a toggle rather than hover so it works on touch, mirroring GoodNotes' "Edit → Remove Color".
+
+### Details worth knowing
+
+- **Fetches fail soft.** Both vocabulary requests are `.catch(() => {})`. A flaky network degrades the *flexibility* (built-in chips and swatches still work) rather than blocking event creation.
+- **Escape is layered.** The inline type input and `CustomColorPopover` each call `stopPropagation()` on Escape, so the first press cancels the inner control instead of discarding the whole form.
+- **Unknown values are never dropped.** If the event's type is missing from the fetched list, or its hex is no longer in the shared palette, the chip/swatch is appended anyway - so editing an old event never silently reassigns its category or looks like nothing is selected.
+
+**Client component:** yes (portal, state, keyboard effects)
+
+---
+
+## `CustomColorPopover`
+The "Custom" half of the calendar color picker - a small popover for dialing an arbitrary color and either using it once or saving it to the shared palette.
+
+**File:** `components/features/calendar/CustomColorPopover.tsx`
+
+**Props**
+| Prop | Type | Description |
+|------|------|-------------|
+| `initial` | `string` | Where the picker starts - the event's current color when that is already a hex, otherwise a neutral seed |
+| `onApply` | `(hex: string) => void` | Use this color on the event **without** saving it to the shared palette |
+| `onSaveToPalette` | `(hex: string) => Promise<void>` | Use it **and** save it as a swatch every admin will see; rejection surfaces inline |
+| `onClose` | `() => void` | Asks `EventModal` to unmount the popover |
+
+**Design provenance:** this is the GoodNotes color model. The preset swatch grid handles the common case; the `+` opens this popover for "I want our exact Christmas red", and saving writes the color back into the grid permanently. Swatches are unnamed on purpose - naming each one is ceremony a church admin would not maintain.
+
+**Two commit paths, deliberately.** "Use this color" and "Save to palette" are different intents: using a color once should not silently grow a palette every other admin has to look at.
+
+**Live preview renders BOTH renderers.** A single-day chip paints `text` on the `highlight` tint, while a multi-day banner paints white on the `text` color. A color can look fine in one and poor in the other, so the popover shows both samples - the GitHub-label live-preview idea applied to this codebase's two paint directions.
+
+**Escape handling:** the keydown listener is registered in the **capture** phase and calls `stopPropagation()`, so the first Escape closes this popover rather than the `EventModal` behind it.
+
+**Client component:** yes (state, keyboard + outside-click effects)
+
+---
+
 ## `AccentColorPicker`
 Inline contextual popover that lets an admin pick the accent color for the currently-viewed calendar month.
 
@@ -590,13 +652,15 @@ The "highlighter swipe" chip used to render a single calendar event inside a day
 |------|------|---------|-------------|
 | `title` | `string` | required | Event title shown in the chip (truncates inside narrow cells) |
 | `icon` | `string` | required | Icon key resolved by `CalendarIcon`; rendered only in the full (non-compact) variant |
-| `color` | `string` | required | Category color key into `COLOR_MAP`; supplies the `highlight` tint and `text` color |
+| `color` | `string` | required | A named palette key **or** a 6-digit hex, passed through `resolveColor()`; supplies the `highlight` tint and `text` color |
 | `tooltip` | `string` | `title` | Native hover tooltip - the desktop grid passes the event's notes so full text is reachable when truncated |
 | `compact` | `boolean` | `false` | Mobile variant: smaller text, tighter padding, no icon for the ~50px columns |
 
 **Data flow:** pure presentational. `CalendarGrid` maps each **single-day** event to an `<EventChip>` in both its desktop (full) and mobile (`compact`) grids, so the look stays identical and the PNG export (which renders the desktop grid) matches the live page. Multi-day events are rendered as `<EventBanner>` ribbons instead (see below).
 
 **Birthday special case:** when `icon === 'cake'` the full (non-compact) variant renders a standalone layout - a large `<CakeMarker>` (the local Apple cake image) with the name beneath it and **no** highlighter pill - mirroring how the cake simply sits in the day box on the paper calendars.
+
+**No-icon case:** when `icon === 'none'` the chip drops both the icon **and** the flex gap. `CalendarIcon` already renders nothing for `'none'`, but a leftover `gap-1` would push the title off-centre inside the pill.
 
 **Client component:** no (no `"use client"`; renders inside the client `CalendarGrid`)
 
@@ -611,7 +675,7 @@ The multi-day ribbon used to render an event that spans more than one day across
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `title` | `string` | required | Event title, centered and truncated within the bar |
-| `color` | `string` | required | Category color key into `COLOR_MAP`; the bar fills with the dark `text` color and uses white text |
+| `color` | `string` | required | A named palette key **or** a 6-digit hex, passed through `resolveColor()`. The bar fills with the dark `text` value and writes **white** on it - which is why `deriveRamp` guarantees `text` clears WCAG AA against white, not just against the chip tint |
 | `roundStart` | `boolean` | required | Round + inset the left end (true only on the segment that begins the span) |
 | `roundEnd` | `boolean` | required | Round + inset the right end (true only on the segment that ends the span) |
 | `tooltip` | `string` | `title` | Native hover tooltip (the event's notes) |

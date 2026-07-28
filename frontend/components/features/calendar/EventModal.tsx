@@ -2,17 +2,32 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { createPortal } from 'react-dom'
-import { X } from '@phosphor-icons/react'
-import { createEvent, deleteEvent, updateEvent, upsertMonthNote } from '@/lib/calendar'
+import { Check, Plus, Prohibit, X } from '@phosphor-icons/react'
+import {
+  createEvent,
+  createEventType,
+  createPaletteColor,
+  deleteEvent,
+  deletePaletteColor,
+  getEventTypes,
+  getPaletteColors,
+  updateEvent,
+  upsertMonthNote,
+} from '@/lib/calendar'
 import {
   CalendarEvent,
   CalendarEventType,
+  CalendarEventTypeDef,
   CalendarMonthNote,
   COLOR_MAP,
   EVENT_TYPE_LABELS,
   ICON_LABELS,
+  ICON_NONE,
+  PaletteColor,
+  resolveColor,
 } from './types'
 import CalendarIcon from './CalendarIcon'
+import CustomColorPopover from './CustomColorPopover'
 import InfoTip from '@/components/ui/InfoTip'
 
 type ModalMode = 'create' | 'edit' | 'note'
@@ -29,9 +44,27 @@ interface EventModalProps {
   onClose: () => void
 }
 
+// ICON_LABELS leads with ICON_NONE, so the "None" tile is naturally the first
+// cell in the grid - the convention Notion and Asana use, where "no icon" is a
+// selectable state in the radio group rather than a separate clear button.
 const ICON_KEYS = Object.keys(ICON_LABELS)
 const COLOR_KEYS = Object.keys(COLOR_MAP)
-const EVENT_TYPES = Object.keys(EVENT_TYPE_LABELS) as CalendarEventType[]
+
+// Used only until GET /calendar/event-types resolves, so the chip row renders
+// its real labels immediately instead of flashing empty.
+const FALLBACK_TYPE_SLUGS = Object.keys(EVENT_TYPE_LABELS)
+
+// The icon/color a built-in type starts with. The database now carries these
+// per type (calendar_event_types.default_icon/default_color); this map is the
+// pre-fetch fallback only.
+const FALLBACK_TYPE_DEFAULTS: Record<string, { icon: string; color: string }> = {
+  birthday: { icon: 'cake', color: 'rose' },
+  bible_study: { icon: 'book-open', color: 'sky' },
+  prayer: { icon: 'flame', color: 'violet' },
+  announcement: { icon: 'bell', color: 'amber' },
+  general: { icon: 'star', color: 'slate' },
+  graduation: { icon: 'graduation-cap', color: 'amber' },
+}
 
 const EXIT_MS = 280
 
@@ -66,6 +99,23 @@ export default function EventModal({
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
+  // The two admin-growable vocabularies, fetched on open. Both start empty and
+  // fall back to the built-ins, so the modal is fully usable even if these
+  // requests fail.
+  const [eventTypes, setEventTypes] = useState<CalendarEventTypeDef[]>([])
+  const [palette, setPalette] = useState<PaletteColor[]>([])
+
+  // Inline "create a type as you type" state (the Linear/Airtable pattern).
+  const [addingType, setAddingType] = useState(false)
+  const [newTypeLabel, setNewTypeLabel] = useState('')
+  const [creatingType, setCreatingType] = useState(false)
+  const newTypeInputRef = useRef<HTMLInputElement | null>(null)
+
+  const [colorPickerOpen, setColorPickerOpen] = useState(false)
+  // GoodNotes' "Edit" mode for the swatch grid: a toggle rather than hover, so
+  // removing a saved color works on a phone as well as a desktop.
+  const [editingPalette, setEditingPalette] = useState(false)
+
   // Portal + animation state - mirrors EditPostModal's pattern.
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
   const [closing, setClosing] = useState(false)
@@ -95,19 +145,83 @@ export default function EventModal({
     return () => window.removeEventListener('keydown', onKey)
   }, [handleClose])
 
-  // Sync icon/color with event type selection for smart defaults
+  // Load the admin-growable vocabularies. Failures are swallowed on purpose:
+  // the picker falls back to the built-in chips and swatches, so a flaky
+  // network degrades the flexibility rather than blocking event creation.
+  useEffect(() => {
+    let cancelled = false
+    Promise.all([getEventTypes(), getPaletteColors()])
+      .then(([types, colors]) => {
+        if (cancelled) return
+        setEventTypes(types)
+        setPalette(colors)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // Sync icon/color with event type selection for smart defaults. The defaults
+  // now travel with the type row in the database, so an admin-created type
+  // brings its own look; FALLBACK_TYPE_DEFAULTS only covers the window before
+  // the fetch lands.
   function handleTypeChange(t: CalendarEventType) {
     setEventType(t)
-    const defaults: Record<CalendarEventType, { icon: string; color: string }> = {
-      birthday: { icon: 'cake', color: 'rose' },
-      bible_study: { icon: 'book-open', color: 'sky' },
-      prayer: { icon: 'flame', color: 'violet' },
-      announcement: { icon: 'bell', color: 'amber' },
-      general: { icon: 'star', color: 'slate' },
-      graduation: { icon: 'graduation-cap', color: 'amber' },
+    const def = eventTypes.find((d) => d.slug === t)
+    const defaults = def
+      ? { icon: def.default_icon, color: def.default_color }
+      : FALLBACK_TYPE_DEFAULTS[t]
+    if (defaults) {
+      setIcon(defaults.icon)
+      setColor(defaults.color)
     }
-    setIcon(defaults[t].icon)
-    setColor(defaults[t].color)
+  }
+
+  // Create a reusable type from what the admin typed. The new type inherits the
+  // icon and color currently selected, so it is born looking like the event
+  // being built rather than generic. The slug is derived server-side, which
+  // makes this get-or-create - two admins typing "Baptism" converge on one type.
+  async function handleCreateType() {
+    const label = newTypeLabel.trim()
+    if (!label || !accessToken) return
+    setCreatingType(true)
+    setError(null)
+    try {
+      const def = await createEventType(
+        { label, default_icon: icon, default_color: color },
+        accessToken,
+      )
+      setEventTypes((prev) => (prev.some((t) => t.slug === def.slug) ? prev : [...prev, def]))
+      setEventType(def.slug)
+      setAddingType(false)
+      setNewTypeLabel('')
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Couldn't create that type")
+    } finally {
+      setCreatingType(false)
+    }
+  }
+
+  async function handleSavePaletteColor(hex: string) {
+    if (!accessToken) throw new Error('Not signed in')
+    const saved = await createPaletteColor(hex, accessToken)
+    setPalette((prev) => (prev.some((c) => c.hex === saved.hex) ? prev : [...prev, saved]))
+    setColor(saved.hex)
+  }
+
+  // Removing a swatch only shrinks the picker. Events already using that hex
+  // keep it, because the color is copied onto the event rather than referenced.
+  async function handleDeletePaletteColor(id: string) {
+    if (!accessToken) return
+    const previous = palette
+    setPalette((prev) => prev.filter((c) => c.id !== id))
+    try {
+      await deletePaletteColor(id, accessToken)
+    } catch {
+      setPalette(previous)
+      setError("Couldn't remove that color")
+    }
   }
 
   async function handleSave() {
@@ -145,6 +259,30 @@ export default function EventModal({
       setError(e instanceof Error ? e.message : 'Delete failed')
       setSaving(false)
     }
+  }
+
+  // The chip row: the fetched vocabulary once it lands, the built-ins before
+  // then. The event's own type is appended if it is somehow missing from the
+  // list, so editing an old event never silently reassigns its category.
+  const typeChips: { slug: string; label: string }[] = (
+    eventTypes.length > 0
+      ? eventTypes.map((t) => ({ slug: t.slug, label: t.label }))
+      : FALLBACK_TYPE_SLUGS.map((slug) => ({ slug, label: EVENT_TYPE_LABELS[slug] }))
+  )
+  if (eventType && !typeChips.some((c) => c.slug === eventType)) {
+    typeChips.push({ slug: eventType, label: EVENT_TYPE_LABELS[eventType] ?? eventType })
+  }
+
+  // Built-in swatches first, then whatever admins have saved - the order the
+  // GoodNotes palette grows in.
+  const swatches: { key: string; hex: string; paletteId?: string }[] = [
+    ...COLOR_KEYS.map((key) => ({ key, hex: COLOR_MAP[key].dot })),
+    ...palette.map((c) => ({ key: c.hex, hex: c.hex, paletteId: c.id })),
+  ]
+  // An event may carry a custom hex that has since been removed from the shared
+  // palette. Show it anyway, or the picker would look like nothing is selected.
+  if (color.startsWith('#') && !swatches.some((s) => s.key.toUpperCase() === color.toUpperCase())) {
+    swatches.push({ key: color, hex: color })
   }
 
   const canSave = mode === 'note'
@@ -224,22 +362,79 @@ export default function EventModal({
                 <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                   Type
                 </label>
-                <div className="flex flex-wrap gap-2">
-                  {EVENT_TYPES.map((t) => (
+                <div className="flex flex-wrap items-center gap-2">
+                  {typeChips.map(({ slug, label }) => (
                     <button
-                      key={t}
-                      onClick={() => handleTypeChange(t)}
+                      key={slug}
+                      type="button"
+                      onClick={() => handleTypeChange(slug)}
                       className={[
                         'px-3 py-1.5 rounded-full font-display text-xs font-medium border transition-colors',
-                        eventType === t
+                        eventType === slug
                           ? 'bg-foreground text-background border-foreground'
                           : 'bg-background text-muted border-border hover:border-foreground/30',
                       ].join(' ')}
                     >
-                      {EVENT_TYPE_LABELS[t]}
+                      {label}
                     </button>
                   ))}
+
+                  {/* Create a type inline, without leaving the form - the
+                      Linear/Airtable creatable-combobox pattern. */}
+                  {addingType ? (
+                    <span className="inline-flex items-center gap-1">
+                      <input
+                        ref={newTypeInputRef}
+                        type="text"
+                        value={newTypeLabel}
+                        onChange={(e) => setNewTypeLabel(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            handleCreateType()
+                          } else if (e.key === 'Escape') {
+                            // Stop the modal's own Escape handler - the first
+                            // press should cancel this input, not close the form.
+                            e.stopPropagation()
+                            setAddingType(false)
+                            setNewTypeLabel('')
+                          }
+                        }}
+                        maxLength={60}
+                        placeholder="Baptism"
+                        aria-label="New event type name"
+                        className="w-28 rounded-full border border-foreground bg-background px-3 py-1.5 font-display text-xs text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCreateType}
+                        disabled={creatingType || !newTypeLabel.trim()}
+                        aria-label="Create event type"
+                        className="p-1.5 rounded-full text-foreground hover:bg-border/40 transition-colors disabled:opacity-30"
+                      >
+                        <Check size={14} weight="bold" />
+                      </button>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAddingType(true)
+                        // Focus after the input actually exists.
+                        setTimeout(() => newTypeInputRef.current?.focus(), 0)
+                      }}
+                      className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full font-display text-xs font-medium border border-dashed border-border text-muted hover:border-foreground/40 hover:text-foreground transition-colors"
+                    >
+                      <Plus size={12} weight="bold" />
+                      Add
+                    </button>
+                  )}
                 </div>
+                {addingType && (
+                  <p className="font-sans text-[11px] text-muted">
+                    New types are saved for everyone and start with the icon and color selected below.
+                  </p>
+                )}
               </div>
 
               {/* Dates - optional multi-day span. The start date is the event's
@@ -296,49 +491,112 @@ export default function EventModal({
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {ICON_KEYS.map((key) => {
-                    const colors = COLOR_MAP[color] ?? COLOR_MAP.slate
+                    const colors = resolveColor(color)
                     const active = icon === key
+                    const isNone = key === ICON_NONE
                     return (
                       <button
                         key={key}
+                        type="button"
                         onClick={() => setIcon(key)}
                         title={ICON_LABELS[key]}
+                        aria-label={ICON_LABELS[key]}
+                        aria-pressed={active}
                         className={[
-                          'w-9 h-9 rounded-lg flex items-center justify-center border transition-all',
+                          'w-9 h-9 rounded-lg flex items-center justify-center transition-all',
+                          // The None tile is dashed so it reads as an empty slot
+                          // rather than another icon to choose between.
+                          isNone ? 'border border-dashed' : 'border',
                           active
                             ? 'border-foreground shadow-sm'
                             : 'border-border hover:border-foreground/30',
                         ].join(' ')}
                         style={active ? { backgroundColor: colors.bg } : {}}
                       >
-                        <CalendarIcon iconKey={key} size={16} color={active ? colors.dot : undefined} />
+                        {isNone ? (
+                          <Prohibit
+                            size={16}
+                            weight="bold"
+                            color={active ? colors.text : 'currentColor'}
+                            className={active ? undefined : 'text-muted'}
+                          />
+                        ) : (
+                          <CalendarIcon iconKey={key} size={16} color={active ? colors.text : undefined} />
+                        )}
                       </button>
                     )
                   })}
                 </div>
               </div>
 
-              {/* Color picker */}
+              {/* Color picker - built-in swatches, then the shared custom
+                  palette, then a + that opens the full picker. The GoodNotes
+                  model: the + both applies a color and can grow the grid. */}
               <div className="flex flex-col gap-2">
-                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
-                  Color
-                </label>
-                <div className="flex flex-wrap gap-2">
-                  {COLOR_KEYS.map((key) => {
-                    const c = COLOR_MAP[key]
+                <div className="flex items-center justify-between">
+                  <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
+                    Color
+                  </label>
+                  {palette.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setEditingPalette((v) => !v)}
+                      className="font-display text-[11px] font-medium text-muted hover:text-foreground transition-colors"
+                    >
+                      {editingPalette ? 'Done' : 'Edit'}
+                    </button>
+                  )}
+                </div>
+                <div className="relative flex flex-wrap items-center gap-2">
+                  {swatches.map(({ key, hex, paletteId }) => {
+                    const active = color.toUpperCase() === key.toUpperCase()
+                    const removable = editingPalette && !!paletteId
                     return (
-                      <button
-                        key={key}
-                        onClick={() => setColor(key)}
-                        title={key}
-                        className={[
-                          'w-7 h-7 rounded-full border-2 transition-all',
-                          color === key ? 'scale-110 border-foreground' : 'border-transparent hover:border-foreground/30',
-                        ].join(' ')}
-                        style={{ backgroundColor: c.dot }}
-                      />
+                      <span key={key} className="relative inline-flex">
+                        <button
+                          type="button"
+                          onClick={() => setColor(key)}
+                          title={key}
+                          aria-label={`Color ${key}`}
+                          aria-pressed={active}
+                          className={[
+                            'w-7 h-7 rounded-full border-2 transition-all',
+                            active ? 'scale-110 border-foreground' : 'border-transparent hover:border-foreground/30',
+                          ].join(' ')}
+                          style={{ backgroundColor: hex }}
+                        />
+                        {removable && (
+                          <button
+                            type="button"
+                            onClick={() => handleDeletePaletteColor(paletteId)}
+                            aria-label={`Remove ${key} from the palette`}
+                            className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-foreground text-background shadow-sm"
+                          >
+                            <X size={9} weight="bold" />
+                          </button>
+                        )}
+                      </span>
                     )
                   })}
+
+                  <button
+                    type="button"
+                    onClick={() => setColorPickerOpen((v) => !v)}
+                    aria-label="Add a custom color"
+                    aria-expanded={colorPickerOpen}
+                    className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-border text-muted transition-colors hover:border-foreground/40 hover:text-foreground"
+                  >
+                    <Plus size={13} weight="bold" />
+                  </button>
+
+                  {colorPickerOpen && (
+                    <CustomColorPopover
+                      initial={color}
+                      onApply={setColor}
+                      onSaveToPalette={handleSavePaletteColor}
+                      onClose={() => setColorPickerOpen(false)}
+                    />
+                  )}
                 </div>
               </div>
 
