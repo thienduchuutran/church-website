@@ -4,6 +4,7 @@ import { useState } from 'react'
 import type { AdminTranslation, TranslationRecordGroup } from '@/lib/translations'
 import { sanitizeBody } from '@/lib/sanitizeBody'
 import { useSessionDraft } from '@/lib/use-session-draft'
+import { useConfirm } from '@/lib/confirm'
 import { RichContent } from '@/components/editor/RichContent'
 import { RichBodyEditor } from '@/components/editor/RichBodyEditor'
 
@@ -88,6 +89,7 @@ export default function TranslationReviewRecord({
   const [editingBody, setEditingBody] = useState<Record<string, boolean>>({})
   // busy is 'approve' for the record-level action, or `retranslate:<id>` for a
   // single field, so only the button in flight shows a spinner.
+  const confirm = useConfirm()
   const [busy, setBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -131,13 +133,19 @@ export default function TranslationReviewRecord({
 
   async function handleRetranslate(field: AdminTranslation) {
     if (busy) return
-    if (
-      !window.confirm(
-        `Delete the ${FIELD_LABELS[field.field_name] ?? field.field_name} translation and queue a fresh one? Any human-approved edits to this field will be lost.`,
-      )
-    ) {
-      return
-    }
+    const label = FIELD_LABELS[field.field_name] ?? field.field_name
+    const ok = await confirm({
+      title: 'Retranslate this field?',
+      message: (
+        <>
+          The current <strong className="font-semibold text-foreground">{label}</strong> translation
+          is deleted and a fresh one is queued. Any human-approved edits to this field will be lost.
+        </>
+      ),
+      confirmLabel: 'Retranslate',
+      tone: 'danger',
+    })
+    if (!ok) return
     setBusy(`retranslate:${field.id}`)
     setError(null)
     try {

@@ -92,6 +92,43 @@ Switches between English and Vietnamese without page reload. Lives in the Navbar
 
 ---
 
+### `ConfirmDialog` + `useConfirm`
+
+**Files:** `components/ui/ConfirmDialog.tsx` (presentation), `lib/confirm.tsx` (provider + hook)
+
+**Never use `window.confirm` / `window.alert` / `window.prompt` in product flows.** Browser dialogs are unstyleable, block the JS thread, animate not at all next to sheets that do, and can be suppressed by the browser's "prevent this page from creating additional dialogs" checkbox. Use this instead:
+
+```tsx
+const confirm = useConfirm()
+const ok = await confirm({
+  title: 'Remove this section?',
+  message: <><strong>Our Story</strong> will be removed from the page.</>,
+  confirmLabel: 'Remove',
+  tone: 'danger',
+})
+if (!ok) return
+```
+
+**`ConfirmOptions`**
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `title` | `string` | required | The question. Rendered as the dialog heading |
+| `message` | `ReactNode` | required | The consequence. A node, not a string, so the thing being deleted can be bolded |
+| `confirmLabel` | `string` | `'Confirm'` | Name the action (`Remove`, `Discard`, `Re-queue all`) rather than saying OK |
+| `cancelLabel` | `string` | `'Cancel'` | |
+| `tone` | `'default' \| 'danger'` | `'default'` | `danger` colours the confirm button red |
+
+**Client components:** both. `ConfirmProvider` is mounted in `app/[locale]/layout.tsx`, wrapping `UnsavedChangesProvider` because `confirmDiscard` prompts through it.
+
+**Design notes**
+- Built on `ModalShell` with `size="sm"`, so confirmations inherit the same backdrop blur and spring in/out animation as every other sheet. The answer is parked in a ref and read in `onClose`, which fires *after* the exit animation - so confirming animates out too instead of vanishing on click.
+- Every dismissal route (Escape, backdrop click, the X, Cancel) funnels through the same close path and resolves `false`.
+- Focus moves to **Cancel** on open, not Confirm - for a destructive prompt the safe option should be the one that is one Enter away. The previously focused element gets focus back on close.
+- Asking while a dialog is already open resolves the older question `false` rather than leaving a promise that never settles.
+- **The one permitted native dialog** is the `beforeunload` handler in `lib/unsaved-changes.tsx`. Browsers refuse to let a custom dialog block a real unload (tab close, hard refresh), so that one stays native by necessity.
+
+---
+
 ### `MachineTranslatedBadge`
 Small italic "Bản dịch tự động" notice that flags content served from an unapproved AI translation. Lives at the bottom of post cards, beside calendar event titles inside `DayEventsModal`, under the month note on the calendar shell, and below the page hero on About/Connect.
 

@@ -52,11 +52,14 @@ export default function LanguageSwitcher({ className = '' }: { className?: strin
   const [isSwitching, setIsSwitching] = useState(false)
   const { confirmDiscard } = useUnsavedChanges()
 
-  function switchTo(target: Locale) {
+  // Async because the discard prompt is now an in-app dialog that resolves on
+  // click rather than a blocking window.confirm. Everything after the await is
+  // unchanged - the hard nav simply happens once the user has answered.
+  async function switchTo(target: Locale) {
     if (target === active) return
     // Tier 2: if an editor on the page has unsaved, non-auto-restored edits
     // (e.g. the post modal), confirm before the switch discards the open state.
-    if (!confirmDiscard('Switch language now? Unsaved changes in the open editor will be lost.')) {
+    if (!(await confirmDiscard('Switching language reloads the page. Unsaved changes in the open editor will be lost.'))) {
       return
     }
     // Tier 1: record scroll so the reloaded tree lands in the same place and

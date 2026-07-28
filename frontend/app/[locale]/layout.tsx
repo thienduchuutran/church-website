@@ -7,6 +7,7 @@ import '../globals.css'
 import { AuthProvider } from '@/lib/auth'
 import { EditModalProvider } from '@/lib/edit-modal'
 import { UnsavedChangesProvider } from '@/lib/unsaved-changes'
+import { ConfirmProvider } from '@/lib/confirm'
 import Navbar from '@/components/ui/Navbar'
 import PageTransition from '@/components/ui/PageTransition'
 import NavigationProgress from '@/components/ui/NavigationProgress'
@@ -115,6 +116,9 @@ export default async function LocaleLayout({
             segment param forces the client context to track the URL. */}
         <NextIntlClientProvider locale={locale}>
           <AuthProvider>
+            {/* ConfirmProvider wraps UnsavedChangesProvider because
+                confirmDiscard prompts through it. */}
+            <ConfirmProvider>
             <UnsavedChangesProvider>
             <EditModalProvider>
               <NavigationProgress />
@@ -133,6 +137,7 @@ export default async function LocaleLayout({
               {/* <ChatBox /> */}
             </EditModalProvider>
             </UnsavedChangesProvider>
+            </ConfirmProvider>
           </AuthProvider>
         </NextIntlClientProvider>
       </body>

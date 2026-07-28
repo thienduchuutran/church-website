@@ -44,7 +44,9 @@ frontend/
 │   ├── ui/                             ← Reusable primitives, no business logic
 │   │   ├── Button.tsx
 │   │   ├── Input.tsx
+│   │   ├── ConfirmDialog.tsx           ← Destructive-action confirmation, on ModalShell. Summoned via useConfirm()
 │   │   ├── Modal.tsx
+│   │   ├── ModalShell.tsx              ← Animated sheet: portal, backdrop blur, Escape/click-out, size 'md' | 'sm'
 │   │   ├── Navbar.tsx
 │   │   ├── PageTransition.tsx          ← Fade-in wrapper; used in layout.tsx
 │   │   └── SocialIconBar.tsx           ← Social follow icons; reused in Navbar (desktop) + footer
@@ -91,6 +93,7 @@ frontend/
 │   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale)
 │   ├── discord.ts                      ← Discord link API (getDiscordStatus / getDiscordLinkUrl)
 │   ├── events.ts                       ← partitionEvents/isUpcoming/canUnarchive (Upcoming vs Past sectioning)
+│   ├── confirm.tsx                     ← ConfirmProvider + useConfirm() promise dialog. NEVER use window.confirm/alert/prompt
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
 │   ├── pages.ts                        ← Page-content API service. Typed { sections, blocks, machine_translated } response; replacePageBlocks is a FULL replace (absent blocks are deleted server-side)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables

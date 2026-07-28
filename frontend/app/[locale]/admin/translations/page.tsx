@@ -12,6 +12,7 @@ import {
   type AdminTranslation,
 } from '@/lib/translations'
 import TranslationReviewRecord from '@/components/features/admin/TranslationReviewRecord'
+import { useConfirm } from '@/lib/confirm'
 
 // Filter tab state matches the backend's tri-state `approved` query param:
 //   needs-review → approved=false   (default, the most common task)
@@ -46,6 +47,7 @@ export default function AdminTranslationsPage() {
   // Bulk retranslate state. `bulkBusy` doubles as the button's loading flag
   // and the disable-while-running guard. `bulkMessage` shows the result count
   // for a few seconds after success so the reviewer sees confirmation.
+  const confirm = useConfirm()
   const [bulkBusy, setBulkBusy] = useState(false)
   const [bulkMessage, setBulkMessage] = useState<string | null>(null)
   // Orphan cleanup gets its own busy flag (so one slow operation doesn't lock
@@ -125,13 +127,14 @@ export default function AdminTranslationsPage() {
   // worry about losing, so we name that explicitly in the prompt.
   async function handleRetranslateAll() {
     if (!token || bulkBusy) return
-    if (
-      !window.confirm(
-        'Delete every unapproved translation and re-queue them with the current system prompt? Approved (human-reviewed) translations will be left untouched.',
-      )
-    ) {
-      return
-    }
+    const ok = await confirm({
+      title: 'Re-queue every unapproved translation?',
+      message:
+        'All unapproved translations are deleted and re-queued with the current system prompt. Approved (human-reviewed) translations are left untouched.',
+      confirmLabel: 'Re-queue all',
+      tone: 'danger',
+    })
+    if (!ok) return
     setBulkBusy(true)
     setBulkMessage(null)
     setError(null)
@@ -152,13 +155,14 @@ export default function AdminTranslationsPage() {
   // live translations are at risk.
   async function handleCleanupOrphans() {
     if (!token || orphanBusy) return
-    if (
-      !window.confirm(
-        'Delete translations whose source post/page/event no longer exists? Translations for existing content (approved or pending) are not touched.',
-      )
-    ) {
-      return
-    }
+    const ok = await confirm({
+      title: 'Clean up orphaned translations?',
+      message:
+        'Deletes translations whose source post, page or event no longer exists. Translations for existing content - approved or pending - are not touched.',
+      confirmLabel: 'Clean up',
+      tone: 'danger',
+    })
+    if (!ok) return
     setOrphanBusy(true)
     setBulkMessage(null)
     setError(null)

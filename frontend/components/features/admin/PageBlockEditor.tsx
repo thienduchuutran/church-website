@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
 import { useRegisterUnsaved } from '@/lib/unsaved-changes'
+import { useConfirm } from '@/lib/confirm'
 import { getPageContent, replacePageBlocks, type PageBlock, type PageBlockType } from '@/lib/pages'
 import { RichBodyEditor } from '@/components/editor/RichBodyEditor'
 
@@ -83,6 +84,7 @@ const iconBtnClass =
 export default function PageBlockEditor({ slug }: { slug: string }) {
   const { session } = useAuth()
   const router = useRouter()
+  const confirm = useConfirm()
 
   const [blocks, setBlocks] = useState<EditorBlock[]>([])
   // The snapshot of what the server last confirmed, used purely for dirty
@@ -157,12 +159,25 @@ export default function PageBlockEditor({ slug }: { slug: string }) {
     setSuccess(false)
   }
 
-  function removeBlock(index: number) {
+  async function removeBlock(index: number) {
     const b = blocks[index]
     const name = b.title.trim() || BLOCK_META[b.block_type].label
     // Removal is destructive on save - the row and its Vietnamese translations
-    // are deleted server-side - so it gets an explicit confirm.
-    if (!window.confirm(`Remove "${name}"? Its translations are deleted when you save.`)) return
+    // are deleted server-side - so it gets an explicit confirm. The section
+    // name is bolded rather than quoted mid-sentence so it is unmissable when
+    // several sections look alike.
+    const ok = await confirm({
+      title: 'Remove this section?',
+      message: (
+        <>
+          <strong className="font-semibold text-foreground">{name}</strong> will be removed from
+          the page. Its Vietnamese translation is deleted when you save.
+        </>
+      ),
+      confirmLabel: 'Remove',
+      tone: 'danger',
+    })
+    if (!ok) return
     setBlocks((prev) => prev.filter((_, i) => i !== index))
     setSuccess(false)
   }
@@ -211,8 +226,17 @@ export default function PageBlockEditor({ slug }: { slug: string }) {
     }
   }
 
-  function handleBack() {
-    if (dirty && !window.confirm('You have unsaved changes that will be lost. Continue?')) return
+  async function handleBack() {
+    if (dirty) {
+      const ok = await confirm({
+        title: 'Discard unsaved changes?',
+        message: 'Your edits to this page have not been saved yet and will be lost.',
+        confirmLabel: 'Discard',
+        cancelLabel: 'Keep editing',
+        tone: 'danger',
+      })
+      if (!ok) return
+    }
     router.push('/admin')
   }
 
