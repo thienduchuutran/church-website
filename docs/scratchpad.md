@@ -6,9 +6,195 @@ We are consolidating design/progress tracking into `docs/progress.md`.
 
 ---
 
-# ACTIVE PLAN - Flexible About page (block-based page content)
+# SHIPPED - Flexible calendar event types, colors, and "no icon"
 
-**Status:** awaiting approval. Nothing implemented yet.
+**Status:** implemented 2026-07-28. Migration `000012` applied and verified on the local dev DB
+(20 events before / 20 after, all four distinct type counts identical; down-then-up round trip
+tested inside a rolled-back transaction). Backend `go build` / `go vet` / `go test ./...` green,
+frontend `tsc --noEmit` clean, `npm run build` succeeds, `npm run test:color` 8/8.
+
+**Deviation from the plan below:** the plan proposed handler-level tests. The calendar handler
+depends on the concrete `*service.CalendarService` rather than an interface, so there is no seam to
+mock without refactoring the existing handler - out of scope for this change. Coverage instead sits
+at the model layer (`internal/model/calendar_types_test.go`: slugify, color/icon/slug validation)
+and in `frontend/lib/__tests__/color.test.ts`, which is where the actual logic and the actual
+security boundary live. The route wiring was verified by live smoke test instead.
+
+## The problem
+
+The event modal ([`frontend/components/features/calendar/EventModal.tsx`](../frontend/components/features/calendar/EventModal.tsx))
+gives admins three pickers, and all three are **closed sets** an admin can never grow:
+
+| Picker | Where the set is frozen | Consequence |
+|---|---|---|
+| Type | `calendar_event_type` **Postgres enum** + a `switch` in `model/types.go` + `EVENT_TYPE_LABELS` in `types.ts` | "Baptism", "Fellowship Meal", "Church Anniversary" all require a migration + a backend deploy + a frontend deploy |
+| Color | `AllowedCalendarColors` map (9 keys) + `COLOR_MAP` (9 keys) | The church's own Christmas red or the printed calendar's exact purple is unreachable |
+| Icon | `AllowedCalendarIcons` map (11 keys), no empty option | Every event is forced to wear an icon, even when the title alone reads better |
+
+Adding a fourth category next Easter should be a thing an admin does in ten seconds, not a thing
+the developer ships.
+
+---
+
+## Research - how the industry solves this
+
+### Custom colors
+
+| Product | Design | What we steal |
+|---|---|---|
+| **Google Calendar** (custom event colors, June 2026) | 24 preset swatches in a grid; a full RGB/hex picker reachable from the same popover. The custom color is stored **on the event**, not as a named entity, and syncs to mobile. | Presets and custom live in **one** picker, not two screens. Hex belongs on the event. |
+| **GoodNotes 6** | Preset swatch grid + a **`+` that opens a Custom tab** (color wheel, hex field, eyedropper). Tapping `+` / "Add to Presets" **writes the color back into the swatch grid permanently**. An "Edit" affordance removes a saved swatch. Swatches are unnamed. | **This is the chosen model.** The `+` both applies the color *and* grows the shared palette, so the second admin who wants that red just clicks it. No naming ceremony. |
+| **GitHub labels** | Preset swatch row + hex text field + randomize, with a **live preview chip**. Solid color only - no alpha, because the text on top must stay readable. | Live preview before commit; no alpha. |
+| **Outlook categories** | Fixed 25 colors, each **named** and renamable | Rejected - naming every swatch is ceremony a church admin will not maintain. |
+
+The non-obvious part every one of these solves: a custom hex is **not one value**. A chip needs a
+fill tint *and* a readable text color on top of it; a banner needs a dark fill with white text. So a
+custom hex has to be expanded into a ramp, with a WCAG 4.5:1 check on the derived text color -
+HSL lightness manipulation is the standard technique.
+
+### Adding a type / category
+
+| Product | Design | What we steal |
+|---|---|---|
+| **Airtable** single-select | `+ Add option` inline; each option is a row with a name + a `⌄` color dropdown; options are **global and reusable**, never per-record | Global reusability. One admin's "Baptism" is every admin's "Baptism". |
+| **Linear / Notion / shadcn combobox** | Type a name that doesn't exist → a `+ Create "Baptism"` row appears inline. The option is created as a real reusable entity **without leaving the form**. | The creation flow. No settings screen, no context switch. |
+| **Jira issue types** | Separate admin settings screen, name + description + icon | Rejected - too heavy for a 100-member church with a handful of admins. |
+
+The consensus is **create-on-the-fly, stored globally**: the convenience of ad-hoc typing with the
+consistency of a managed vocabulary. Per-event free text is what everyone moved *away* from,
+because it fragments ("Baptism" / "baptism" / "Baptism Service") and breaks legends and filters.
+
+### No icon
+
+| Product | Design |
+|---|---|
+| **Notion** | Click the icon → `Remove`. Added for callouts specifically because a forced icon made blocks noisy. |
+| **Slack status** | An `X` to clear the emoji |
+| **Asana / Figma variants** | A `None` tile inside the grid |
+
+The picker-grid convention is a **first tile with a dashed border and a slash glyph**, labeled
+"None" - because inside a radio group "no icon" is a *selectable state*, not an action. A
+"Remove" button next to the grid would be a different control with different keyboard semantics.
+
+---
+
+## Decisions locked (2026-07-28)
+
+1. **Types are global and reusable**, created inline from the event modal. Enum → text + lookup table.
+2. **Colors follow the GoodNotes model**: built-in swatches + a shared, persisted custom palette that
+   the `+` grows. The event stores the resolved value (palette key *or* hex), so rendering never joins.
+3. **Add only** for types - no rename/recolor/delete in v1. The palette *does* get a delete, because
+   GoodNotes' "Edit → Remove Color" is part of the model being copied and it costs ~15 lines.
+
+---
+
+## Phase 1 - Database
+
+New migration `backend/migrations/000012_calendar_flexible_types_and_palette.{up,down}.sql`.
+
+| File | Change | Why |
+|---|---|---|
+| `000012_..._.up.sql` | `CREATE TABLE calendar_event_types (slug text PK, label text, default_icon text, default_color text, is_builtin bool, sort_order int, admin_id uuid, created_at, updated_at)`, seeded with the 6 built-ins and the exact icon/color defaults currently hardcoded in `EventModal.handleTypeChange` | The type vocabulary stops being a compile-time constant. `default_icon`/`default_color` move the smart-defaults map out of the component and into data, so a new type carries its own look. `is_builtin` protects the 6 the code branches on. |
+| `000012_..._.up.sql` | `ALTER TABLE calendar_events ALTER COLUMN event_type DROP DEFAULT, TYPE text USING event_type::text, SET DEFAULT 'general'` then add FK → `calendar_event_types(slug)` `ON UPDATE CASCADE ON DELETE RESTRICT` | The enum is the actual blocker - Postgres enums can only be extended by migration. Text + FK keeps referential integrity (no orphan type on an event) while letting `INSERT` create new values at runtime. Seed must run **before** the FK is added. |
+| `000012_..._.up.sql` | `CREATE TABLE calendar_palette_colors (id uuid PK, hex text UNIQUE CHECK (hex ~ '^#[0-9A-Fa-f]{6}$'), sort_order int, admin_id uuid, created_at)` | The GoodNotes shared swatch grid. `UNIQUE` makes "add to palette" idempotent; the `CHECK` is the DB-level backstop against anything but a 6-digit hex reaching an inline `style`. |
+| `000012_..._.down.sql` | Drop FK, drop palette table, map any non-builtin `event_type` back to `'general'`, convert the column back to `calendar_event_type`, drop the types table | The enum type itself is left in place by the up migration precisely so the down migration has something to cast back to. |
+
+## Phase 2 - Backend
+
+| File | Change | Why |
+|---|---|---|
+| `internal/model/calendar_test.go` | **First.** Tests for: `Slugify` ("Fellowship Meal" → `fellowship_meal`, accents/punctuation stripped, collision suffix), `IsAllowedCalendarColor` (named key ✓, `#7C3A6E` ✓, `red; background:url()` ✗, `#GGG` ✗), icon `"none"` accepted, event-type shape rejects `../admin` | TDD rule. These validators are the entire security surface of the feature - a bad hex reaches an inline `style` attribute, a bad slug reaches a URL and a FK. |
+| `internal/model/types.go` | Add `"none": true` to `AllowedCalendarIcons`. Replace the `AllowedCalendarColors` map lookup with `IsAllowedCalendarColor(s string) bool` = named key **or** `hexColorRegexp` (already declared at line 13). Replace the closed `switch` on `EventType` in both validators with a shape check `^[a-z0-9_]{1,40}$`. | Existence of the type is a *database* question now, so the model can only check shape; the service checks existence. Reusing the existing `hexColorRegexp` keeps one definition of "what a hex is". |
+| `internal/model/types.go` | New types: `CalendarEventTypeDef`, `PaletteColor`, `CreateEventTypeRequest{Label, DefaultIcon, DefaultColor}`, `CreatePaletteColorRequest{Hex}`, each with `Validate()` | Step 2 of the feature workflow - declare the data shape before any logic. |
+| `internal/repository/calendar.go` | Add `ListEventTypes`, `CreateEventType`, `EventTypeExists`, `ListPaletteColors`, `CreatePaletteColor`, `DeletePaletteColor` | Raw SQL only, per the layer contract. |
+| `internal/repository/calendar.go:198` | `COALESCE($5::calendar_event_type, event_type)` → `COALESCE($5::text, event_type)` | **Easy to miss and it breaks every event update.** The explicit cast names a type that no longer applies to the column. |
+| `internal/service/calendar.go` | Validate `event_type` exists via `EventTypeExists` before create/update; on `CreateEventType`, slugify the label and return the existing row on slug collision instead of erroring | Business rule, so it belongs here per the global rules. Collision-returns-existing makes the inline "create" idempotent - two admins typing "Baptism" the same week get one type, not an error toast. |
+| `internal/handler/calendar.go` | `ListEventTypes`, `CreateEventType`, `ListPaletteColors`, `CreatePaletteColor`, `DeletePaletteColor` - parse, validate, call service, write JSON | Three responsibilities only. |
+| `cmd/server/main.go` | `GET /calendar/event-types` and `GET /calendar/palette` public; `POST /calendar/event-types`, `POST /calendar/palette`, `DELETE /calendar/palette/{id}` inside the `RequireAdmin` group | Matches the existing calendar posture (public reads intentional, writes gated) documented at `main.go:414-427`. |
+
+## Phase 3 - Frontend form
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/lib/color.ts` **(new)** | `hexToHsl`, `hslToHex`, `contrastRatio`, `deriveRamp(hex) → {dot,text,bg,highlight}`. `text` starts at L=35% and steps down until it clears 4.5:1 against **both** white and the derived `highlight`, floored at L=12%. | The research finding made concrete. `EventBanner` fills with `ramp.text` and writes **white** on it; `EventChip` fills with `ramp.highlight` and writes `ramp.text` on it. Both contrast pairs must hold or a custom color produces unreadable chips. |
+| `frontend/lib/__tests__/color.test.ts` **(new)** | Assert the ramp clears 4.5:1 on both pairs across a sweep of hues, including the hard ones (yellow `#FFD400`, pale `#E8E8E8`) | TDD rule, and yellows are exactly where naive lightness math fails. |
+| `frontend/components/features/calendar/types.ts` | `CalendarEventType` union → `string`. Add `CalendarEventTypeDef`, `PaletteColor`. Add `resolveColor(color) → ramp` = `COLOR_MAP[color] ?? (isHex(color) ? deriveRamp(color) : COLOR_MAP.slate)`. `ICON_LABELS` gains `none: 'No icon'`. `EVENT_TYPE_LABELS` kept as the pre-fetch fallback. | One resolver means every consumer keeps its existing `{dot,text,bg,highlight}` contract and gains hex support for free. Keeping `EVENT_TYPE_LABELS` avoids a label flash before the fetch lands. |
+| `frontend/lib/calendar.ts` | `getEventTypes`, `createEventType`, `getPaletteColors`, `createPaletteColor`, `deletePaletteColor` | The `apiGet`/`apiPost` layer, per the workflow rule against calling Supabase directly. |
+| `frontend/components/features/calendar/CalendarIcon.tsx` | Return `null` when `iconKey === 'none'` | One guard at the source, so no caller has to know about the sentinel. |
+| `EventModal.tsx` - Type field | Fetch defs on mount; render a chip per def; append a `+ Add` chip that swaps into an inline text input; Enter creates via the API, selects it, and appends the chip. `handleTypeChange` reads `default_icon`/`default_color` from the def instead of the hardcoded map at lines 101-108. | The Linear/Airtable creatable pattern. Deleting the hardcoded defaults map is the point - the data now carries the look. |
+| `EventModal.tsx` - Icon field | Prepend a "None" tile: dashed border, `Prohibit` glyph, same 36px square, participates in the same selection state | The Notion/Asana convention, as a selectable state rather than a separate clear button. |
+| `EventModal.tsx` - Color field | Built-in swatches, then saved palette swatches, then a `+` tile opening a small popover: native `<input type="color">`, hex text field, **live preview chip** rendering the derived ramp, and "Add to palette". Long-press / hover-`X` removes a saved swatch. | The GoodNotes flow end to end. The live preview is the GitHub detail that stops an admin from saving a color that turns out unreadable. |
+
+## Phase 4 - Display
+
+| File | Change | Why |
+|---|---|---|
+| `EventChip.tsx`, `EventBanner.tsx`, `DayEventsModal.tsx`, `CalendarShell.tsx` | Replace all six `COLOR_MAP[x] ?? COLOR_MAP.<fallback>` lookups with `resolveColor(x)` | Custom hex renders identically in the grid, the multi-day ribbon, the day modal, and the birthday/bible-study/address sidebar strips. Miss one and a custom color silently falls back to slate there. |
+| `EventChip.tsx` | Skip the `<CalendarIcon>` element and its gap when `icon === 'none'` | `CalendarIcon` returning null would otherwise leave the flex gap, so the text sits off-centre. |
+| `DayEventsModal.tsx:119` | Look the label up from the fetched defs, falling back to `EVENT_TYPE_LABELS[t] ?? t` | A custom type must not render as the raw slug `fellowship_meal`. |
+| PNG export | **No change needed.** | `exportCalendarToPng` runs `html-to-image` over the live DOM, so anything that renders on screen is already in the export. Verified at `ExportButton.tsx:47`. |
+| `docs/api.md`, `docs/components.md`, `docs/agents/backend.md`, `docs/agents/frontend.md`, `docs/agents/database.md` | New endpoints, models, table, and the changed `EventModal` props/data-flow | API + component documentation rules, same commit. |
+
+## End-to-end flow
+
+```
+Admin opens New Event
+   │
+   ├─ GET /calendar/event-types  ──→ chips: Birthday … Graduation, [+ Add]
+   └─ GET /calendar/palette      ──→ swatches: 9 built-ins + saved customs, [+]
+   │
+   ├─ types "Baptism" in the + chip, Enter
+   │     └─ POST /calendar/event-types {label:"Baptism"}
+   │          └─ service slugifies → 'baptism', inserts (or returns existing)
+   │               └─ chip appears selected; icon+color snap to its defaults
+   │
+   ├─ clicks the color +, dials #2E7D9A, "Add to palette"
+   │     └─ POST /calendar/palette {hex:"#2E7D9A"}  → swatch joins the grid for every admin
+   │
+   ├─ clicks the "None" icon tile → icon = 'none'
+   │
+   └─ Save → POST /calendar/events {event_type:'baptism', color:'#2E7D9A', icon:'none'}
+             │  FK check: 'baptism' exists ✓   CHECK: hex shape ✓
+             ▼
+        GET /calendar → resolveColor('#2E7D9A') → deriveRamp → {dot,text,bg,highlight}
+             │
+             ├─ CalendarGrid chip: highlight fill, text on top, no icon
+             ├─ DayEventsModal: "Baptism"
+             └─ Export PNG: same DOM, same colors, no extra work
+```
+
+## Security callouts
+
+- **Added:** `POST /calendar/event-types`, `POST /calendar/palette`, `DELETE /calendar/palette/{id}` all sit inside the existing `RequireAdmin` group. Reads are public, consistent with `GET /calendar`.
+- **Injection:** `color` reaches an inline `style={{ backgroundColor }}`. Defence is three-deep - `IsAllowedCalendarColor` regex in the model, `CHECK (hex ~ ...)` on the palette table, and React's own attribute escaping. A value like `red; background-image:url(...)` fails the regex.
+- **Slug:** validated `^[a-z0-9_]{1,40}$` server-side after slugification, and constrained by the FK. It never reaches a URL path or a raw query.
+- **`ON DELETE RESTRICT`:** an event type in use cannot be deleted, so no event can end up pointing at a missing type. Relevant now that a delete endpoint is foreseeable.
+- **No gap closed or opened** in the address-visibility logic - untouched.
+
+## Known gaps (deliberate, flag before shipping)
+
+1. **Custom type labels are not translated.** The translation pipeline covers event `title` and `notes`; a label typed as "Baptism" shows as "Baptism" on `/vi`. Built-in labels have the same limitation today.
+2. **`event_type === 'birthday'` still drives layout**, not just styling - the cake marker, the 2-row cell budget (`CalendarGrid.tsx:49`), and the Birthdays sidebar strip. A custom type called "Kids' Birthdays" gets whatever icon and color it is given, but not the cake treatment. Correct for v1; worth a `layout_hint` column if it ever comes up.
+3. **No rename/recolor/delete for types**, per the locked decision. Deleting needs a "what happens to events using this" answer that v1 doesn't owe.
+
+## Scope estimate
+
+| Phase | Estimate |
+|---|---|
+| 1 - Database (migration up + down, local apply, verify existing rows survive the enum→text cast) | ~45 min |
+| 2 - Backend (model tests first, then model/repo/service/handler/routes) | ~2 h |
+| 3 - Frontend form (`color.ts` + tests, three pickers in `EventModal`) | ~2.5 h |
+| 4 - Display + docs (6 call-site swaps, icon-less chip, 5 doc files) | ~1 h |
+
+Riskiest step is the enum→text cast in Phase 1 - it rewrites a production column. It is additive
+in effect (every existing value survives as the identical text), but it is the one step to run
+against a local DB first and read the row count on both sides.
+
+---
+
+# SHIPPED - Flexible About page (block-based page content)
+
+**Status:** shipped (commits `56404a0`, `faf12de`, `0b9de28`, `968170c`, `a0f774e`).
 
 ## The problem
 

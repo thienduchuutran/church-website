@@ -3,6 +3,54 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-07-28 - Admins can add calendar event types, custom colors, and "no icon"
+
+The calendar's event editor had three **closed sets** an admin could never grow: `event_type` was a
+Postgres enum, `color` was a 9-key allowlist in Go, and `icon` was an 11-key allowlist with no empty
+option. Adding a category for next Easter meant a migration plus two deploys. All three now grow at
+runtime.
+
+**Design provenance.** Researched how the majors do this before building. Colors follow **GoodNotes**
+(the owner's call): a preset grid plus a `+` that opens a full picker, where saving writes the color
+back into a **shared** swatch grid for every admin - unnamed, because naming each swatch is ceremony
+a church admin would not maintain. Types follow **Airtable/Linear**: a creatable combobox where a
+typed label becomes a *global, reusable* option without leaving the form, because per-record free
+text fragments ("Baptism" / "baptism" / "Baptism Service"). "No icon" follows **Notion/Asana**: a
+dashed "None" tile leading the grid, since in a radio group it is a selectable state rather than a
+clear action. Google Calendar's June 2026 custom-color release confirmed storing the hex **on the
+event** rather than as a named entity.
+
+Database (`000012`):
+- `calendar_event_types` (slug PK, label, `default_icon`, `default_color`, `is_builtin`, sort) seeded
+  with the six built-ins, carrying the icon/color pairs previously hardcoded in `EventModal`.
+- `calendar_events.event_type` enum → **text + FK** (`ON UPDATE CASCADE ON DELETE RESTRICT`). The
+  enum type is left in place, unused, so the down migration can cast back.
+- `calendar_palette_colors` (hex UNIQUE, `CHECK (hex ~ '^#[0-9A-Fa-f]{6}$')`).
+
+Backend: `IsAllowedCalendarColor` (named key **or** hex) replaces the map lookup; the closed `switch`
+on `event_type` becomes a shape check, with existence answered by the FK plus a service pre-flight;
+`SlugifyEventType` folds diacritics so `"Lễ Báp-têm"` → `le_bap_tem`. Both creates are **get-or-create**,
+so two admins typing "Baptism" the same week converge on one type instead of near-duplicates.
+Reads (`GET /calendar/event-types`, `GET /calendar/palette`) are public; writes are admin-gated.
+
+Frontend: `lib/color.ts` expands one hex into the four values the calendar paints with. This is the
+part worth remembering - the derivation is **two-sided**, because `EventChip` writes `text` on
+`highlight` while `EventBanner` writes **white** on `text`. A custom color must clear 4.5:1 on both
+pairs or it looks fine in the grid and unreadable in a multi-day ribbon. A fixed darkening step does
+not work (yellow at a given lightness is far brighter than blue), so the ramp walks lightness down
+until both hold. `resolveColor()` is now the single entry point for all six render call sites.
+
+Security: the color reaches an inline `style` attribute, so it is validated three-deep - regex in the
+Go model, `CHECK` on the table, and React's escaping. Verified live that a `red; background-image:url(x)`
+insert is rejected by the CHECK and an unknown `event_type` by the FK.
+
+Known gaps (deliberate): custom type labels are **not translated** (the pipeline covers event title
+and notes only), so a custom category shows its English label on `/vi` - the built-ins have the same
+limitation. And `event_type === 'birthday'` still drives *layout*, not just styling (cake marker,
+two-row cell budget, sidebar strip), so a custom birthday-ish type gets its icon and color but not
+the cake treatment. Would need a `layout_hint` column if that ever comes up. No rename/recolor/delete
+for types yet, per the owner's "add only for now" call.
+
 ## 2026-06-25 - Inline images in post bodies (+ images ride along to Discord)
 
 Post bodies can now hold **inline images**, positioned anywhere in the text flow (drop / paste /

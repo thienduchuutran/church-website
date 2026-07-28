@@ -28,6 +28,8 @@ Endpoints that honor `locale`:
 - `GET /api/v1/pages/:slug`
 - `GET /api/v1/calendar`
 
+> **Not** localized: `GET /api/v1/calendar/event-types`. Type labels are admin-authored English and are not run through the translation pipeline, so a custom category shows its English label on `/vi`. The built-in labels have the same limitation.
+
 See `docs/agents/backend.md` → "Translation engine" and `docs/agents/database.md` → "Translation tables" for the full architecture.
 
 ---
@@ -148,6 +150,69 @@ Returns the events for a given month, plus the optional sidebar note and the opt
 `events` is always an array (never `null`). `month_note` and `month_settings` are `null` when the admin has not added a note or customized the accent color for that month.
 
 **Response `400`** - missing or invalid `year` / `month`
+
+---
+
+### `GET /api/v1/calendar/event-types`
+Returns the full event-type vocabulary, built-ins first (`sort_order` 10-60) then admin-created ones. Public: the day-events modal needs the labels to name an event's category to visitors.
+
+Since migration `000012` this list is **data, not code** - `calendar_events.event_type` is a text column with a foreign key here, not a Postgres enum, so admins add categories at runtime.
+
+**Response `200`** - `CalendarEventTypeDef[]` (always an array, never `null`)
+
+---
+
+### `POST /api/v1/calendar/event-types`
+Create a reusable event type from an admin-typed label. **Admin only.**
+
+**Request body**
+```json
+{ "label": "Baptism", "default_icon": "star", "default_color": "#2E7D9A" }
+```
+| Field | Rules |
+|---|---|
+| `label` | Required, 1-60 chars, must contain at least one letter or number |
+| `default_icon` | Must be an allowed icon key, including `"none"` |
+| `default_color` | A named palette key **or** a 6-digit hex |
+
+**Get-or-create.** The `slug` is derived server-side from the label (`"Fellowship Meal"` → `fellowship_meal`, diacritics folded so `"Lễ Báp-têm"` → `le_bap_tem`). If that slug already exists the existing row is returned instead of an error, so two admins who both type "Baptism" converge on one type rather than creating near-duplicates.
+
+**Response `201`** - the created (or existing) `CalendarEventTypeDef`  
+**Response `400`** - blank/over-long label, or invalid icon/color  
+**Response `401` / `403`** - unauthenticated or not an admin
+
+---
+
+### `GET /api/v1/calendar/palette`
+Returns the shared custom color swatches admins have saved, in picker order. Public (a list of hex strings).
+
+**Response `200`** - `PaletteColor[]` (always an array, never `null`)
+
+---
+
+### `POST /api/v1/calendar/palette`
+Save a custom color as a swatch every admin will see in the picker. **Admin only.**
+
+**Request body**
+```json
+{ "hex": "#2E7D9A" }
+```
+`hex` must be a 6-digit hex (`^#[0-9A-Fa-f]{6}$`) - named palette keys are rejected, since those are already built-in swatches. Normalized to uppercase before storing, and idempotent: saving a color that already exists returns the existing swatch.
+
+**Response `201`** - the created (or existing) `PaletteColor`  
+**Response `400`** - not a 6-digit hex  
+**Response `401` / `403`** - unauthenticated or not an admin
+
+---
+
+### `DELETE /api/v1/calendar/palette/:id`
+Remove a saved swatch from the picker. **Admin only.**
+
+Events already using that hex **keep it** - the color is copied onto the event, never referenced - so this only shrinks the picker and never repaints the calendar.
+
+**Response `204`** - deleted  
+**Response `404`** - no swatch with that id  
+**Response `401` / `403`** - unauthenticated or not an admin
 
 ---
 
@@ -654,7 +719,7 @@ Tags are reusable labels created by admins and can be applied to multiple galler
   "machine_translated": true
 }
 ```
-`date` is a `YYYY-MM-DD` string (no time component) - the first day of the event. `end_date` is the inclusive last day of a multi-day span (also `YYYY-MM-DD`); it is **omitted/null for a single-day event**, and when set must be `>= date` (enforced by request validation and a DB `CHECK`). A multi-day event renders as a banner ribbon spanning its days, and the month query returns it for **every** month its range overlaps (a span crossing a month boundary appears in both). `event_type` is one of `birthday`, `bible_study`, `general`, `announcement`, `prayer`, `graduation`. `icon` is a Phosphor icon key (one of: `cake`, `book-open`, `bell`, `heart`, `star`, `users`, `music-notes`, `cross`, `flame`, `sparkle`, `graduation-cap`). `color` is one of `slate`, `red`, `amber`, `emerald`, `sky`, `violet`, `rose`, `stone`, `black`. `private_address` is returned to admins always, and to the public **only when `address_public` is `true`**; otherwise public viewers see `null` even when an address exists. `address_public` defaults to `false` (privacy-safe). The PNG export is admin-driven, so it always includes the address regardless of this flag. `machine_translated` follows the same rule as on Post.
+`date` is a `YYYY-MM-DD` string (no time component) - the first day of the event. `end_date` is the inclusive last day of a multi-day span (also `YYYY-MM-DD`); it is **omitted/null for a single-day event**, and when set must be `>= date` (enforced by request validation and a DB `CHECK`). A multi-day event renders as a banner ribbon spanning its days, and the month query returns it for **every** month its range overlaps (a span crossing a month boundary appears in both). `event_type` is a **slug from the `calendar_event_types` table**, not a fixed enum - the six built-ins are `birthday`, `bible_study`, `general`, `announcement`, `prayer`, `graduation`, and admins create more at runtime via `POST /api/v1/calendar/event-types`. Request validation only checks shape (`^[a-z0-9_]{1,40}$`); existence is enforced by the foreign key and a pre-flight check in the service. `icon` is a Phosphor icon key (one of: `cake`, `book-open`, `bell`, `heart`, `star`, `users`, `music-notes`, `cross`, `flame`, `sparkle`, `graduation-cap`) **or `none`**, which renders the event with no icon at all. `color` is either a named palette key (`slate`, `red`, `amber`, `emerald`, `sky`, `violet`, `rose`, `stone`, `black`) **or a 6-digit hex** like `#2E7D9A`. Named keys carry hand-tuned tints; a hex is expanded client-side by `deriveRamp` (`frontend/lib/color.ts`) into the same four values, with the derived text color guaranteed to clear WCAG AA against both white and its own highlight tint. `private_address` is returned to admins always, and to the public **only when `address_public` is `true`**; otherwise public viewers see `null` even when an address exists. `address_public` defaults to `false` (privacy-safe). The PNG export is admin-driven, so it always includes the address regardless of this flag. `machine_translated` follows the same rule as on Post.
 
 ### CalendarMonthNote
 ```json
@@ -684,6 +749,42 @@ Sidebar note attached to a (`year`, `month`) pair. Returned on `GET /api/v1/cale
 }
 ```
 Per-month admin styling for the calendar. `accent_color` is a 6-digit hex string. Returned on `GET /api/v1/calendar` as `month_settings`; absent (`null`) when no row exists for that month - the frontend then falls back to its static `MONTH_THEMES` palette.
+
+### CalendarEventTypeDef
+```json
+{
+  "slug": "baptism",
+  "label": "Baptism",
+  "default_icon": "star",
+  "default_color": "#2E7D9A",
+  "is_builtin": false,
+  "sort_order": 100,
+  "admin_id": "uuid",
+  "created_at": "2026-07-28T00:00:00Z",
+  "updated_at": "2026-07-28T00:00:00Z"
+}
+```
+One row of the admin-managed event-type vocabulary (table `calendar_event_types`, added in migration `000012`). `slug` is the primary key and is what `CalendarEvent.event_type` points at via a foreign key (`ON UPDATE CASCADE ON DELETE RESTRICT`).
+
+`default_icon` / `default_color` are the look a new event of this type starts with - selecting a type chip in the event modal applies them. They live here rather than in the frontend so an admin-created type feels designed from its first use.
+
+`is_builtin` marks the six types the application code still branches on (`birthday` drives the cake marker, the two-row cell budget in `CalendarGrid`, and the Birthdays sidebar strip), so a future delete feature can protect them.
+
+### PaletteColor
+```json
+{
+  "id": "uuid",
+  "hex": "#2E7D9A",
+  "sort_order": 0,
+  "admin_id": "uuid",
+  "created_at": "2026-07-28T00:00:00Z"
+}
+```
+One saved swatch in the shared custom color palette (table `calendar_palette_colors`). Deliberately **unnamed** - the color is its own label, following GoodNotes rather than Outlook categories.
+
+`hex` is `UNIQUE` with a DB `CHECK (hex ~ '^#[0-9A-Fa-f]{6}$')`. That CHECK is a security backstop, not just hygiene: the value is rendered into an inline `style` attribute on the public calendar.
+
+Swatches are a **picker convenience only**. An event stores its color by value, so deleting a swatch never repaints an existing event.
 
 ### PageContent
 ```json
