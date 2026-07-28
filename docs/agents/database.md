@@ -126,23 +126,74 @@ create index idx_page_content_slug_position on page_content(page_slug, position)
 ### `calendar_events`
 One row per calendar entry on a specific date.
 ```sql
-create type calendar_event_type as enum (
-  'birthday', 'bible_study', 'general', 'announcement', 'prayer'
-);
-
 create table calendar_events (
   id           uuid primary key default gen_random_uuid(),
   date         date not null,
+  end_date     date,                            -- inclusive last day of a multi-day span
   title        text not null,
-  event_type   calendar_event_type not null default 'general',
-  icon         text not null default 'star',   -- one of 10 curated Phosphor icon keys
-  color        text not null default 'slate',  -- one of 8 editorial palette keys
+  event_type   text not null default 'general'  -- FK -> calendar_event_types(slug)
+                 references calendar_event_types(slug)
+                 on update cascade on delete restrict,
+  icon         text not null default 'star',    -- a curated Phosphor key, or 'none'
+  color        text not null default 'slate',   -- a palette key OR a 6-digit hex
+  private_address text,
+  address_public  boolean not null default false,
   notes        text,
   admin_id     uuid,
   created_at   timestamptz default now(),
   updated_at   timestamptz default now()
 );
 ```
+
+> **`event_type` was a Postgres enum until migration `000012`.** That was the actual blocker on admin flexibility - an enum only gains values through a migration, so "add a category" could never be a runtime action. It is now `text` with a foreign key, which keeps referential integrity while letting an `INSERT` into `calendar_event_types` create a legal value at runtime.
+>
+> The `calendar_event_type` enum **type** is deliberately left in place (unused) so the down migration has something to cast back to. Do not drop it.
+>
+> Two easy traps: any SQL casting this column must use `$n::text`, **not** `$n::calendar_event_type` (this bit `repository/calendar.go`'s `UpdateEvent`), and the seed of `calendar_event_types` must run *before* the FK is added or every existing row fails the constraint.
+
+---
+
+### `calendar_event_types`
+The admin-managed event-type vocabulary. Added in migration `000012`; before that this list lived in a Postgres enum plus a hardcoded `switch` in Go and a `Record` in TypeScript.
+```sql
+create table calendar_event_types (
+  slug          text primary key,               -- 'birthday', 'baptism', ...
+  label         text not null,                  -- 'Birthday', 'Baptism'
+  default_icon  text not null default 'star',
+  default_color text not null default 'slate',
+  is_builtin    boolean not null default false,
+  sort_order    int not null default 100,       -- built-ins 10-60, admin-created 100
+  admin_id      uuid,
+  created_at    timestamptz not null default now(),
+  updated_at    timestamptz not null default now()
+);
+```
+Seeded with the six built-ins (`birthday`, `bible_study`, `general`, `announcement`, `prayer`, `graduation`) carrying the icon/color pairs that were previously hardcoded in `EventModal.handleTypeChange`.
+
+`default_icon` / `default_color` are what makes an admin-created type feel designed from its first use - the look travels with the type row rather than living in the component.
+
+`is_builtin` marks the six the **application code still branches on**: `event_type === 'birthday'` drives the cake marker, the two-row cell budget in `CalendarGrid`, and the Birthdays sidebar strip. A custom type never inherits that layout behaviour, only its icon and color.
+
+The `slug` is derived server-side by `model.SlugifyEventType` (diacritics folded, so `"Lễ Báp-têm"` → `le_bap_tem`) and inserted with `ON CONFLICT DO UPDATE ... RETURNING`, making creation **get-or-create**.
+
+---
+
+### `calendar_palette_colors`
+The shared custom color swatches for the event color picker. Added in migration `000012`.
+```sql
+create table calendar_palette_colors (
+  id         uuid primary key default gen_random_uuid(),
+  hex        text not null unique check (hex ~ '^#[0-9A-Fa-f]{6}$'),
+  sort_order int not null default 0,
+  admin_id   uuid,
+  created_at timestamptz not null default now()
+);
+```
+Swatches are deliberately **unnamed** - the color is its own label (GoodNotes' model, not Outlook categories).
+
+**The `CHECK` is a security backstop, not hygiene.** This value is rendered into an inline `style` attribute on the public calendar, so the regex is the DB-level layer of the same defence as `model.IsAllowedCalendarColor` in Go.
+
+**Events store color by value, not by reference.** There is no FK from `calendar_events.color` to this table - an event holds the literal hex. That is why deleting a swatch only shrinks the picker and never repaints an existing event.
 
 ---
 
