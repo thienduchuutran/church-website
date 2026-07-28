@@ -167,7 +167,11 @@ function SectionsEditor({ slug, schema }: { slug: string; schema: PageSchema }) 
       ) : (
         <form onSubmit={handleSubmit} className="space-y-8">
           {schema.groups.map((group) => (
-            <fieldset key={group.heading} className="space-y-4 rounded-xl border border-border p-6">
+            // min-w-0 for the same reason as PageBlockEditor: the UA stylesheet's
+            // `min-inline-size: min-content` on fieldset is not reset by Tailwind's
+            // preflight, so inputs' intrinsic width can push the group past the
+            // viewport on a narrow screen.
+            <fieldset key={group.heading} className="min-w-0 space-y-4 rounded-xl border border-border p-6">
               <legend className="px-2 font-display text-sm font-semibold uppercase tracking-wider text-muted">
                 {group.heading}
               </legend>

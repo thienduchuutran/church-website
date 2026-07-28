@@ -265,12 +265,26 @@ export default function PageBlockEditor({ slug }: { slug: string }) {
           return (
             <fieldset
               key={block.key}
-              className="space-y-4 rounded-xl border border-border bg-surface/30 p-6"
+              // min-w-0 is load-bearing on mobile. The UA stylesheet gives every
+              // fieldset `min-inline-size: min-content`, and Tailwind's preflight
+              // does not reset it - so without this the fieldset refuses to shrink
+              // below the editor toolbar's ~14-button min-content width, stretches
+              // past the viewport, and takes the whole page with it. Zeroing it
+              // lets the toolbar's own `overflow-x: auto` do its job instead.
+              className="min-w-0 space-y-4 rounded-xl border border-border bg-surface/30 p-6"
+              aria-labelledby={`${block.key}-legend`}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <legend className="font-display text-sm font-semibold uppercase tracking-wider text-muted">
+                {/* A <legend> is only the fieldset's caption when it is the first
+                    child; nested in this flex row it would be invalid markup and
+                    the group would have no accessible name - hence the span plus
+                    aria-labelledby above. */}
+                <span
+                  id={`${block.key}-legend`}
+                  className="font-display text-sm font-semibold uppercase tracking-wider text-muted"
+                >
                   {meta.label}
-                </legend>
+                </span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"

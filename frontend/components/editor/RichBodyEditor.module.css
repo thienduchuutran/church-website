@@ -192,6 +192,11 @@
   min-height: 160px;
   padding: 14px 16px;
   outline: none;
+  /* A pasted URL or any long unbroken token is a second, independent way the
+     editor can outgrow a phone screen - separate from the fieldset min-width
+     issue. Mirrors `.rich-content` in globals.css so text wraps the same while
+     being authored as it does once published. */
+  overflow-wrap: anywhere;
 }
 /* Inline images inside the editor: constrain, round, and highlight when selected. */
 .editorContent img {
