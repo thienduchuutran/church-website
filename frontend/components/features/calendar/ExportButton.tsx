@@ -37,6 +37,11 @@ export async function exportCalendarToPng(
   root.style.width = '1100px'
   root.style.maxWidth = 'none'
 
+  // Flag the capture so day cells reveal their overflow events (the "+N more"
+  // is a live-only affordance; a static image must show every event). Drives the
+  // [data-export-reveal] rules in globals.css. Removed again in finally.
+  root.setAttribute('data-exporting', '')
+
   try {
     const { toPng } = await import('html-to-image')
     const url = await toPng(root, {
@@ -49,6 +54,7 @@ export async function exportCalendarToPng(
     link.href = url
     link.click()
   } finally {
+    root.removeAttribute('data-exporting')
     if (savedRootStyle) root.setAttribute('style', savedRootStyle)
     else root.removeAttribute('style')
     savedCircles.forEach(({ el, className, style }) => {

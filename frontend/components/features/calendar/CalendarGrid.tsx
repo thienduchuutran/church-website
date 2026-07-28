@@ -29,6 +29,58 @@ function isSpanEvent(e: CalendarEvent): boolean {
   return !!e.end_date && e.end_date >= e.date
 }
 
+// Desktop cell overflow budget. A day cell is a fixed ~115px box, but letting
+// every single-day chip render (the old behavior) grew the cell - and because
+// this desktop grid IS what the PNG export rasterizes, one busy day made its
+// whole week row taller than the other four and threw the printed calendar off
+// balance. So we cap what shows and collapse the rest into a "+N more" line -
+// the same discipline the mobile grid already uses, and the pattern every major
+// calendar (Google, Outlook, FullCalendar) settled on. Live, the cell click
+// opens DayEventsModal so the hidden events are one tap away; in the export the
+// "+N more" is a static, honest "there's more here" signal and the info strip
+// below the grid carries the detail.
+//
+// Budget is counted in chip-rows: a normal highlighter chip costs 1, a
+// birthday's big standalone cake is ~2 rows tall so it costs 2. Three rows is
+// about what fits below the date number in a week with no multi-day banners.
+const DESKTOP_CELL_BUDGET = 3
+
+function chipRows(e: CalendarEvent): number {
+  return e.event_type === 'birthday' ? 2 : 1
+}
+
+// Decide which single-day chips a desktop cell shows on screen and which spill
+// into the overflow. Non-birthday events are placed first: they're operational
+// (service, announcements, bible study) with no second home, whereas birthdays
+// are ALSO listed in the info strip's Birthdays column - so when a day is
+// crowded, birthdays are the safe thing to defer rather than hiding an
+// announcement. Order is otherwise preserved within each group. Greedy fill
+// stops at the first item that would exceed the budget (rather than skipping it
+// to squeeze in a later smaller one) so the visible stack stays in its natural
+// order.
+//
+// `hidden` are NOT discarded: the live grid keeps them out of view behind a
+// "+N more" affordance, but the PNG export reveals them (see the
+// [data-export-reveal] handling), because a printed/shared calendar has no
+// click target and must show every event. So this returns the full partition,
+// not a count.
+function planDesktopCell(chips: CalendarEvent[]): { visible: CalendarEvent[]; hidden: CalendarEvent[] } {
+  const ordered = [
+    ...chips.filter((e) => e.event_type !== 'birthday'),
+    ...chips.filter((e) => e.event_type === 'birthday'),
+  ]
+  const visible: CalendarEvent[] = []
+  let used = 0
+  let i = 0
+  for (; i < ordered.length; i++) {
+    const cost = chipRows(ordered[i])
+    if (used + cost > DESKTOP_CELL_BUDGET) break
+    visible.push(ordered[i])
+    used += cost
+  }
+  return { visible, hidden: ordered.slice(i) }
+}
+
 interface BannerSegment {
   event: CalendarEvent
   startCol: number // 0-6 within the week
@@ -193,6 +245,7 @@ export default function CalendarGrid({
               }
 
               const chips = singleByDay[day] ?? []
+              const { visible: visibleChips, hidden: hiddenChips } = planDesktopCell(chips)
               const isToday = day === todayDay
               const dateStr = formatDate(day)
               const isClickable = isAdmin || (mobileByDay[day]?.length ?? 0) > 0
@@ -224,8 +277,10 @@ export default function CalendarGrid({
                   </span>
 
                   {/* Single-day events - highlighter-swipe chips, shared with
-                      the mobile grid and the PNG export. */}
-                  {chips.map((e) => (
+                      the mobile grid and the PNG export. Capped to the cell's
+                      row budget; the remainder collapses into the "+N more" line
+                      below so the cell height stays uniform in the export. */}
+                  {visibleChips.map((e) => (
                     <EventChip
                       key={e.id}
                       title={e.title}
@@ -234,6 +289,41 @@ export default function CalendarGrid({
                       tooltip={e.notes ?? e.title}
                     />
                   ))}
+
+                  {/* Overflow indicator - LIVE ONLY. data-export-hide drops it
+                      from the PNG (the filter in exportCalendarToPng), because a
+                      static image has no click target to reveal the rest. Live,
+                      the whole cell is clickable and opens DayEventsModal, so
+                      every hidden event is one tap away; the group-hover
+                      darkening is the faint affordance for that. */}
+                  {hiddenChips.length > 0 && (
+                    <span
+                      data-export-hide
+                      className="mt-0.5 font-sans text-[10px] font-semibold leading-none text-gray-500 group-hover:text-gray-800 transition-colors"
+                    >
+                      +{hiddenChips.length} more
+                    </span>
+                  )}
+
+                  {/* The overflow events themselves - hidden on screen, REVEALED
+                      into the export so the printed/shared calendar is complete
+                      (a static image can't reveal them any other way). display is
+                      toggled by the [data-export-reveal] rules in globals.css when
+                      exportCalendarToPng flags the calendar root with
+                      data-exporting for the duration of the capture. */}
+                  {hiddenChips.length > 0 && (
+                    <div data-export-reveal>
+                      {hiddenChips.map((e) => (
+                        <EventChip
+                          key={e.id}
+                          title={e.title}
+                          icon={e.icon}
+                          color={e.color}
+                          tooltip={e.notes ?? e.title}
+                        />
+                      ))}
+                    </div>
+                  )}
 
                   {isAdmin && chips.length === 0 && (
                     <span data-export-hide className="font-sans text-[9px] text-gray-300 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">+</span>

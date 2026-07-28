@@ -240,3 +240,21 @@ body {
     transform: translateY(0) scale(1);
   }
 }
+
+/* Calendar PNG export - reveal per-day overflow events.
+   The live desktop grid caps how many events a day cell shows and collapses the
+   rest behind a clickable "+N more" (opens DayEventsModal). A PNG has no click
+   target, so the export must instead render those hidden events into the image.
+   The overflow chips sit in a [data-export-reveal] wrapper that is hidden on
+   screen; exportCalendarToPng sets [data-exporting] on the calendar root for the
+   duration of the capture, which flips the wrapper visible (and the "+N more"
+   node is dropped by that function's data-export-hide filter). Gap mirrors the
+   cell's own flex `gap-1` so revealed chips line up with the visible ones. */
+[data-export-reveal] {
+  display: none;
+}
+[data-exporting] [data-export-reveal] {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
