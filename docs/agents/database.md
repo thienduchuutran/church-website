@@ -99,17 +99,27 @@ create table reactions (
 ---
 
 ### `page_content`
-Editable text sections for static pages (about, connect).
+Editable content blocks for static pages (about, connect). After migration `000011`, each row
+is a typed, ordered block with its own heading (`title`) and body (`content`).
 ```sql
 create table page_content (
   id          uuid primary key default gen_random_uuid(),
   page_slug   text not null,
-  section_key text not null,
-  content     text not null default '',
+  section_key text not null,        -- human-readable slug, immutable after creation (identity is the UUID)
+  block_type  text not null default 'rich_text',  -- discriminant: 'hero', 'rich_text', 'quote'
+  position    int  not null default 0,            -- display order within the page
+  title       text not null default '',           -- block heading (was a separate *_heading row)
+  content     text not null default '',           -- block body (HTML for rich_text/quote, plain for hero)
+  props       jsonb not null default '{}'::jsonb, -- type-specific config (never prose, never translated)
   updated_at  timestamptz default now(),
   unique (page_slug, section_key)
 );
+create index idx_page_content_slug_position on page_content(page_slug, position);
 ```
+> `block_type` is validated server-side against `model.AllowedBlockTypes` (`hero`, `rich_text`, `quote`). The default `'rich_text'` keeps existing rows valid without a backfill.
+> `title` + `content` are both translatable fields. The COALESCE joins in `GetBlocks` join `translations` twice (once for `field_name='title'`, once for `field_name='content'`).
+> `props` is the escape hatch for future block types - new types need no migration, just a new registry entry. Never contains prose; the translation worker never sees it.
+> Migration `000011` backfills About's old `*_heading` + `*_body` pairs into single block rows, re-points translations, and merges `values_item_1..4` into one `<ul>` block.
 
 ---
 
@@ -286,6 +296,7 @@ create index posts_archived_at_idx on posts(archived_at) where archived_at is no
 create index on post_images(post_id);
 create index on reactions(post_id);
 create index on page_content(page_slug);
+create index idx_page_content_slug_position on page_content(page_slug, position);
 create index on calendar_events(date);
 create index on calendar_events(date, event_type);
 create index on calendar_month_notes(year, month);
@@ -333,6 +344,14 @@ backend/migrations/
 ├── 000006_discord_identity.down.sql
 ├── 000007_post_archived_at.up.sql      ← posts += archived_at (+ partial index) for the Past-events section
 ├── 000007_post_archived_at.down.sql
+├── 000008_calendar_event_end_date.up.sql  ← calendar_events += end_date for multi-day spans
+├── 000008_calendar_event_end_date.down.sql
+├── 000009_calendar_event_type_graduation.up.sql  ← adds 'graduation' to calendar_event_type enum
+├── 000009_calendar_event_type_graduation.down.sql
+├── 000010_calendar_event_address_public.up.sql  ← calendar_events += private_address visibility (address_public bool)
+├── 000010_calendar_event_address_public.down.sql
+├── 000011_page_blocks.up.sql           ← page_content += block_type, position, title, props; backfills About heading/body pairs into blocks
+├── 000011_page_blocks.down.sql
 └── embed.go                            ← exposes the SQL files as embed.FS to main.go
 ```
 

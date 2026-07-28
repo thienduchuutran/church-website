@@ -152,26 +152,46 @@ Returns the events for a given month, plus the optional sidebar note and the opt
 ---
 
 ### `GET /api/v1/pages/:slug`
-Returns all editable sections for a static page (e.g. `about`, `connect`).
+Returns all editable content for a static page (e.g. `about`, `connect`). The response contains two projections of the same `page_content` rows:
+
+- **`sections`** — flat key-value map (Connect reads this)
+- **`blocks`** — ordered array of typed blocks (About reads this)
 
 **Query params**
 | Param | Type | Default | Description |
 |-------|------|---------|-------------|
-| `locale` | string | `en` | When `vi`, each section's content is served from translations with English fallback. The response includes `machine_translated: true` (page-level boolean) when any returned section is unapproved AI output. See [Localized reads](#localized-reads-locale). |
+| `locale` | string | `en` | When `vi`, each section's content and each block's title+content are served from translations with English fallback. The response includes `machine_translated: true` (page-level boolean) when any returned field is unapproved AI output. See [Localized reads](#localized-reads-locale). |
 
 **Response `200`**
 ```json
 {
   "sections": {
-    "hero_title": "About Our Church",
-    "hero_subtitle": "Welcome",
-    "mission_heading": "Our Mission",
-    "mission_body": "..."
+    "hero": "Welcome",
+    "mission": "Our mission..."
   },
+  "blocks": [
+    {
+      "id": "uuid",
+      "block_type": "hero",
+      "position": 0,
+      "title": "About Our Church",
+      "content": "Welcome",
+      "props": {},
+      "machine_translated": false
+    },
+    {
+      "id": "uuid",
+      "block_type": "rich_text",
+      "position": 1,
+      "title": "Our Mission",
+      "content": "<p>We exist to...</p>",
+      "props": {}
+    }
+  ],
   "machine_translated": true
 }
 ```
-`sections` is always an object (never `null`). Missing keys mean no content has been saved yet - the frontend fills defaults. `machine_translated` is omitted on English responses and on fully human-approved Vietnamese responses.
+`sections` is always an object (never `null`). `blocks` is always an array (never `null`). Missing content means nothing has been saved yet - the frontend fills defaults. `machine_translated` is omitted on English responses and on fully human-approved Vietnamese responses. Per-block `machine_translated` is also omitted when false.
 
 ---
 
@@ -218,9 +238,9 @@ Ask the AI assistant a question. Powered by the Groq API (llama-3.3-70b-versatil
 All admin routes require a valid Supabase JWT in the `Authorization: Bearer <token>` header, and the token's email must exist in the `admins` table.
 
 ### `PUT /api/v1/pages/:slug`
-Upsert editable sections for a static page. Only supplied keys are updated; existing keys not in the request body are left unchanged.
+Update page content. Two mutually exclusive modes:
 
-**Request body**
+**Mode 1 — Sections (Connect):** partial upsert of key-value pairs. Only supplied keys are updated; existing keys not in the request body are left unchanged.
 ```json
 {
   "sections": {
@@ -230,8 +250,25 @@ Upsert editable sections for a static page. Only supplied keys are updated; exis
 }
 ```
 
+**Mode 2 — Blocks (About):** full replace of the ordered block array. Blocks present in the payload are upserted (by `id`); blocks absent from the payload are deleted (along with their translations and pending translation jobs). New blocks (no `id`) get a server-generated `section_key`.
+```json
+{
+  "blocks": [
+    { "block_type": "hero", "title": "About Us", "content": "Welcome", "props": {} },
+    { "id": "existing-uuid", "block_type": "rich_text", "title": "Mission", "content": "<p>...</p>", "props": {} },
+    { "block_type": "quote", "title": "", "content": "<p>For God so loved...</p>", "props": {"attribution": "John 3:16"} }
+  ]
+}
+```
+
+Validation:
+- `blocks: []` → 400 (cannot make a page empty)
+- Unknown `block_type` → 400 (allowed: `hero`, `rich_text`, `quote`)
+- Empty `block_type` → 400
+- If both `sections` and `blocks` are present, `blocks` takes priority
+
 **Response `204`** - no body
-**Response `400`** - missing slug or empty sections
+**Response `400`** - missing slug, empty sections/blocks, or invalid block_type
 **Response `401` / `403`** - unauthenticated or not an admin
 
 ---
@@ -653,12 +690,26 @@ Per-month admin styling for the calendar. `accent_color` is a 6-digit hex string
 {
   "id": "uuid",
   "page_slug": "about",
-  "section_key": "hero_title",
-  "content": "About Our Church",
+  "section_key": "hero",
+  "content": "Welcome",
   "updated_at": "2026-04-09T00:00:00Z"
 }
 ```
-> The API never returns raw `PageContent` rows - it returns `{ sections: { key: value, ... } }`. This model is for reference only.
+> The API never returns raw `PageContent` rows - it returns `{ sections, blocks }`. This model is for reference only.
+
+### PageBlock
+```json
+{
+  "id": "uuid",
+  "block_type": "rich_text",
+  "position": 1,
+  "title": "Our Mission",
+  "content": "<p>We exist to serve...</p>",
+  "props": {},
+  "machine_translated": false
+}
+```
+`block_type` is one of `hero`, `rich_text`, `quote`. Validated server-side - the handler rejects any unknown type. `position` is the 0-based order of the block on the page. `title` is the block heading (rendered as `<h2>`). `content` is sanitized HTML (same rules as post bodies). `props` is a JSON object for type-specific config (e.g. `{"attribution": "John 3:16"}` for `quote` blocks) - never prose, never translated. `machine_translated` is per-block, omitted when false.
 
 ### AssistantMessage
 ```json

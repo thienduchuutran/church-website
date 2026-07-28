@@ -413,6 +413,31 @@ type PageContent struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// PageBlock represents a single typed, ordered block on a page. The block model
+// replaces the old flat section_key approach for pages like About that need
+// structural flexibility (add/remove/reorder sections). Connect keeps using
+// sections because its fields are structured data, not prose.
+type PageBlock struct {
+	ID        string         `json:"id,omitempty"`
+	BlockType string         `json:"block_type"`
+	Position  int            `json:"position"`
+	Title     string         `json:"title"`
+	Content   string         `json:"content"`
+	Props     map[string]any `json:"props"`
+	// MachineTranslated is true when any field of this block was served from
+	// an unapproved AI translation. Omitted on English responses.
+	MachineTranslated bool `json:"machine_translated,omitempty"`
+}
+
+// AllowedBlockTypes is the server-side allow-list for block_type values. A
+// crafted payload cannot persist an unrenderable type - the handler rejects
+// any block whose type is not in this set.
+var AllowedBlockTypes = map[string]bool{
+	"hero":      true,
+	"rich_text": true,
+	"quote":     true,
+}
+
 // UpdatePageRequest is the request body for PUT /api/v1/pages/:slug.
 type UpdatePageRequest struct {
 	Sections map[string]string `json:"sections"`

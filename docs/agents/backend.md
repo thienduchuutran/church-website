@@ -39,7 +39,7 @@ backend/
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
 │   │   ├── calendar.go         ← GET /calendar (locale-aware), POST/PATCH/DELETE /calendar/events, PUT month note + settings
-│   │   ├── pages.go            ← GET /pages/:slug (locale-aware), PUT /pages/:slug
+│   │   ├── pages.go            ← GET /pages/:slug (locale-aware, returns sections + blocks), PUT /pages/:slug (sections OR blocks)
 │   │   └── admin_translations.go  ← GET list, PATCH approve, POST retranslate (admin review panel)
 │   │   ├── pages.go            ← GET /pages/:slug, PUT /pages/:slug
 │   │   └── assistant.go        ← POST /assistant/chat
@@ -49,7 +49,7 @@ backend/
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
 │   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue)
-│   │   ├── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue)
+│   │   ├── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue), GetPageBlocks, ReplacePageBlocks (with diff-based enqueue of title+content)
 │   │   └── translation.go      ← List/Approve/Retranslate/CleanupOrphans for the admin review panel; Approve also fire-and-forgets a fine-tuning pair capture
 │   │   ├── pages.go            ← GetPageContent, UpdatePageContent
 │   │   ├── assistant.go        ← Chat orchestration (RAG pipeline)
@@ -60,7 +60,7 @@ backend/
 │   │   ├── reactions.go        ← UpsertReaction, GetReactionCounts, DeleteReaction
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
 │   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings
-│   │   ├── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections
+│   │   ├── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections, GetBlocks (locale-aware, ordered by position, two COALESCE joins), ReplaceBlocks (transactional upsert + delete with translation cleanup)
 │   │   ├── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete, orphan sweeps (DeleteOrphanedTranslations/PendingJobs)
 │   │   └── finetuning.go       ← CaptureFinetuningExample: idempotent INSERT of gold (en, vi) pairs into fine_tuning_examples
 │   ├── translation/            ← Async EN→VI translation engine. See "Translation engine" section below.
@@ -205,6 +205,21 @@ type PageContent struct {
     SectionKey string    `json:"section_key"`
     Content    string    `json:"content"`
     UpdatedAt  time.Time `json:"updated_at"`
+}
+
+// PageBlock represents a single typed, ordered block on a page.
+type PageBlock struct {
+    ID        string         `json:"id,omitempty"`
+    BlockType string         `json:"block_type"`       // "hero", "rich_text", "quote"
+    Position  int            `json:"position"`
+    Title     string         `json:"title"`
+    Content   string         `json:"content"`
+    Props     map[string]any `json:"props"`
+    MachineTranslated bool  `json:"machine_translated,omitempty"`
+}
+
+var AllowedBlockTypes = map[string]bool{
+    "hero": true, "rich_text": true, "quote": true,
 }
 ```
 

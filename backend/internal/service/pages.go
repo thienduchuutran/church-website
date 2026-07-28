@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 
+	"github.com/thienduchuutran/church-website/backend/internal/model"
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
 	"github.com/thienduchuutran/church-website/backend/internal/translation"
 )
@@ -94,4 +95,77 @@ func (s *PageService) enqueueSection(recordID, content string) {
 		ContentType:   translation.ContentTypeGeneral,
 	})
 }
+
+// GetPageBlocks returns the ordered block list for a page, with locale-aware
+// title and content. This is the block-model counterpart to GetPageContent;
+// both are called on GET /pages/:slug so the response contains both projections.
+func (s *PageService) GetPageBlocks(ctx context.Context, slug, locale string) ([]model.PageBlock, bool, error) {
+	return s.repo.GetBlocks(ctx, slug, locale)
+}
+
+// ReplacePageBlocks performs a full block replace for a page. It follows the
+// same pre-fetch/diff/enqueue pattern as UpdatePageContent, but enqueues both
+// title and content fields per changed block. Blocks that did not change
+// produce no translation jobs.
+func (s *PageService) ReplacePageBlocks(ctx context.Context, slug string, blocks []model.PageBlock) error {
+	// Pre-fetch existing blocks so we can diff after the replace.
+	existingByID := map[string]model.PageBlock{}
+	if existing, _, err := s.repo.GetBlocks(ctx, slug, ""); err != nil {
+		log.Printf("page blocks pre-fetch failed (slug=%s): %v", slug, err)
+	} else {
+		for _, b := range existing {
+			existingByID[b.ID] = b
+		}
+	}
+
+	if err := s.repo.ReplaceBlocks(ctx, slug, blocks); err != nil {
+		return err
+	}
+
+	if s.enqueue == nil {
+		return nil
+	}
+
+	// Post-fetch to get IDs of newly inserted blocks.
+	updated, _, err := s.repo.GetBlocks(ctx, slug, "")
+	if err != nil {
+		log.Printf("page blocks post-fetch failed (slug=%s): %v", slug, err)
+		return nil
+	}
+
+	// Enqueue translation jobs for blocks whose title or content changed.
+	for _, b := range updated {
+		fields := map[string]string{}
+		old, existed := existingByID[b.ID]
+		if !existed {
+			// New block - enqueue both fields if non-empty.
+			if b.Title != "" {
+				fields["title"] = b.Title
+			}
+			if b.Content != "" {
+				fields["content"] = b.Content
+			}
+		} else {
+			// Existing block - diff each field.
+			if b.Title != old.Title && b.Title != "" {
+				fields["title"] = b.Title
+			}
+			if b.Content != old.Content && b.Content != "" {
+				fields["content"] = b.Content
+			}
+		}
+		if len(fields) == 0 {
+			continue
+		}
+		s.enqueue(translation.TranslationJob{
+			TableName:     "page_content",
+			RecordID:      b.ID,
+			Fields:        fields,
+			TargetLocales: []string{"vi"},
+			ContentType:   translation.ContentTypeGeneral,
+		})
+	}
+	return nil
+}
+
 
