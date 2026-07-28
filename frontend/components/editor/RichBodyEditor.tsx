@@ -4,8 +4,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
 import StarterKit from '@tiptap/starter-kit'
-import Underline from '@tiptap/extension-underline'
-import Link from '@tiptap/extension-link'
 import Highlight from '@tiptap/extension-highlight'
 import TextAlign from '@tiptap/extension-text-align'
 import { TextStyle } from '@tiptap/extension-text-style'
@@ -142,9 +140,8 @@ export function RichBodyEditor({
         codeBlock: {},
         horizontalRule: {},
         strike: {},
+        link: { openOnClick: false, autolink: true },
       }),
-      Underline,
-      Link.configure({ openOnClick: false, autolink: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyle,
       CharacterCount.configure({}),
