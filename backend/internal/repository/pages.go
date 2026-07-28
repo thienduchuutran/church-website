@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 )
@@ -246,6 +247,17 @@ func (r *PageRepository) ReplaceBlocks(ctx context.Context, slug string, blocks 
 	// Collect IDs of blocks in the payload (existing rows being kept/updated).
 	keepIDs := make([]string, 0, len(blocks))
 
+	// section_key is UNIQUE per (page_slug, section_key), and generateSectionKey
+	// derives it from the title - so two blocks titled "Our Mission", or a new
+	// block whose title matches a row that already exists, would violate the
+	// constraint and fail the whole save. Seed the taken-set with the keys of
+	// rows we are KEEPING; keys belonging to rows this same transaction deletes
+	// are free to reuse.
+	taken, err := existingSectionKeys(ctx, tx, slug, blocks)
+	if err != nil {
+		return err
+	}
+
 	for i, b := range blocks {
 		if b.ID != "" {
 			// Existing block: update in place.
@@ -265,8 +277,9 @@ func (r *PageRepository) ReplaceBlocks(ctx context.Context, slug string, blocks 
 			}
 			keepIDs = append(keepIDs, b.ID)
 		} else {
-			// New block: insert with a generated section_key.
-			sectionKey := generateSectionKey(b.Title, b.BlockType, i)
+			// New block: insert with a generated, collision-free section_key.
+			sectionKey := uniqueSectionKey(taken, generateSectionKey(b.Title, b.BlockType, i))
+			taken[sectionKey] = true
 			var newID string
 			err := tx.QueryRow(ctx,
 				`INSERT INTO page_content (page_slug, section_key, block_type, position, title, content, props, updated_at)
@@ -323,6 +336,58 @@ func (r *PageRepository) ReplaceBlocks(ctx context.Context, slug string, blocks 
 	}
 
 	return tx.Commit(ctx)
+}
+
+// existingSectionKeys returns the section_keys currently held by the rows this
+// payload keeps (blocks that arrived with an ID). Rows absent from the payload
+// are deleted later in the same transaction, so their keys are deliberately not
+// reserved - an admin who deletes "Our Story" and adds a new section with that
+// title should get the clean `our-story` key back.
+func existingSectionKeys(ctx context.Context, tx pgx.Tx, slug string, blocks []model.PageBlock) (map[string]bool, error) {
+	taken := map[string]bool{}
+
+	keepExisting := make([]string, 0, len(blocks))
+	for _, b := range blocks {
+		if b.ID != "" {
+			keepExisting = append(keepExisting, b.ID)
+		}
+	}
+	if len(keepExisting) == 0 {
+		return taken, nil
+	}
+
+	rows, err := tx.Query(ctx,
+		`SELECT section_key FROM page_content WHERE page_slug = $1 AND id = ANY($2)`,
+		slug, keepExisting,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		taken[key] = true
+	}
+	return taken, rows.Err()
+}
+
+// uniqueSectionKey appends a numeric suffix until the key is free, the same way
+// a filesystem produces "report (2)". Mutating the caller's set is the caller's
+// job - this only picks the name.
+func uniqueSectionKey(taken map[string]bool, base string) string {
+	if !taken[base] {
+		return base
+	}
+	for n := 2; ; n++ {
+		candidate := fmt.Sprintf("%s-%d", base, n)
+		if !taken[candidate] {
+			return candidate
+		}
+	}
 }
 
 // generateSectionKey produces a human-readable, slug-like key from a block's

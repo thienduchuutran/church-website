@@ -303,6 +303,39 @@ The body editor (`components/editor/RichBodyEditor.tsx`, rendered inside `PostFo
 
 ---
 
+#### `RichBodyEditor` - `variant` prop
+One editor component serves two surfaces. The difference is not cosmetic: `lite` drops extensions from the schema, so the toolbar cannot offer a command the document has no node for, and a page body can never contain markup the public page has no styles for.
+
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `variant` | `'full' \| 'lite'` | `'full'` | `full` = post composer, `lite` = page-section editor |
+| `ariaLabel` | `string` | `'Post body'` | Screen-reader name for the editable region - page blocks pass their own so several editors on one screen are distinguishable |
+
+| | `full` | `lite` |
+|---|---|---|
+| Headings | H1-H3 | H3-H4 (a block title already renders as `<h2>`; H1/H2 in a body would break the outline) |
+| Extensions | + Image, CalloutBlock, Color, Highlight | dropped entirely |
+| Menus | BubbleToolbar, SlashMenu, EmojiMenu, StatusBar | none (all read commands the lite schema lacks) |
+| Images | drag/drop/paste upload to R2 | ignored |
+| Toolbar extras | callout pills, highlight dots, image, emoji | link button, clear formatting |
+| Both | bold, italic, underline, strike, bullet + numbered list, **indent/outdent**, align | |
+
+`PersistentToolbar` takes the same `variant` prop and gates its own controls - a single toolbar rather than a second copy that drifts.
+
+---
+
+#### `Indent` extension
+**File:** `components/editor/extensions/Indent.ts`
+
+Adds an `indent` attribute (levels 0-4) to paragraphs and headings, rendered as inline `margin-left` at 1.5rem per step. StarterKit gives list nesting for free (`ListItem` binds Tab / Shift-Tab to `sinkListItem` / `liftListItem`) but has no way to indent a plain paragraph.
+
+- **Attribute, not nested blockquotes** - round-trips through sanitize-html as one allow-listed style and cannot change document semantics. A nested blockquote would tell a screen reader "this is a quotation" when the author meant "move this over a bit".
+- **Bound to `Mod-]` / `Mod-[`, deliberately not Tab.** Tab is the only way a keyboard user leaves a contenteditable region; hijacking it globally would trap focus. Toolbar buttons carry discoverability, and inside a list Tab still nests.
+- **`margin-left` must stay allow-listed** in `lib/sanitizeBody.ts` (enumerated: `1.5rem`, `3rem`, `4.5rem`, `6rem`). If the two lists diverge, indents are silently stripped on save.
+- The toolbar's indent buttons dispatch `sinkListItem`/`liftListItem` inside a list and `indent`/`outdent` on a plain paragraph.
+
+---
+
 #### `DiscordComposerNote`
 Shown under the form **only when creating** (`!postId`). Tells the admin which Discord channel the post will go to and under whose identity, and exposes the "Notify @everyone" opt-in. Self-contained: fetches the admin's link status so `PostFormFields` stays presentational.
 
@@ -408,17 +441,47 @@ Navigation sidebar shown inside the admin layout.
 
 ### Page editor (`app/admin/pages/[slug]/page.tsx`)
 
-Inline page component (not extracted to `components/`) that lets admins edit the About and Connect pages.
-
 **Route:** `/admin/pages/[slug]` where `slug` is `about` or `connect`
 
-**How it works**
-1. On mount, fetches `GET /api/v1/pages/:slug` via `apiGet` to load existing section values.
-2. Renders grouped form fields driven by a `PAGE_SCHEMA` constant - each page has named groups (Hero, Mission, etc.) with typed section keys.
-3. On submit, sends `PUT /api/v1/pages/:slug` via `apiPut` with the admin's JWT.
-4. Shows success/error feedback inline.
+`AdminPageEditor` is a thin router: it owns the auth gate, then dispatches to one of two editors depending on the page's content shape. All its hooks run before any conditional return.
+
+| Slug | Editor | Why |
+|---|---|---|
+| `about` | `PageBlockEditor` | Content is prose - the admin needs to add, remove and reorder sections without a code change |
+| `connect` | `SectionsEditor` (same file) | Content is structured data (service day, street address, email) - a fixed typed field is the right shape |
+
+`SectionsEditor` is the original fixed-field form, unchanged, now scoped to Connect and driven by the `PAGE_SCHEMA` constant. It fetches `GET /api/v1/pages/:slug`, renders grouped inputs, and `PUT`s `{sections}` back.
 
 **Client component:** yes (form state, auth)
+
+---
+
+#### `PageBlockEditor`
+The block builder for prose pages. Lets an admin add, remove and reorder page sections, each with a lightweight rich-text body.
+
+**File:** `components/features/admin/PageBlockEditor.tsx`
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `slug` | `string` | required | Page slug to load and save (`about` today) |
+
+**Client component:** yes (form state, auth, editor instances)
+
+**Block types** - `BLOCK_META` is the editor-side half of the block registry; the renderer holds the other half and Go's `model.AllowedBlockTypes` is the third. Adding a type means one entry in each, never a new page template.
+
+| `block_type` | Editor UI | Addable |
+|---|---|---|
+| `hero` | Page title + plain-text tagline. Pinned to index 0, cannot be moved or removed | no - seeded automatically when missing |
+| `rich_text` | Heading input + `RichBodyEditor variant="lite"` | yes |
+| `quote` | Lite editor body + optional `props.attribution` input, no heading | yes |
+
+**How it works**
+1. On mount, `getPageContent(slug)` loads the English source (no `locale` - admins edit the source; the worker fans translations out afterwards). If no `hero` block exists, one is seeded client-side.
+2. Each block carries a client-only `key` for React separate from its server `id`, so a brand-new block can be edited and reordered before it has ever been saved.
+3. On submit, `replacePageBlocks` sends the **complete** list. This is a full replace: blocks absent from the array are deleted server-side along with their translations. Removal therefore prompts for confirmation.
+4. After a successful save the component **refetches**. New blocks only receive their row UUID server-side; without the refetch a second save would send them with an empty `id` and insert duplicates.
+5. Dirty state is computed by comparing serialized blocks against the last server-confirmed snapshot (so an edit-then-undo correctly reports clean) and registered with `useRegisterUnsaved`.
 
 ---
 

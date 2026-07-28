@@ -17,6 +17,7 @@ import Image from '@tiptap/extension-image'
 import { useAuth } from '@/lib/auth'
 import { uploadEditorImage } from '@/lib/uploads'
 import { CalloutBlock } from './extensions/CalloutBlock'
+import { Indent } from './extensions/Indent'
 import { PersistentToolbar } from './toolbar/PersistentToolbar'
 import { BubbleToolbar } from './toolbar/BubbleToolbar'
 import { SlashMenu } from './menus/SlashMenu'
@@ -29,6 +30,18 @@ export interface RichBodyEditorProps {
   onChange: (html: string) => void
   placeholder?: string
   className?: string
+  // 'full' is the post composer: images, callouts, colours, slash menu.
+  // 'lite' is the page-section editor: text, lists, indent, links only.
+  //
+  // The difference is not cosmetic - lite drops the Image/Callout/Color/
+  // Highlight extensions entirely, so the toolbar cannot offer a command the
+  // schema has no node for, and a page body can never contain markup the
+  // public page has no styles for.
+  variant?: 'full' | 'lite'
+  // Screen-reader name for the editable region. Defaults to the post-composer
+  // wording; a page block passes its own so several editors on one screen are
+  // distinguishable.
+  ariaLabel?: string
 }
 
 // imageFilesFrom keeps only image files from a drop/paste/select list.
@@ -70,9 +83,14 @@ function removeImage(editor: Editor, src: string) {
 export function RichBodyEditor({
   value,
   onChange,
-  placeholder = 'Start writing… or type / to insert a block',
+  placeholder,
   className,
+  variant = 'full',
+  ariaLabel = 'Post body',
 }: RichBodyEditorProps) {
+  const isLite = variant === 'lite'
+  const resolvedPlaceholder =
+    placeholder ?? (isLite ? 'Write this section…' : 'Start writing… or type / to insert a block')
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [uploadingCount, setUploadingCount] = useState(0)
   const [isDropActive, setIsDropActive] = useState(false)
@@ -115,7 +133,9 @@ export function RichBodyEditor({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        heading: { levels: [1, 2, 3] },
+        // Lite headings start at H3: the block title already renders as <h2>
+        // on the public page, so H1/H2 in a body would break the outline.
+        heading: { levels: isLite ? [3, 4] : [1, 2, 3] },
         bulletList: {},
         orderedList: {},
         blockquote: {},
@@ -125,14 +145,21 @@ export function RichBodyEditor({
       }),
       Underline,
       Link.configure({ openOnClick: false, autolink: true }),
-      Highlight.configure({ multicolor: true }),
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TextStyle,
-      Color,
       CharacterCount.configure({}),
-      Placeholder.configure({ placeholder }),
-      CalloutBlock,
-      Image.configure({ inline: false, allowBase64: false }),
+      Placeholder.configure({ placeholder: resolvedPlaceholder }),
+      Indent,
+      // Composer-only extensions. Excluded from lite so the page-block schema
+      // physically cannot hold an image, callout, colour or highlight.
+      ...(isLite
+        ? []
+        : [
+            Highlight.configure({ multicolor: true }),
+            Color,
+            CalloutBlock,
+            Image.configure({ inline: false, allowBase64: false }),
+          ]),
     ],
     content: value,
     onUpdate: ({ editor: ed }) => {
@@ -146,12 +173,13 @@ export function RichBodyEditor({
         spellcheck: 'true',
         role: 'textbox',
         'aria-multiline': 'true',
-        'aria-label': 'Post body',
+        'aria-label': ariaLabel,
       },
       // Dropped image files insert at the drop point; other drops fall through
-      // to ProseMirror's default handling.
+      // to ProseMirror's default handling. In lite there is no image node in
+      // the schema, so dropped files are ignored rather than half-handled.
       handleDrop: (view, event, _slice, moved) => {
-        if (moved) return false
+        if (moved || isLite) return false
         const images = imageFilesFrom((event as DragEvent).dataTransfer?.files)
         if (images.length === 0) return false
         event.preventDefault()
@@ -164,6 +192,7 @@ export function RichBodyEditor({
       },
       // Pasted image files insert at the cursor; text/HTML pastes fall through.
       handlePaste: (_view, event) => {
+        if (isLite) return false
         const images = imageFilesFrom((event as ClipboardEvent).clipboardData?.files)
         if (images.length === 0) return false
         event.preventDefault()
@@ -213,32 +242,39 @@ export function RichBodyEditor({
   return (
     <div
       className={`${styles.editorWrapper} ${isDropActive ? styles.dropActive : ''} ${className ?? ''}`}
-      onDragOver={handleWrapperDragOver}
-      onDragLeave={handleWrapperDragLeave}
-      onDrop={() => setIsDropActive(false)}
+      onDragOver={isLite ? undefined : handleWrapperDragOver}
+      onDragLeave={isLite ? undefined : handleWrapperDragLeave}
+      onDrop={isLite ? undefined : () => setIsDropActive(false)}
     >
       <PersistentToolbar
         editor={editor}
+        variant={variant}
         onEmojiClick={() => setEmojiOpen(true)}
         onImageClick={() => fileInputRef.current?.click()}
       />
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/jpeg,image/png,image/webp,image/gif"
-        multiple
-        onChange={handleFileSelect}
-        className="hidden"
-      />
+      {!isLite && (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif"
+          multiple
+          onChange={handleFileSelect}
+          className="hidden"
+        />
+      )}
       {uploadingCount > 0 && (
         <p className="px-3 py-1.5 font-sans text-xs text-muted" role="status">
           Uploading {uploadingCount} image{uploadingCount === 1 ? '' : 's'}… please wait to save.
         </p>
       )}
       <EditorContent editor={editor} />
-      <p className={styles.imageHint}>Drag &amp; drop or paste images anywhere in your text.</p>
-      {editor && (
+      {!isLite && (
+        <p className={styles.imageHint}>Drag &amp; drop or paste images anywhere in your text.</p>
+      )}
+      {editor && !isLite && (
         <>
+          {/* All three read commands the lite schema does not have (highlight,
+              colour, image, callout), so they are composer-only. */}
           <BubbleToolbar editor={editor} />
           <SlashMenu editor={editor} onInsertImage={() => fileInputRef.current?.click()} />
           <EmojiMenu
@@ -248,7 +284,7 @@ export function RichBodyEditor({
           />
         </>
       )}
-      <StatusBar editor={editor} />
+      {!isLite && <StatusBar editor={editor} />}
     </div>
   )
 }

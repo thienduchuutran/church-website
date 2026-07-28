@@ -31,7 +31,7 @@ frontend/
 │       └── admin/
 │           ├── page.tsx                ← Admin dashboard (lists all posts, edit/delete, edit pages, link to translation review)
 │           ├── [section]/page.tsx      ← Post creation form per section
-│           ├── pages/[slug]/page.tsx   ← Page content editor (about, connect)
+│           ├── pages/[slug]/page.tsx   ← Auth gate + dispatch: about → PageBlockEditor, connect → SectionsEditor (same file)
 │           └── translations/page.tsx   ← AI translation review panel (Phase 5)
 ├── i18n/
 │   ├── routing.ts                      ← defineRouting() + createNavigation() - locale list, default, locale-aware Link/useRouter/usePathname
@@ -67,11 +67,22 @@ frontend/
 │           ├── EditPostForm.tsx         ← Wraps PostFormFields, PATCHes existing posts
 │           ├── EditPostModal.tsx        ← Modal chrome + portal hosting EditPostForm
 │           ├── EventArchiveButton.tsx   ← Admin "Move to Past/Upcoming" toggle on event cards
+│           ├── PageBlockEditor.tsx      ← Block builder for prose pages: add/remove/reorder sections + lite rich text
 │           └── PostFormFields.tsx       ← Presentational inputs shared by Create/Edit
 │       └── assistant/
 │           ├── ChatBox.tsx             ← Floating AI assistant widget
 │           ├── ChatMessage.tsx         ← Renders user/assistant chat bubbles
 │           └── TypingIndicator.tsx     ← Animated thinking indicator for the helper
+│   └── editor/                          ← Tiptap rich-text editor, shared by posts and page blocks
+│       ├── RichBodyEditor.tsx           ← The editor. `variant="full"` = post composer, `variant="lite"` = page section
+│       ├── RichContent.tsx              ← Read-only renderer; re-sanitizes on every render
+│       ├── StatusBar.tsx                ← Word/char count (full only)
+│       ├── constants.ts                 ← CALLOUT_VARIANTS, isTouchDevice
+│       ├── extensions/
+│       │   ├── CalloutBlock.tsx         ← Church callout node (full only)
+│       │   └── Indent.ts                ← Paragraph/heading indent attribute → margin-left; Mod-] / Mod-[
+│       ├── menus/                       ← SlashMenu, EmojiMenu (full only)
+│       └── toolbar/                     ← PersistentToolbar (variant-aware), BubbleToolbar (full only)
 ├── lib/
 │   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
@@ -79,7 +90,7 @@ frontend/
 │   ├── discord.ts                      ← Discord link API (getDiscordStatus / getDiscordLinkUrl)
 │   ├── events.ts                       ← partitionEvents/isUpcoming/canUnarchive (Upcoming vs Past sectioning)
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
-│   ├── pages.ts                        ← Page-content API service (typed { sections, machine_translated } response)
+│   ├── pages.ts                        ← Page-content API service. Typed { sections, blocks, machine_translated } response; replacePageBlocks is a FULL replace (absent blocks are deleted server-side)
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
 │   ├── posts.ts                        ← Post API service (list/get takes optional locale)
 │   ├── posts.ts                        ← Post API service (list/get/create/update/delete)

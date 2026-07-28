@@ -30,10 +30,11 @@ export const BODY_ALLOWED_ATTR = [
 ]
 
 // sanitizeBody returns body HTML containing only the allowed tags/attributes,
-// with every inline style except text-align removed (the TextAlign extension
-// stores alignment as inline `text-align`; every other inline style - e.g. the
-// `color: oklab(...)` spans pasted from Planning Center / Gmail - is dropped).
-// Safe to call in the browser and on the server.
+// with every inline style except text-align and margin-left removed (the
+// TextAlign extension stores alignment as inline `text-align` and the Indent
+// extension stores indent depth as `margin-left`; every other inline style -
+// e.g. the `color: oklab(...)` spans pasted from Planning Center / Gmail - is
+// dropped). Safe to call in the browser and on the server.
 export function sanitizeBody(html: string): string {
   return sanitizeHtml(html, {
     allowedTags: BODY_ALLOWED_TAGS,
@@ -42,12 +43,18 @@ export function sanitizeBody(html: string): string {
     allowedAttributes: {
       '*': BODY_ALLOWED_ATTR,
     },
-    // The ONLY CSS property allowed to survive on a style="" attribute. Any
+    // The ONLY CSS properties allowed to survive on a style="" attribute. Any
     // style declaration whose value does not match is dropped; a style="" with
     // nothing left is removed entirely.
+    //
+    // margin-left is enumerated rather than pattern-matched on any length: the
+    // Indent extension only ever emits these five steps (levels 0-4 x 1.5rem),
+    // so an arbitrary value in stored HTML means it did not come from our
+    // editor and has no business surviving.
     allowedStyles: {
       '*': {
         'text-align': [/^(left|right|center|justify)$/],
+        'margin-left': [/^(1\.5|3|4\.5|6)rem$/],
       },
     },
     // Strip dangerous URL schemes (javascript:, data:, etc.) on links; keep the

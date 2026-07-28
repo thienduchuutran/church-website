@@ -4,52 +4,19 @@ import { use, useEffect, useState } from 'react'
 import { useRouter } from '@/i18n/routing'
 import { useAuth } from '@/lib/auth'
 import { apiGet, apiPut } from '@/lib/api'
+import PageBlockEditor from '@/components/features/admin/PageBlockEditor'
 
-// Each page's editable section keys, grouped for display.
-const PAGE_SCHEMA: Record<string, { label: string; groups: { heading: string; keys: { key: string; label: string; multiline?: boolean }[] }[] }> = {
-  about: {
-    label: 'About',
-    groups: [
-      {
-        heading: 'Hero',
-        keys: [
-          { key: 'hero_title', label: 'Title' },
-          { key: 'hero_subtitle', label: 'Subtitle' },
-        ],
-      },
-      {
-        heading: 'Mission',
-        keys: [
-          { key: 'mission_heading', label: 'Heading' },
-          { key: 'mission_body', label: 'Body', multiline: true },
-        ],
-      },
-      {
-        heading: 'Beliefs',
-        keys: [
-          { key: 'beliefs_heading', label: 'Heading' },
-          { key: 'beliefs_body', label: 'Body', multiline: true },
-        ],
-      },
-      {
-        heading: 'Story',
-        keys: [
-          { key: 'story_heading', label: 'Heading' },
-          { key: 'story_body', label: 'Body', multiline: true },
-        ],
-      },
-      {
-        heading: 'Values',
-        keys: [
-          { key: 'values_heading', label: 'Heading' },
-          { key: 'values_item_1', label: 'Value 1' },
-          { key: 'values_item_2', label: 'Value 2' },
-          { key: 'values_item_3', label: 'Value 3' },
-          { key: 'values_item_4', label: 'Value 4' },
-        ],
-      },
-    ],
-  },
+// PAGE_SCHEMA drives the fixed-field editor. Only Connect uses it now: its
+// content is structured data (a service day, a street address, an email), and
+// a fixed typed field is the right shape for that. About moved to the block
+// editor because its content is prose, where the admin needs to add, remove
+// and reorder sections without a code change.
+type PageSchema = {
+  label: string
+  groups: { heading: string; keys: { key: string; label: string; multiline?: boolean }[] }[]
+}
+
+const PAGE_SCHEMA: Record<string, PageSchema> = {
   connect: {
     label: 'Connect',
     groups: [
@@ -101,6 +68,9 @@ const PAGE_SCHEMA: Record<string, { label: string; groups: { heading: string; ke
   },
 }
 
+// AdminPageEditor is a thin router: it owns the auth gate, then hands off to
+// whichever editor suits the page's content shape. All hooks it uses are called
+// before any conditional return, so the dispatch below is safe.
 export default function AdminPageEditor({
   params,
 }: {
@@ -109,23 +79,6 @@ export default function AdminPageEditor({
   const { slug } = use(params)
   const { session, isAdmin, loading: authLoading } = useAuth()
   const router = useRouter()
-
-  const schema = PAGE_SCHEMA[slug]
-
-  const [sections, setSections] = useState<Record<string, string>>({})
-  const [loadingContent, setLoadingContent] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState(false)
-
-  useEffect(() => {
-    if (!isAdmin) return
-    setLoadingContent(true)
-    apiGet(`/api/v1/pages/${slug}`)
-      .then((data) => setSections(data?.sections ?? {}))
-      .catch(() => {})
-      .finally(() => setLoadingContent(false))
-  }, [isAdmin, slug])
 
   if (authLoading) {
     return (
@@ -140,6 +93,14 @@ export default function AdminPageEditor({
     return null
   }
 
+  // Block-model pages. Listed explicitly rather than inferred so a typo in the
+  // URL falls through to the "Unknown page" branch instead of silently opening
+  // an empty block editor against a slug that does not exist.
+  if (slug === 'about') {
+    return <PageBlockEditor slug={slug} />
+  }
+
+  const schema = PAGE_SCHEMA[slug]
   if (!schema) {
     return (
       <div className="mx-auto max-w-2xl px-4 py-12 sm:px-6 lg:px-8">
@@ -147,6 +108,30 @@ export default function AdminPageEditor({
       </div>
     )
   }
+
+  return <SectionsEditor slug={slug} schema={schema} />
+}
+
+// SectionsEditor is the original fixed-field form, unchanged in behaviour and
+// now scoped to Connect. Extracted into its own component so its data-fetching
+// hooks are not run for pages that never use sections.
+function SectionsEditor({ slug, schema }: { slug: string; schema: PageSchema }) {
+  const { session } = useAuth()
+  const router = useRouter()
+
+  const [sections, setSections] = useState<Record<string, string>>({})
+  const [loadingContent, setLoadingContent] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [success, setSuccess] = useState(false)
+
+  useEffect(() => {
+    setLoadingContent(true)
+    apiGet(`/api/v1/pages/${slug}`)
+      .then((data) => setSections(data?.sections ?? {}))
+      .catch(() => {})
+      .finally(() => setLoadingContent(false))
+  }, [slug])
 
   function handleChange(key: string, value: string) {
     setSections((prev) => ({ ...prev, [key]: value }))
