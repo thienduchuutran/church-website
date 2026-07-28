@@ -30,5 +30,9 @@
     ".next/dev/types/**/*.ts",
     "**/*.mts"
   ],
-  "exclude": ["node_modules"]
+  // __tests__ runs under node --experimental-strip-types, which requires
+  // explicit .ts import extensions that tsc rejects under this config. The
+  // tests are not part of the Next build, so they are excluded here and
+  // typechecked implicitly by running them (npm run test:color).
+  "exclude": ["node_modules", "**/__tests__/**"]
 }
