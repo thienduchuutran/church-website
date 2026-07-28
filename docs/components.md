@@ -439,6 +439,39 @@ Navigation sidebar shown inside the admin layout.
 
 ---
 
+### Pages (`components/features/pages/`)
+
+#### `PageBlocks`
+The render half of the block registry. Turns an ordered `PageBlock[]` into the public page.
+
+**File:** `components/features/pages/PageBlocks.tsx`
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `blocks` | `PageBlock[]` | required | Ordered blocks from `GET /api/v1/pages/:slug` |
+| `machineTranslated` | `boolean` | `false` | Page-level flag; renders `MachineTranslatedBadge` inside the hero |
+
+**Server component:** yes (no state, no effects). Bodies render through `RichContent`, which is a client component and re-sanitizes on every render.
+
+| `block_type` | Renders as |
+|---|---|
+| `hero` | `<header>` with `<h1>` title, subtitle paragraph, and the translation badge underneath |
+| `rich_text` | Card (`rounded-xl border bg-surface/50 p-8`) with optional `<h2>` + sanitized body. Both fields optional - a heading with no body, or a body with no heading, are both valid |
+| `quote` | `<figure>` with a left rule, serif italic body, and optional `props.attribution` in the `<figcaption>` |
+
+**Three halves of one registry.** Adding a block type means one entry in each, and nothing else:
+
+| Half | File | Holds |
+|---|---|---|
+| Storage | `backend/internal/model/types.go` | `AllowedBlockTypes` - what the API will persist |
+| Authoring | `components/features/admin/PageBlockEditor.tsx` | `BLOCK_META` - label, hint, whether it is addable |
+| Rendering | `components/features/pages/PageBlocks.tsx` | `BLOCK_RENDERERS` - how it looks |
+
+**`BLOCK_RENDERERS` is keyed by `string`, not `PageBlockType`, on purpose.** The database can hold a type this build has never heard of - an older deploy still serving traffic after new content lands, or a rollback. A lookup miss renders nothing; it must never throw. This is the server-driven-UI forward-compat rule (Airbnb, Lyft, Meta Bloks all do the same).
+
+---
+
 ### Page editor (`app/admin/pages/[slug]/page.tsx`)
 
 **Route:** `/admin/pages/[slug]` where `slug` is `about` or `connect`

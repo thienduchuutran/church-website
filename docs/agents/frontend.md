@@ -54,6 +54,8 @@ frontend/
 │       │   ├── PostFeed.tsx            ← List of PostCards
 │       │   ├── PastEventsCarousel.tsx  ← Swipeable strip of past events (homepage + /events)
 │       │   └── ReactionBar.tsx         ← 👍 ❤️ 🙏 😂 row on each card
+│       ├── pages/
+│       │   └── PageBlocks.tsx          ← Block registry renderer for prose pages; skips unknown block types
 │       ├── gallery/
 │       │   ├── AlbumGrid.tsx           ← Grid of albums
 │       │   └── RecentMoments.tsx       ← Flat photo grid
