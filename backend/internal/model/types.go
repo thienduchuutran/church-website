@@ -4,7 +4,13 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
+	"unicode"
+
+	"golang.org/x/text/runes"
+	"golang.org/x/text/transform"
+	"golang.org/x/text/unicode/norm"
 )
 
 // hexColorRegexp matches a 6-digit RGB hex color like "#C4663C". Used by the
@@ -179,18 +185,174 @@ const (
 	CalendarEventTypeGraduation   CalendarEventType = "graduation"
 )
 
+// IconNone is the sentinel for "this event shows no icon". It is a real,
+// selectable state in the picker (the dashed None tile) rather than an empty
+// string, so the column stays NOT NULL and the value reads as deliberate in
+// the database instead of looking like missing data.
+const IconNone = "none"
+
 // AllowedCalendarIcons is the curated Phosphor icon key set admins may choose from.
 var AllowedCalendarIcons = map[string]bool{
 	"cake": true, "book-open": true, "bell": true, "heart": true, "star": true,
 	"users": true, "music-notes": true, "cross": true, "flame": true, "sparkle": true,
-	"graduation-cap": true,
+	"graduation-cap": true, IconNone: true,
 }
 
-// AllowedCalendarColors is the editorial palette admins may choose from.
-// black is the paper calendars' banner-bar color (near-black ribbon).
+// AllowedCalendarColors is the editorial palette admins may choose from by name.
+// black is the paper calendars' banner-bar color (near-black ribbon). Admins are
+// no longer limited to these - see IsAllowedCalendarColor.
 var AllowedCalendarColors = map[string]bool{
 	"slate": true, "red": true, "amber": true, "emerald": true,
 	"sky": true, "violet": true, "rose": true, "stone": true, "black": true,
+}
+
+// IsAllowedCalendarColor reports whether a color is storable on an event. It
+// accepts either a named palette key or a 6-digit hex, which is what lets an
+// admin save a custom color without a deploy.
+//
+// This is the security boundary for the feature, not just a data check: the
+// value ends up in an inline style attribute on the public calendar, so the
+// exact-match/regex pair is what stops `red; background-image:url(...)` from
+// ever reaching a browser. The DB CHECK on calendar_palette_colors is the
+// second layer.
+func IsAllowedCalendarColor(color string) bool {
+	return AllowedCalendarColors[color] || hexColorRegexp.MatchString(color)
+}
+
+const (
+	// maxEventTypeSlugLen bounds the generated key. Slugs are opaque and only
+	// ever seen by developers, so this is about keeping the FK sane, not about
+	// how much an admin may type.
+	maxEventTypeSlugLen = 40
+	// maxEventTypeLabelLen bounds what an admin types. Long enough for
+	// "Church Anniversary Celebration", short enough that a chip still fits.
+	maxEventTypeLabelLen = 60
+)
+
+// eventTypeSlugRegexp is the shape every event_type must have by the time it
+// reaches the database. Existence is a database question now (the foreign key
+// answers it), so the model's remaining job is shape.
+var eventTypeSlugRegexp = regexp.MustCompile(`^[a-z0-9_]{1,` + fmt.Sprint(maxEventTypeSlugLen) + `}$`)
+
+// vietnameseDMap folds the two Vietnamese letters that NFD cannot decompose,
+// since đ/Đ are distinct letters rather than d plus a combining mark.
+var vietnameseDMap = strings.NewReplacer("đ", "d", "Đ", "D")
+
+// SlugifyEventType converts an admin-typed label ("Fellowship Meal") into the
+// opaque key stored on events and referenced by the foreign key
+// ("fellowship_meal").
+//
+// It must be *stable* above all: the same label always yields the same slug, so
+// two admins who both type "Baptism" land on one shared type instead of two
+// near-duplicates. That stability is what makes the inline create-on-the-fly
+// flow safe to expose.
+//
+// Diacritics are folded to ASCII rather than stripped, so a Vietnamese label
+// produces a readable key ("Lễ Báp-têm" -> "le_bap_tem") instead of shattering
+// into single letters. Returns "" when nothing usable survives; the caller
+// decides what that means.
+func SlugifyEventType(label string) string {
+	folded, _, err := transform.String(
+		transform.Chain(norm.NFD, runes.Remove(runes.In(unicode.Mn)), norm.NFC),
+		vietnameseDMap.Replace(label),
+	)
+	if err != nil {
+		folded = label // folding is best-effort; the filter below is the guarantee
+	}
+
+	var b strings.Builder
+	lastWasSep := true // leading separators are dropped
+	for _, r := range strings.ToLower(folded) {
+		switch {
+		case (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'):
+			b.WriteRune(r)
+			lastWasSep = false
+		case r == '\'' || r == '’' || r == '"':
+			// Quotes vanish rather than splitting a word, so "Mother's Day"
+			// slugs to mothers_day and not mother_s_day. This is what every
+			// other slugifier does, and it keeps possessives readable.
+		case !lastWasSep:
+			// Any run of non-alphanumerics collapses to a single underscore.
+			b.WriteByte('_')
+			lastWasSep = true
+		}
+	}
+
+	slug := strings.Trim(b.String(), "_")
+	if len(slug) > maxEventTypeSlugLen {
+		// Trim again after cutting: truncation must not leave a dangling "_",
+		// or two labels could differ only by that.
+		slug = strings.Trim(slug[:maxEventTypeSlugLen], "_")
+	}
+	return slug
+}
+
+// CalendarEventTypeDef is one row of the admin-managed event-type vocabulary.
+// DefaultIcon/DefaultColor carry the look a new event of this type starts with,
+// which is why creating a type is enough to make it feel designed.
+type CalendarEventTypeDef struct {
+	Slug         string    `json:"slug"`
+	Label        string    `json:"label"`
+	DefaultIcon  string    `json:"default_icon"`
+	DefaultColor string    `json:"default_color"`
+	IsBuiltin    bool      `json:"is_builtin"`
+	SortOrder    int       `json:"sort_order"`
+	AdminID      *string   `json:"admin_id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// PaletteColor is one saved custom swatch in the shared calendar palette.
+// Deliberately unnamed - naming every swatch is ceremony an admin would not
+// maintain, and the color itself is the label.
+type PaletteColor struct {
+	ID        string    `json:"id"`
+	Hex       string    `json:"hex"`
+	SortOrder int       `json:"sort_order"`
+	AdminID   *string   `json:"admin_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type CreateEventTypeRequest struct {
+	Label        string `json:"label"`
+	DefaultIcon  string `json:"default_icon"`
+	DefaultColor string `json:"default_color"`
+}
+
+func (r *CreateEventTypeRequest) Validate() error {
+	label := strings.TrimSpace(r.Label)
+	if label == "" {
+		return errors.New("label is required")
+	}
+	if len(label) > maxEventTypeLabelLen {
+		return fmt.Errorf("label must be %d characters or fewer", maxEventTypeLabelLen)
+	}
+	// A label made entirely of punctuation slugs to nothing, which would leave
+	// the row unaddressable. Reject it here with a message about the label
+	// rather than letting an empty primary key surface as a database error.
+	if SlugifyEventType(label) == "" {
+		return errors.New("label must contain at least one letter or number")
+	}
+	if !AllowedCalendarIcons[r.DefaultIcon] {
+		return fmt.Errorf("invalid default_icon: %s", r.DefaultIcon)
+	}
+	if !IsAllowedCalendarColor(r.DefaultColor) {
+		return fmt.Errorf("invalid default_color: %s", r.DefaultColor)
+	}
+	return nil
+}
+
+type CreatePaletteColorRequest struct {
+	Hex string `json:"hex"`
+}
+
+func (r *CreatePaletteColorRequest) Validate() error {
+	// Hex only, not IsAllowedCalendarColor: a named key would save a swatch the
+	// picker already shows as a built-in, and would fail the DB CHECK anyway.
+	if !hexColorRegexp.MatchString(r.Hex) {
+		return fmt.Errorf("invalid hex color: %s", r.Hex)
+	}
+	return nil
 }
 
 type CalendarEvent struct {
@@ -269,17 +431,17 @@ func (r *CreateCalendarEventRequest) Validate() error {
 	if r.Title == "" {
 		return errors.New("title is required")
 	}
-	switch r.EventType {
-	case CalendarEventTypeBirthday, CalendarEventTypeBibleStudy,
-		CalendarEventTypeGeneral, CalendarEventTypeAnnouncement, CalendarEventTypePrayer,
-		CalendarEventTypeGraduation:
-	default:
+	// Only shape is checked here. Whether the type actually exists is a
+	// database question now (the calendar_event_types foreign key answers it),
+	// and the service asks it before we get this far - a closed switch would
+	// defeat the whole point of admin-created types.
+	if !eventTypeSlugRegexp.MatchString(string(r.EventType)) {
 		return fmt.Errorf("invalid event_type: %s", r.EventType)
 	}
 	if !AllowedCalendarIcons[r.Icon] {
 		return fmt.Errorf("invalid icon: %s", r.Icon)
 	}
-	if !AllowedCalendarColors[r.Color] {
+	if !IsAllowedCalendarColor(r.Color) {
 		return fmt.Errorf("invalid color: %s", r.Color)
 	}
 	// A multi-day span must end on or after it starts. Both dates are present
@@ -325,19 +487,14 @@ type UpdateCalendarEventRequest struct {
 }
 
 func (r *UpdateCalendarEventRequest) Validate() error {
-	if r.EventType != nil {
-		switch *r.EventType {
-		case CalendarEventTypeBirthday, CalendarEventTypeBibleStudy,
-			CalendarEventTypeGeneral, CalendarEventTypeAnnouncement, CalendarEventTypePrayer,
-		CalendarEventTypeGraduation:
-		default:
-			return fmt.Errorf("invalid event_type: %s", *r.EventType)
-		}
+	// Shape only - see CreateCalendarEventRequest.Validate.
+	if r.EventType != nil && !eventTypeSlugRegexp.MatchString(string(*r.EventType)) {
+		return fmt.Errorf("invalid event_type: %s", *r.EventType)
 	}
 	if r.Icon != nil && !AllowedCalendarIcons[*r.Icon] {
 		return fmt.Errorf("invalid icon: %s", *r.Icon)
 	}
-	if r.Color != nil && !AllowedCalendarColors[*r.Color] {
+	if r.Color != nil && !IsAllowedCalendarColor(*r.Color) {
 		return fmt.Errorf("invalid color: %s", *r.Color)
 	}
 	// On a PATCH the start date may be omitted (unchanged). Cross-check the
