@@ -195,7 +195,9 @@ func (r *CalendarRepository) UpdateEvent(ctx context.Context, id string, req *mo
 		   date            = COALESCE($2::date,                  date),
 		   end_date        = $3::date,
 		   title           = COALESCE($4,                        title),
-		   event_type      = COALESCE($5::calendar_event_type,   event_type),
+		   -- text, not calendar_event_type: migration 000012 converted this
+		   -- column off the enum so admins can create types at runtime.
+		   event_type      = COALESCE($5::text,                  event_type),
 		   icon            = COALESCE($6,                        icon),
 		   private_address = CASE WHEN $7::boolean THEN $8 ELSE private_address END,
 		   color           = COALESCE($9,                        color),
@@ -224,6 +226,136 @@ func (r *CalendarRepository) UpdateEvent(ctx context.Context, id string, req *mo
 // DeleteEvent removes a calendar event by id. Returns ErrNotFound if no row was deleted.
 func (r *CalendarRepository) DeleteEvent(ctx context.Context, id string) error {
 	tag, err := r.pool.Exec(ctx, `DELETE FROM calendar_events WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return model.ErrNotFound
+	}
+	return nil
+}
+
+// --- Event types (the admin-managed category vocabulary) ---
+
+// ListEventTypes returns every event type, built-ins first in their curated
+// order and admin-created ones after. Ordering lives in SQL rather than in the
+// frontend so the chip row reads the same for every admin.
+func (r *CalendarRepository) ListEventTypes(ctx context.Context) ([]model.CalendarEventTypeDef, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT slug, label, default_icon, default_color, is_builtin, sort_order, admin_id, created_at, updated_at
+		 FROM calendar_event_types
+		 ORDER BY sort_order, label`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	types := []model.CalendarEventTypeDef{}
+	for rows.Next() {
+		var t model.CalendarEventTypeDef
+		if err := rows.Scan(&t.Slug, &t.Label, &t.DefaultIcon, &t.DefaultColor, &t.IsBuiltin,
+			&t.SortOrder, &t.AdminID, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			return nil, err
+		}
+		types = append(types, t)
+	}
+	return types, rows.Err()
+}
+
+// GetEventType returns one type by slug, or ErrNotFound.
+func (r *CalendarRepository) GetEventType(ctx context.Context, slug string) (*model.CalendarEventTypeDef, error) {
+	var t model.CalendarEventTypeDef
+	err := r.pool.QueryRow(ctx,
+		`SELECT slug, label, default_icon, default_color, is_builtin, sort_order, admin_id, created_at, updated_at
+		 FROM calendar_event_types WHERE slug = $1`, slug,
+	).Scan(&t.Slug, &t.Label, &t.DefaultIcon, &t.DefaultColor, &t.IsBuiltin,
+		&t.SortOrder, &t.AdminID, &t.CreatedAt, &t.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, model.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &t, nil
+}
+
+// EventTypeExists answers the question the model validator can no longer
+// answer on its own, now that the vocabulary lives in the database.
+func (r *CalendarRepository) EventTypeExists(ctx context.Context, slug string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM calendar_event_types WHERE slug = $1)`, slug,
+	).Scan(&exists)
+	return exists, err
+}
+
+// CreateEventType inserts a new admin-created type. On slug conflict it returns
+// the row that already exists rather than erroring - two admins typing the same
+// label the same week should converge on one type, not see a failure. Admin
+// creations sort after the built-ins.
+func (r *CalendarRepository) CreateEventType(ctx context.Context, t model.CalendarEventTypeDef) (*model.CalendarEventTypeDef, error) {
+	var out model.CalendarEventTypeDef
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO calendar_event_types (slug, label, default_icon, default_color, is_builtin, sort_order, admin_id)
+		 VALUES ($1, $2, $3, $4, false, 100, $5)
+		 ON CONFLICT (slug) DO UPDATE SET slug = calendar_event_types.slug
+		 RETURNING slug, label, default_icon, default_color, is_builtin, sort_order, admin_id, created_at, updated_at`,
+		t.Slug, t.Label, t.DefaultIcon, t.DefaultColor, t.AdminID,
+	).Scan(&out.Slug, &out.Label, &out.DefaultIcon, &out.DefaultColor, &out.IsBuiltin,
+		&out.SortOrder, &out.AdminID, &out.CreatedAt, &out.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// --- Palette colors (the shared custom swatch grid) ---
+
+// ListPaletteColors returns the saved custom swatches in picker order.
+func (r *CalendarRepository) ListPaletteColors(ctx context.Context) ([]model.PaletteColor, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, hex, sort_order, admin_id, created_at
+		 FROM calendar_palette_colors
+		 ORDER BY sort_order, created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	colors := []model.PaletteColor{}
+	for rows.Next() {
+		var c model.PaletteColor
+		if err := rows.Scan(&c.ID, &c.Hex, &c.SortOrder, &c.AdminID, &c.CreatedAt); err != nil {
+			return nil, err
+		}
+		colors = append(colors, c)
+	}
+	return colors, rows.Err()
+}
+
+// CreatePaletteColor saves a swatch to the shared palette. Adding a color that
+// is already saved returns the existing row, so the "add to palette" button is
+// idempotent and never surfaces a duplicate-key error to an admin.
+func (r *CalendarRepository) CreatePaletteColor(ctx context.Context, hex string, adminID *string) (*model.PaletteColor, error) {
+	var c model.PaletteColor
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO calendar_palette_colors (hex, admin_id)
+		 VALUES ($1, $2)
+		 ON CONFLICT (hex) DO UPDATE SET hex = calendar_palette_colors.hex
+		 RETURNING id, hex, sort_order, admin_id, created_at`,
+		hex, adminID,
+	).Scan(&c.ID, &c.Hex, &c.SortOrder, &c.AdminID, &c.CreatedAt)
+	if err != nil {
+		return nil, err
+	}
+	return &c, nil
+}
+
+// DeletePaletteColor removes a saved swatch. Events already using that hex keep
+// it - the color is copied onto the event, not referenced - so removing a
+// swatch only shrinks the picker and never repaints the calendar.
+func (r *CalendarRepository) DeletePaletteColor(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM calendar_palette_colors WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}
