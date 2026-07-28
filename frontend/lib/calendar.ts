@@ -2,9 +2,11 @@ import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from './api'
 import type {
   CalendarEvent,
   CalendarEventType,
+  CalendarEventTypeDef,
   CalendarMonthNote,
   CalendarMonthResponse,
   CalendarMonthSettings,
+  PaletteColor,
 } from '@/components/features/calendar/types'
 
 const BASE = '/api/v1/calendar'
@@ -64,6 +66,43 @@ export async function updateEvent(
 
 export async function deleteEvent(id: string, token: string): Promise<void> {
   await apiDelete(`${BASE}/events/${id}`, token)
+}
+
+// --- Event types (the admin-managed category vocabulary) ---
+
+// Public read - the day modal needs the labels to name an event's category to
+// visitors, so this deliberately takes no token.
+export async function getEventTypes(): Promise<CalendarEventTypeDef[]> {
+  return apiGet('/api/v1/calendar/event-types') as Promise<CalendarEventTypeDef[]>
+}
+
+// Creates a reusable event type from an admin-typed label. The slug is derived
+// server-side from the label, which makes this get-or-create: two admins who
+// both type "Baptism" converge on one type instead of near-duplicates.
+export async function createEventType(
+  payload: { label: string; default_icon: string; default_color: string },
+  token: string,
+): Promise<CalendarEventTypeDef> {
+  return apiPost('/api/v1/calendar/event-types', payload, token) as Promise<CalendarEventTypeDef>
+}
+
+// --- Palette colors (the shared custom swatch grid) ---
+
+export async function getPaletteColors(): Promise<PaletteColor[]> {
+  return apiGet('/api/v1/calendar/palette') as Promise<PaletteColor[]>
+}
+
+// Saves a swatch for every admin to reuse. Idempotent server-side, so adding a
+// color that is already saved returns the existing swatch rather than erroring.
+export async function createPaletteColor(hex: string, token: string): Promise<PaletteColor> {
+  return apiPost('/api/v1/calendar/palette', { hex }, token) as Promise<PaletteColor>
+}
+
+// Removes a swatch from the picker only. Events already using that hex keep it -
+// the color is copied onto the event, never referenced - so this never repaints
+// the calendar.
+export async function deletePaletteColor(id: string, token: string): Promise<void> {
+  await apiDelete(`/api/v1/calendar/palette/${id}`, token)
 }
 
 export async function upsertMonthNote(

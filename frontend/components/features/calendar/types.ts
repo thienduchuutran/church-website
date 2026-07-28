@@ -1,4 +1,40 @@
-export type CalendarEventType = 'birthday' | 'bible_study' | 'general' | 'announcement' | 'prayer' | 'graduation'
+import { deriveRamp, isHexColor, type ColorRamp } from '@/lib/color'
+
+// An event type is now an opaque slug, not a closed union: admins create types
+// at runtime (migration 000012 moved the vocabulary from a Postgres enum into
+// the calendar_event_types table). The six built-ins below are still named in
+// BUILTIN_EVENT_TYPE_LABELS because a few components branch on 'birthday'.
+export type CalendarEventType = string
+
+// One row of the admin-managed event-type vocabulary, as served by
+// GET /api/v1/calendar/event-types.
+export interface CalendarEventTypeDef {
+  slug: string
+  label: string
+  // The icon and color a new event of this type starts with. Data, not code -
+  // which is what lets an admin-created type feel designed from the first use.
+  default_icon: string
+  default_color: string
+  is_builtin: boolean
+  sort_order: number
+  admin_id: string | null
+  created_at: string
+  updated_at: string
+}
+
+// One saved swatch in the shared custom palette (GET /api/v1/calendar/palette).
+// Deliberately unnamed - the color is its own label.
+export interface PaletteColor {
+  id: string
+  hex: string
+  sort_order: number
+  admin_id: string | null
+  created_at: string
+}
+
+// The sentinel for "this event shows no icon" - a real selectable state in the
+// picker rather than an empty string, matching the backend's model.IconNone.
+export const ICON_NONE = 'none'
 
 export interface CalendarEvent {
   id: string
@@ -112,7 +148,24 @@ export const COLOR_MAP: Record<string, { dot: string; text: string; bg: string; 
   black: { dot: '#171717', text: '#171717', bg: '#fafafa', highlight: '#d4d4d4' },
 }
 
+// resolveColor is the single entry point every renderer uses to turn a stored
+// color into the four values it paints with. A stored color is either a
+// built-in palette key ('rose') or an admin's custom hex ('#2E7D9A'); this hides
+// that difference so no component has to know which it got.
+//
+// Built-in keys keep their hand-tuned values; a hex is expanded by deriveRamp,
+// which guarantees the derived text color clears WCAG AA against both white and
+// its own highlight tint. Anything unrecognized falls back to slate rather than
+// rendering an event invisible.
+export function resolveColor(color: string): ColorRamp {
+  const builtin = COLOR_MAP[color]
+  if (builtin) return builtin
+  if (isHexColor(color)) return deriveRamp(color)
+  return COLOR_MAP.slate
+}
+
 export const ICON_LABELS: Record<string, string> = {
+  [ICON_NONE]: 'No icon',
   'cake': 'Birthday',
   'book-open': 'Bible Study',
   'bell': 'Announcement',
@@ -126,11 +179,25 @@ export const ICON_LABELS: Record<string, string> = {
   'graduation-cap': 'Graduation',
 }
 
-export const EVENT_TYPE_LABELS: Record<CalendarEventType, string> = {
+// Labels for the six built-in types. The authoritative list now comes from
+// GET /calendar/event-types, but keeping these means a type chip or a day-modal
+// row renders its proper label immediately instead of flashing a raw slug while
+// that request is in flight.
+export const EVENT_TYPE_LABELS: Record<string, string> = {
   birthday: 'Birthday',
   bible_study: 'Bible Study',
   general: 'General',
   announcement: 'Announcement',
   prayer: 'Prayer',
   graduation: 'Graduation',
+}
+
+// Turn a slug into something human-readable, preferring the fetched vocabulary,
+// then the built-in labels, and finally de-slugging the key itself so a custom
+// type never surfaces to a visitor as `fellowship_meal`.
+export function eventTypeLabel(slug: string, defs?: CalendarEventTypeDef[]): string {
+  const def = defs?.find((d) => d.slug === slug)
+  if (def) return def.label
+  if (EVENT_TYPE_LABELS[slug]) return EVENT_TYPE_LABELS[slug]
+  return slug.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())
 }

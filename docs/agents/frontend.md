@@ -90,7 +90,8 @@ frontend/
 ├── lib/
 │   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
-│   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale)
+│   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale; event-type + palette CRUD)
+│   ├── color.ts                        ← Custom-color math: deriveRamp/contrastRatio/normalizeHexInput. Expands one admin hex into the 4-value ramp the calendar paints with, guaranteeing WCAG AA on BOTH contrast pairs (see below)
 │   ├── discord.ts                      ← Discord link API (getDiscordStatus / getDiscordLinkUrl)
 │   ├── events.ts                       ← partitionEvents/isUpcoming/canUnarchive (Upcoming vs Past sectioning)
 │   ├── confirm.tsx                     ← ConfirmProvider + useConfirm() promise dialog. NEVER use window.confirm/alert/prompt
@@ -146,6 +147,25 @@ Every resource service in `lib/` accepts an optional `locale` parameter:
 **Rule:** public read paths pass the locale they resolved via `getLocale()` (server) or `useLocale()` (client). Admin call sites (admin dashboard, edit modal, page editor) deliberately omit the locale so the form pre-fills with the English source - admins always work with the canonical text, never the translation.
 
 `CalendarShell` reads `isAdmin` and only passes the locale when `!isAdmin` - same rule encoded in one component. When you add a new admin surface that calls `listPosts` or `getMonth`, follow the same pattern.
+
+### Calendar colors: `resolveColor` is the only entry point
+
+A calendar event's `color` is **either** a named palette key (`'rose'`) **or** an admin's custom hex (`'#2E7D9A'`). Every renderer must go through `resolveColor(color)` from `components/features/calendar/types.ts`, which hides that difference and always returns the same `{ dot, text, bg, highlight }` shape.
+
+**Never write `COLOR_MAP[event.color]` again.** That lookup silently falls back to slate for any custom hex, so the color would render correctly in the grid and wrong in, say, the birthdays sidebar strip. The one legitimate remaining `COLOR_MAP` use is `CalendarShell`'s static legend, which lists fixed built-in keys rather than event data.
+
+Named keys return their hand-tuned values. A hex is expanded by `deriveRamp` in `lib/color.ts`, and the derivation is **two-sided on purpose**:
+
+| Renderer | Fill | Text on it | Constraint |
+|---|---|---|---|
+| `EventChip` (single day) | `highlight` | `text` | `text` vs `highlight` ≥ 4.5:1 |
+| `EventBanner` (multi-day) | `text` | white | `text` vs white ≥ 4.5:1 |
+
+`deriveRamp` walks the text lightness darker until **both** hold. A fixed darkening step is not enough - yellow and cyan are far brighter at a given HSL lightness than blue or red, which is exactly the case `lib/__tests__/color.test.ts` sweeps (127 samples around the hue circle plus the known-hard hexes). Run it with `npm run test:color`; it uses Node's built-in runner with native TypeScript stripping, so there is no test dependency to install.
+
+`dot` is never adjusted - it is the admin's exact choice, so the picker swatch matches what they picked.
+
+The PNG export needs no involvement in any of this: `exportCalendarToPng` runs `html-to-image` over the live DOM, so whatever renders on screen is already in the export.
 
 The middleware in `frontend/proxy.ts` handles all locale detection. It checks (in order): the URL prefix, the `NEXT_LOCALE` cookie, and the `Accept-Language` header. The cookie persistence means once a visitor picks Vietnamese via the language switcher, they stay there on subsequent pageloads.
 
