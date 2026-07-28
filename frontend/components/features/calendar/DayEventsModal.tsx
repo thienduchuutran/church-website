@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Plus, PencilSimple } from '@phosphor-icons/react'
-import { CalendarEvent, COLOR_MAP, EVENT_TYPE_LABELS } from './types'
+import { CalendarEvent, CalendarEventTypeDef, eventTypeLabel, resolveColor } from './types'
+import { getEventTypes } from '@/lib/calendar'
 import CalendarIcon from './CalendarIcon'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 
@@ -40,11 +41,27 @@ export default function DayEventsModal({
   const [mounted, setMounted] = useState(false)
   const [closing, setClosing] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Needed so an admin-created category shows its label ("Baptism") instead of
+  // its raw slug. eventTypeLabel de-slugs as a last resort, so a failed fetch
+  // degrades to "Fellowship Meal" rather than "fellowship_meal".
+  const [eventTypes, setEventTypes] = useState<CalendarEventTypeDef[]>([])
 
   useEffect(() => {
     setMounted(true)
     return () => {
       if (closeTimer.current) clearTimeout(closeTimer.current)
+    }
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    getEventTypes()
+      .then((types) => {
+        if (!cancelled) setEventTypes(types)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
     }
   }, [])
 
@@ -97,7 +114,7 @@ export default function DayEventsModal({
         {/* Events list */}
         <div className="overflow-y-auto flex-1 px-4 py-4 flex flex-col gap-2">
           {events.map((e) => {
-            const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
+            const colors = resolveColor(e.color)
             return (
               <div
                 key={e.id}
@@ -116,7 +133,7 @@ export default function DayEventsModal({
                     {e.title}
                   </p>
                   <p className="font-display text-[11px] text-muted mt-0.5">
-                    {EVENT_TYPE_LABELS[e.event_type] ?? e.event_type}
+                    {eventTypeLabel(e.event_type, eventTypes)}
                   </p>
                   {e.notes && (
                     <p className="font-sans text-xs text-foreground/80 mt-1.5 leading-relaxed whitespace-pre-wrap">

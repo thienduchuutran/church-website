@@ -1,4 +1,4 @@
-import { COLOR_MAP } from './types'
+import { resolveColor } from './types'
 
 interface EventBannerProps {
   title: string
@@ -16,7 +16,9 @@ interface EventBannerProps {
 // uses the category's dark text color as its fill with white text so every
 // category reads as a bold ribbon.
 export default function EventBanner({ title, color, roundStart, roundEnd, tooltip }: EventBannerProps) {
-  const colors = COLOR_MAP[color] ?? COLOR_MAP.slate
+  // colors.text doubles as this ribbon's fill, and it is guaranteed to clear
+  // WCAG AA against the white text below - see deriveRamp in lib/color.ts.
+  const colors = resolveColor(color)
   return (
     <div
       title={tooltip ?? title}

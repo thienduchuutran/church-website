@@ -1,6 +1,6 @@
 import CalendarIcon from './CalendarIcon'
 import CakeMarker from './CakeMarker'
-import { COLOR_MAP } from './types'
+import { ICON_NONE, resolveColor } from './types'
 
 interface EventChipProps {
   title: string
@@ -24,8 +24,9 @@ interface EventChipProps {
 // Shared by the desktop grid (and therefore the PNG export) and the mobile grid
 // so the look stays identical everywhere and the export matches the live page.
 export default function EventChip({ title, icon, color, tooltip, compact = false }: EventChipProps) {
-  const colors = COLOR_MAP[color] ?? COLOR_MAP.slate
+  const colors = resolveColor(color)
   const isBirthday = icon === 'cake'
+  const hasIcon = icon !== ICON_NONE
 
   if (compact) {
     return (
@@ -56,14 +57,19 @@ export default function EventChip({ title, icon, color, tooltip, compact = false
     )
   }
 
-  // Every other category: the highlighter-swipe chip.
+  // Every other category: the highlighter-swipe chip. With no icon the gap goes
+  // too - CalendarIcon renders nothing, but a leftover flex gap would push the
+  // title off-centre inside the pill.
   return (
     <div
       title={tooltip ?? title}
-      className="flex items-center justify-center gap-1 min-w-0 rounded-[4px] px-1.5 py-[3px] font-display text-[11px] font-bold leading-tight"
+      className={[
+        'flex items-center justify-center min-w-0 rounded-[4px] px-1.5 py-[3px] font-display text-[11px] font-bold leading-tight',
+        hasIcon ? 'gap-1' : '',
+      ].join(' ')}
       style={{ backgroundColor: colors.highlight, color: colors.text }}
     >
-      <CalendarIcon iconKey={icon} size={10} color={colors.text} />
+      {hasIcon && <CalendarIcon iconKey={icon} size={10} color={colors.text} />}
       <span className="truncate">{title}</span>
     </div>
   )

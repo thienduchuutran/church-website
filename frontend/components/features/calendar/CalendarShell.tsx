@@ -5,7 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useLocale } from 'next-intl'
 import { CaretLeft, CaretRight, Plus, Palette, DownloadSimple } from '@phosphor-icons/react'
 import { getMonth, upsertMonthSettings } from '@/lib/calendar'
-import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP } from './types'
+import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP, resolveColor } from './types'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 import CalendarGrid from './CalendarGrid'
 import CakeMarker from './CakeMarker'
@@ -591,7 +591,7 @@ export default function CalendarShell({
                 <div className="flex flex-col gap-y-0.5">
                   {birthdays.map(e => {
                     const day = parseInt(e.date.split('-')[2], 10)
-                    const colors = COLOR_MAP[e.color] ?? COLOR_MAP.rose
+                    const colors = resolveColor(e.color)
                     return (
                       <div
                         key={e.id}
@@ -619,7 +619,7 @@ export default function CalendarShell({
                 <div className="flex flex-col gap-y-0.5">
                   {bibleStudyDays.map(e => {
                     const day = parseInt(e.date.split('-')[2], 10)
-                    const colors = COLOR_MAP[e.color] ?? COLOR_MAP.sky
+                    const colors = resolveColor(e.color)
                     return (
                       <div
                         key={e.id}
@@ -677,7 +677,7 @@ export default function CalendarShell({
                 <div className="flex flex-wrap gap-x-5 gap-y-0.5">
                   {eventsWithAddress.map(e => {
                     const day = parseInt(e.date.split('-')[2], 10)
-                    const colors = COLOR_MAP[e.color] ?? COLOR_MAP.slate
+                    const colors = resolveColor(e.color)
                     return (
                       <div
                         key={e.id}
