@@ -24,6 +24,7 @@ type adminTranslationService interface {
 	Retranslate(ctx context.Context, id string) (*model.Translation, error)
 	RetranslateAll(ctx context.Context) (int, error)
 	CleanupOrphans(ctx context.Context) (int, int, error)
+	Dismiss(ctx context.Context, id string) (*model.Translation, error)
 }
 
 type AdminTranslationsHandler struct {
@@ -176,4 +177,29 @@ func (h *AdminTranslationsHandler) CleanupOrphans(w http.ResponseWriter, r *http
 		"deleted_translations": translations,
 		"deleted_jobs":         jobs,
 	})
+}
+
+// Dismiss handles DELETE /api/v1/admin/translations/{id}.
+// Deletes a translation without re-enqueueing a fresh one - unlike
+// Retranslate, this is "I don't want this suggestion, leave it alone."
+// The public read path falls back to English via COALESCE until the source
+// field is next edited, which naturally re-triggers translation.
+func (h *AdminTranslationsHandler) Dismiss(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		writeError(w, http.StatusBadRequest, "id is required")
+		return
+	}
+
+	dismissed, err := h.svc.Dismiss(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "translation not found")
+			return
+		}
+		log.Printf("dismiss translation %s: %v", id, err)
+		writeError(w, http.StatusInternalServerError, "failed to dismiss translation")
+		return
+	}
+	writeJSON(w, http.StatusOK, dismissed)
 }

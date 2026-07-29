@@ -395,6 +395,7 @@ func main() {
 		// Admin translation review panel. All routes are admin-only.
 		//   GET    /admin/translations                   list with filters (locale, approved, pagination)
 		//   PATCH  /admin/translations/{id}              approve as-is or with edits
+		//   DELETE /admin/translations/{id}              dismiss: delete without re-enqueueing
 		//   POST   /admin/translations/retranslate/{id}  delete current + re-enqueue
 		//   POST   /admin/translations/retranslate-all   bulk: delete + re-enqueue every unapproved row
 		//   POST   /admin/translations/cleanup-orphans   delete translations whose parent record is gone
@@ -405,6 +406,7 @@ func main() {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
 				r.Get("/admin/translations", adminTranslationsHandler.List)
 				r.Patch("/admin/translations/{id}", adminTranslationsHandler.Approve)
+				r.Delete("/admin/translations/{id}", adminTranslationsHandler.Dismiss)
 				r.Post("/admin/translations/retranslate-all", adminTranslationsHandler.RetranslateAll)
 				r.Post("/admin/translations/retranslate/{id}", adminTranslationsHandler.Retranslate)
 				r.Post("/admin/translations/cleanup-orphans", adminTranslationsHandler.CleanupOrphans)

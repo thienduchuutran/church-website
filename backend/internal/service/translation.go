@@ -165,3 +165,19 @@ func (s *TranslationService) Retranslate(ctx context.Context, id string) (*model
 	}
 	return existing, nil
 }
+
+// Dismiss deletes a translation without re-enqueueing a fresh one - the
+// "I don't want this suggestion" action for a pending row, as opposed to
+// Retranslate's "give me a better one." Public reads fall back to English
+// via COALESCE; the row only reappears if the source field is edited again,
+// which re-triggers translation through the normal content-service path.
+func (s *TranslationService) Dismiss(ctx context.Context, id string) (*model.Translation, error) {
+	existing, err := s.repo.GetByID(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("fetch translation: %w", err)
+	}
+	if err := s.repo.Delete(ctx, id); err != nil {
+		return nil, fmt.Errorf("delete translation: %w", err)
+	}
+	return existing, nil
+}
