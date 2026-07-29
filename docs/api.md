@@ -554,6 +554,16 @@ Approve a translation. Admin only. Sets `approved_by` to the caller's JWT `sub` 
 
 ---
 
+### `DELETE /api/v1/admin/translations/:id`
+Dismiss a pending translation. Admin only. Deletes the `translations` row **without** re-enqueueing a fresh one - unlike `retranslate/:id`, nothing new is generated. Use case: the source note/post/event was edited or emptied after the translation was queued, and the AI suggestion is no longer wanted or relevant (e.g. clearing a calendar month note's text leaves the old translation of the previous content behind, since the note row itself isn't deleted - see `docs/agents/known-quirks.md`).
+
+The public read path falls back to English via COALESCE; the row only reappears if the source field is edited again, which re-triggers translation through the normal content-service path.
+
+**Response `200`** - the (now-deleted) Translation object  
+**Response `404`** - translation id not found
+
+---
+
 ### `POST /api/v1/admin/translations/retranslate/:id`
 Re-translate. Admin only. Deletes the existing `translations` row so the public read path's COALESCE falls back to English while the worker produces a fresh one, then enqueues a `translation_jobs` row with the same source_text and locale. Use case: the system prompt was edited and you want existing translations refreshed against the new prompt.
 

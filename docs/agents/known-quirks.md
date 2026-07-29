@@ -15,6 +15,33 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Clearing a calendar month note leaves a stale translation that "Clean up orphans" won't catch
+**Date solved:** 2026-07-29 (added the `Dismiss` action)
+**Symptom:** Admin clears the text in a month note (via the Notes modal, Save
+with empty content) expecting the pending Vietnamese translation for that note
+to go away too. It doesn't - the old translation row keeps showing on
+`/admin/translations` with stale English source text that no longer matches
+anything, and clicking "Clean up orphans" does not remove it.
+**Root cause:** `UpsertMonthNote` (`backend/internal/repository/calendar.go`)
+upserts on the `(year, month)` unique key - clearing the note overwrites
+`content` to `''` on the *same row*, it never deletes the row. So the
+`calendar_month_notes` parent still exists, which means the translation isn't
+an orphan by the sweep's definition (`orphanConditions` in
+`backend/internal/repository/translation.go` only matches translations whose
+*parent row* is gone). Also, `TranslationService.UpsertMonthNote` only
+enqueues a new translation job when `req.Content != ""`, so clearing the note
+enqueues nothing - the stale row from the previous content is simply
+abandoned in place.
+**Fix:** Added a `Dismiss` action (`DELETE /api/v1/admin/translations/:id`)
+that deletes a translation row without re-enqueueing - the "I don't want this
+suggestion, and nothing needs to replace it" case, distinct from `retranslate`
+(delete + requeue) and `cleanup-orphans` (parent-row-gone only). Shown as a
+per-field button on `/admin/translations` for any still-pending (unapproved)
+field.
+**Files affected:** `backend/internal/handler/admin_translations.go`,
+`backend/internal/service/translation.go`, `frontend/lib/translations.ts`,
+`frontend/components/features/admin/TranslationReviewRecord.tsx`
+
 ## Vietnamese AI translations truncated to a single word ("VBS T-Shirt!" -> "Áo")
 **Date solved:** 2026-07-19 (three commits: root cause, cache repair tool, stop-reason detector)
 **Symptom:** Post titles translated to Vietnamese came back as one word and were

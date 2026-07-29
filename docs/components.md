@@ -272,26 +272,27 @@ Flat photo grid showing the most recent images across all albums.
 
 ---
 
-### `TranslationReviewItem`
-Two-column side-by-side diff card for the `/admin/translations` review panel. English source on the left (read-only), Vietnamese translation on the right (editable textarea). Three action buttons: Approve as-is, Save edits, Re-translate.
+### `TranslationReviewRecord`
+Card for the `/admin/translations` review panel, one per (`table_name`, `record_id`, `locale`) group so a record's `title` and `body` fields are reviewed together instead of as unrelated rows (grouping done client-side by `groupAdminTranslations` in `lib/translations.ts`). Each field renders a two-column diff: English source on the left (read-only), Vietnamese translation on the right (editable - textarea for plain fields, `RichBodyEditor` for `body`).
 
 **Props**
 | Prop | Type | Description |
 |------|------|-------------|
-| `item` | `AdminTranslation` | The translation row from `GET /api/v1/admin/translations`, including the synthesized `record_title` |
-| `onChange` | `() => void` | Called after a successful approve / retranslate so the parent list refreshes |
-| `onApprove` | `(id, translatedText \| null) => Promise<void>` | Approve handler. Pass null for "approve as-is", a string for "save edits". |
-| `onRetranslate` | `(id) => Promise<void>` | Retranslate handler. The component shows a `window.confirm` before calling - this is destructive (deletes the row + re-enqueues) |
+| `group` | `TranslationRecordGroup` | The grouped record - `record_title`, `table_name`, `locale`, and its `fields: AdminTranslation[]` (title-first, then body, per `FIELD_ORDER`) |
+| `onChange` | `() => void` | Called after a successful approve / retranslate / dismiss so the parent list refetches |
+| `onApprove` | `(id, translatedText \| null) => Promise<void>` | Approve handler. Pass null for "approve as-is", a string for "save edits". Record-level "Approve all" button loops every field. |
+| `onRetranslate` | `(id) => Promise<void>` | Per-field retranslate handler - deletes the row and re-enqueues a fresh translation. Confirmed via `useConfirm()` (destructive: loses any human edits on that field). |
+| `onDismiss` | `(id) => Promise<void>` | Per-field dismiss handler - deletes the row WITHOUT re-enqueueing. Only shown while the field is unapproved; confirmed via `useConfirm()`. Use when the source no longer needs this suggestion (e.g. a cleared calendar month note - see `docs/agents/known-quirks.md`). |
 
 **Design tokens:**
-- Approve as-is: `bg-primary` (terracotta `#C4663C`), white text - primary CTA
-- Save edits: sage `#4A7A5C` background, white text - only colored when `hasEdits === true`, otherwise muted disabled state
-- Re-translate: ghost (transparent, `text-muted`, hover bg) - secondary destructive action
+- Approve all: `bg-primary` (terracotta `#C4663C`) normally, sage `#4A7A5C` when any field has unsaved edits ("Save edits & approve all")
+- Re-translate: ghost (transparent, `text-muted`, hover bg) - per-field secondary action
+- Dismiss: ghost, hover shifts to red (`hover:bg-red-50 hover:text-red-600`) to read as the more destructive of the two per-field actions
 
 **State:**
-- `text` - controlled textarea, seeded from `item.translated_text`
-- `hasEdits` - computed: `text !== item.translated_text`, drives Save button enable state
-- `submitting` - one of `null | 'approve' | 'save' | 'retranslate'` so each button can show its own "…ing" label
+- `edits` - reviewer's per-field working text, persisted via `useSessionDraft` keyed on the group so in-progress edits survive a locale switch or refresh
+- `editingBody` - which body fields have the Tiptap `RichBodyEditor` open (mounted on demand, one instance is heavy)
+- `busy` - `null | 'approve' | 'retranslate:<fieldId>' | 'dismiss:<fieldId>'` so only the in-flight button shows its "…ing" label
 
 **Table label badges** (color-coded per `table_name`):
 - `posts` → "Post" (terracotta tint)

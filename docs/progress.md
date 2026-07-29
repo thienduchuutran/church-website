@@ -3,6 +3,23 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-07-29 - Dismiss a pending translation without re-queueing it
+
+The review panel had two ways to clear a pending row: approve it, or retranslate it (delete + re-enqueue). Neither fit "the source no longer needs a translation but I don't want a fresh one either" - e.g. clearing a calendar month note's text leaves the old translation of the previous content behind, because `UpsertMonthNote` upserts the same `(year, month)` row rather than deleting it, so it's not an orphan by the cleanup sweep's definition (parent row still exists). Added `Dismiss`: delete the translation row, don't touch the queue. Built TDD-first per the AGENTS.md workflow (handler test → service → handler → route → UI → docs); no repository change needed since `GetByID`/`Delete` already existed for the `Retranslate` path.
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/handler/admin_translations_test.go` | `Dismiss` added to the mock service; success / missing-id / not-found / service-error tests | TDD rule |
+| `backend/internal/service/translation.go` | `Dismiss(ctx, id)` - fetches then deletes via the existing repo methods, no `s.enqueue` call | The one difference from `Retranslate`: no requeue is the entire point |
+| `backend/internal/handler/admin_translations.go` + `cmd/server/main.go` | `Dismiss` handler + `DELETE /admin/translations/{id}` (admin group) | `DELETE` fits "remove this row" better than the `POST`-action routes used for retranslate/cleanup, which both do more than a plain delete |
+| `frontend/lib/translations.ts` | `dismissTranslation` helper | Mirrors `retranslateTranslation`'s shape |
+| `frontend/components/features/admin/TranslationReviewRecord.tsx` | Per-field "Dismiss" button next to "Re-translate", visible only while the field is unapproved; confirmed via `useConfirm()` | Dismissing already-approved (human-reviewed) output isn't a meaningful action, so it's scoped to pending rows |
+| `frontend/app/[locale]/admin/translations/page.tsx` | `handleDismiss` wrapper threading the auth token, passed down as `onDismiss` | Matches the existing `handleApprove`/`handleRetranslate` pattern |
+
+Also documented in `docs/agents/known-quirks.md` ("Clearing a calendar month note leaves a stale translation that 'Clean up orphans' won't catch") since the gap this closes wasn't obvious from the code alone.
+
+Verified: `go build ./...`, `go vet ./...`, and the full `go test ./...` suite all green; `tsc --noEmit` clean.
+
 ## 2026-07-28 - Admins can add calendar event types, custom colors, and "no icon"
 
 The calendar's event editor had three **closed sets** an admin could never grow: `event_type` was a
