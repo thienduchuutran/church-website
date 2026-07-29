@@ -67,6 +67,7 @@ interface TranslationReviewRecordProps {
   // Per-field handlers, threaded from the page (which owns the auth token).
   onApprove: (id: string, translatedText: string | null) => Promise<void>
   onRetranslate: (id: string) => Promise<void>
+  onDismiss: (id: string) => Promise<void>
 }
 
 export default function TranslationReviewRecord({
@@ -74,6 +75,7 @@ export default function TranslationReviewRecord({
   onChange,
   onApprove,
   onRetranslate,
+  onDismiss,
 }: TranslationReviewRecordProps) {
   // edits maps a field id to the reviewer's working copy of the target text.
   // A field is only "edited" once it appears here AND differs from the AI text.
@@ -158,6 +160,37 @@ export default function TranslationReviewRecord({
     }
   }
 
+  // Dismiss: delete this field's pending suggestion without queuing a
+  // replacement. Unlike Retranslate, nothing new is generated - the public
+  // site falls back to English until the source text is edited again.
+  async function handleDismiss(field: AdminTranslation) {
+    if (busy) return
+    const label = FIELD_LABELS[field.field_name] ?? field.field_name
+    const ok = await confirm({
+      title: 'Dismiss this translation?',
+      message: (
+        <>
+          The <strong className="font-semibold text-foreground">{label}</strong> translation is
+          removed from the queue - nothing new is generated. The site shows the English text until
+          this field is edited again.
+        </>
+      ),
+      confirmLabel: 'Dismiss',
+      tone: 'danger',
+    })
+    if (!ok) return
+    setBusy(`dismiss:${field.id}`)
+    setError(null)
+    try {
+      await onDismiss(field.id)
+      onChange()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Dismiss failed')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   return (
     <article className="rounded-xl border border-border bg-surface p-5 shadow-sm">
       {/* Header: record context + table/locale badges. record_title is the
@@ -187,6 +220,7 @@ export default function TranslationReviewRecord({
           const fieldApproved = field.approved_by !== null
           const mismatch = isBody ? tagMismatch(field.source_text, target) : null
           const retranslating = busy === `retranslate:${field.id}`
+          const dismissing = busy === `dismiss:${field.id}`
 
           return (
             <div key={field.id} className="border-t border-border/60 pt-4 first:border-t-0 first:pt-0">
@@ -212,6 +246,21 @@ export default function TranslationReviewRecord({
                 >
                   {retranslating ? 'Queuing…' : 'Re-translate'}
                 </button>
+                {/* Dismiss only makes sense for a still-pending suggestion -
+                    an approved translation is human-reviewed output, not
+                    something to throw away with one click. No ml-auto here:
+                    the Re-translate button's auto margin already pushes this
+                    trailing pair as a group to the row's right edge. */}
+                {!fieldApproved && (
+                  <button
+                    type="button"
+                    onClick={() => handleDismiss(field)}
+                    disabled={busy !== null}
+                    className="inline-flex h-7 items-center rounded-md px-2 font-display text-xs font-medium text-muted transition-colors hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                  >
+                    {dismissing ? 'Dismissing…' : 'Dismiss'}
+                  </button>
+                )}
               </div>
 
               {/* min-w-0 on both columns: grid items default to min-width:auto,

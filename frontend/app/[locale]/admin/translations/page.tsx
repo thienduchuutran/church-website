@@ -5,6 +5,7 @@ import { useAuth } from '@/lib/auth'
 import {
   approveTranslation,
   cleanupOrphanTranslations,
+  dismissTranslation,
   groupAdminTranslations,
   listAdminTranslations,
   retranslateAllTranslations,
@@ -117,6 +118,14 @@ export default function AdminTranslationsPage() {
     async (id: string) => {
       if (!token) throw new Error('not signed in')
       await retranslateTranslation(id, token)
+    },
+    [token],
+  )
+
+  const handleDismiss = useCallback(
+    async (id: string) => {
+      if (!token) throw new Error('not signed in')
+      await dismissTranslation(id, token)
     },
     [token],
   )
@@ -327,6 +336,7 @@ export default function AdminTranslationsPage() {
               onChange={load}
               onApprove={handleApprove}
               onRetranslate={handleRetranslate}
+              onDismiss={handleDismiss}
             />
           ))}
         </div>

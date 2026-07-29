@@ -1,4 +1,4 @@
-import { apiGet, apiPatch, apiPost } from './api'
+import { apiDelete, apiGet, apiPatch, apiPost } from './api'
 
 // AdminTranslation mirrors the Go backend's TranslationListItem - a Translation
 // row plus the synthesized record_title from the multi-table JOIN. The admin
@@ -136,6 +136,14 @@ export interface RetranslateAllResponse {
 // to refresh those, use the per-row Re-translate button on each card.
 export async function retranslateAllTranslations(token: string): Promise<RetranslateAllResponse> {
   return (await apiPost(`${BASE}/retranslate-all`, {}, token)) as RetranslateAllResponse
+}
+
+// dismissTranslation: deletes a pending translation WITHOUT re-queueing a
+// fresh one - the "I don't want this suggestion" action. Public reads fall
+// back to English via COALESCE until the source field is next edited, which
+// naturally re-triggers translation through the normal content-service path.
+export async function dismissTranslation(id: string, token: string): Promise<AdminTranslation> {
+  return (await apiDelete(`${BASE}/${id}`, token)) as AdminTranslation
 }
 
 export interface CleanupOrphansResponse {
