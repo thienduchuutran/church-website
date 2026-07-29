@@ -45,9 +45,13 @@ const beVietnamPro = Be_Vietnam_Pro({
   weight: ['400', '500', '600'],
 })
 
+// Geist Mono only backs hex color codes and DB table names (never
+// Vietnamese prose), and Next 16.2.1's bundled Google Fonts manifest
+// predates Google adding a 'vietnamese' subset for this family - the type
+// checker rejects it even though fonts.google.com now lists one.
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
-  subsets: ['latin', 'vietnamese'],
+  subsets: ['latin'],
 })
 
 // Baloo 2 is the calendar's "marker" display face - rounded and friendly so
