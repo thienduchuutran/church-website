@@ -120,6 +120,13 @@ export default function EventModal({
   const mounted = useSyncExternalStore(() => () => {}, () => true, () => false)
   const [closing, setClosing] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Tracks whether the mousedown that started this click landed directly on
+  // the backdrop (not bubbled up from inside the panel). Without this, a
+  // text-selection drag that starts inside the panel and releases on the
+  // backdrop still fires a backdrop click - the browser targets `click` at
+  // the nearest common ancestor of the mousedown/mouseup targets - and would
+  // close the modal mid-selection.
+  const mouseDownOnBackdrop = useRef(false)
 
   const firstInputRef = useRef<HTMLInputElement | HTMLTextAreaElement | null>(null)
 
@@ -294,7 +301,8 @@ export default function EventModal({
   return createPortal(
     <div
       className={`fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-[10px] backdrop-saturate-150 ${closing ? 'apple-backdrop-out' : 'apple-backdrop-in'}`}
-      onClick={handleClose}
+      onMouseDown={(e) => { mouseDownOnBackdrop.current = e.target === e.currentTarget }}
+      onClick={() => { if (mouseDownOnBackdrop.current) handleClose() }}
     >
       <div
         className={`relative w-full sm:max-w-md bg-surface rounded-3xl shadow-[0_30px_80px_-20px_rgba(0,0,0,0.45),0_10px_30px_-10px_rgba(0,0,0,0.25)] ring-1 ring-black/5 overflow-hidden flex flex-col max-h-[90dvh] will-change-transform ${closing ? 'apple-sheet-out' : 'apple-sheet-in'}`}
