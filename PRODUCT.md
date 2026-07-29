@@ -28,7 +28,7 @@ I feel welcomed and I know exactly where to go.
 These fonts only, never substituted.
 -Consider using google fonts Junge, Gentium Plus, Nunito where they enhance the UI of the website the best and in a consistent way
 - Headings:  h1/h2/card titles/date numerals/section headings. Weight 700 for hero+page titles, 600 for sections. Italic only for hero tagline phrase, once per page.
-- Body/UI: body copy, nav, buttons, badges, inputs. Weights 300/400/500/600 only. Never 700 on DM Sans.
+- Body/UI: body copy, nav, buttons, badges, inputs. Weights 300/400/500/600 only. Never 700 on Be Vietnam Pro.
 
 ## Type Scale
 - Hero h1: 56–64px, Playfair 700, tracking -0.025em, line-height 1.06
@@ -36,9 +36,9 @@ These fonts only, never substituted.
 - Section h2: 20–24px, Playfair 600
 - Card titles: 16–18px, Playfair 600
 - Date numerals on event cards: 22px, Playfair 700
-- Body: 13–14px, DM Sans 400, line-height 1.75
-- Labels/badges/metadata: 10–11px, DM Sans 600–700, uppercase, letter-spacing 0.08em
-- Nav links: 13px, DM Sans 500
+- Body: 13–14px, Be Vietnam Pro 400, line-height 1.75
+- Labels/badges/metadata: 10–11px, Be Vietnam Pro 600–700, uppercase, letter-spacing 0.08em
+- Nav links: 13px, Be Vietnam Pro 500
 
 ## Layout
 - One job per page. Home = hero + announcements + events only.
@@ -62,7 +62,7 @@ These fonts only, never substituted.
 - No more than one accent at equal visual weight per page
 - No shadows on non-hovered elements
 - No gradients except hero bottom rule and hero glow
-- No DM Sans at weight 700
+- No Be Vietnam Pro at weight 700
 - No section background color changes to separate content - use space
 - No blue on any interactive element - failure if it appears
 - No icon grids (3–4 boxes in a row with icon + text)

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Lora, DM_Sans, Geist_Mono, Fredoka } from 'next/font/google'
+import { Inter, Lora, Be_Vietnam_Pro, Geist_Mono, Baloo_2 } from 'next/font/google'
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { setRequestLocale } from 'next-intl/server'
 import { notFound } from 'next/navigation'
@@ -17,37 +17,50 @@ import { routing } from '@/i18n/routing'
 // and the <ChatBox /> mount below to re-enable.
 // import ChatBox from '@/components/features/assistant/ChatBox'
 
+// 'latin' alone excludes the precomposed Vietnamese range (U+1EA0-1EF9,
+// e.g. the vowels in "Chúa", "Thánh", "được") - browsers silently
+// substitute a fallback font for those glyphs, which is what made every
+// diacritic look mismatched against its surrounding word. routing.locales
+// is only en/vi, so 'vietnamese' is the one extra subset every font needs.
 const inter = Inter({
   variable: '--font-sans',
-  subsets: ['latin'],
+  subsets: ['latin', 'vietnamese'],
 })
 
 const lora = Lora({
   variable: '--font-serif',
-  subsets: ['latin'],
+  subsets: ['latin', 'vietnamese'],
   weight: ['400', '600', '700'],
   style: ['normal', 'italic'],
 })
 
-const dmSans = DM_Sans({
+// Be Vietnam Pro replaces DM Sans: DM Sans has no Vietnamese subset on
+// Google Fonts at any weight, so no config could fix it - it had to be
+// swapped. Be Vietnam Pro was commissioned for Vietnamese text specifically
+// (correct tone-mark stacking, not coverage bolted on after the fact) and
+// ships the same 400/500/600 weights DM Sans used here.
+const beVietnamPro = Be_Vietnam_Pro({
   variable: '--font-display',
-  subsets: ['latin'],
+  subsets: ['latin', 'vietnamese'],
   weight: ['400', '500', '600'],
 })
 
 const geistMono = Geist_Mono({
   variable: '--font-geist-mono',
-  subsets: ['latin'],
+  subsets: ['latin', 'vietnamese'],
 })
 
-// Fredoka is the calendar's "marker" display face - rounded and friendly so
+// Baloo 2 is the calendar's "marker" display face - rounded and friendly so
 // the month headline bounces like the hand-made paper calendars, while still
 // reading as legitimate next to Lora/Inter. Scoped to the calendar masthead;
 // the rest of the site keeps its editorial serif. Self-hosted by next/font so
-// it embeds cleanly in the PNG export.
-const fredoka = Fredoka({
+// it embeds cleanly in the PNG export. Replaces Fredoka, which - like DM
+// Sans - has no Vietnamese subset on Google Fonts at all; Baloo 2 is built
+// for multi-script use, so it's well-hinted for stacked Vietnamese
+// diacritics rather than just glyph-complete.
+const baloo2 = Baloo_2({
   variable: '--font-marker',
-  subsets: ['latin'],
+  subsets: ['latin', 'vietnamese'],
   weight: ['500', '600', '700'],
 })
 
@@ -98,7 +111,7 @@ export default async function LocaleLayout({
   return (
     <html
       lang={locale}
-      className={`${inter.variable} ${lora.variable} ${dmSans.variable} ${geistMono.variable} ${fredoka.variable} h-full antialiased`}
+      className={`${inter.variable} ${lora.variable} ${beVietnamPro.variable} ${geistMono.variable} ${baloo2.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <a
