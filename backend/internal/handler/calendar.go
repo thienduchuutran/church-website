@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -27,20 +28,41 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	locale := r.URL.Query().Get("locale")
+	// An absent ?locale= means English, not "raw". Before migration 000013 the two
+	// were the same thing - the source column WAS English - so the frontend omits
+	// the param for English viewers as a small optimization. Now they differ: the
+	// raw path skips translation entirely, which would serve a Vietnamese-authored
+	// event untranslated to an English reader. Defaulting here rather than
+	// requiring the client to send it keeps old clients and direct API calls
+	// correct, and leaves the raw path reachable only from internal service calls
+	// that genuinely want stored text.
+	locale := strings.TrimSpace(r.URL.Query().Get("locale"))
+	if locale == "" {
+		locale = "en"
+	}
 	resp, err := h.svc.GetMonth(r.Context(), year, month, locale)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to load calendar")
 		return
 	}
-	// Non-admins only see an address when it's explicitly marked public on the
-	// site. Admins always see every address (and so does the PNG export, which
-	// is admin-driven). private_address marked non-public is stripped here.
+	// Admin-only fields, all stripped in one place so there is a single boundary
+	// to audit:
+	//   - private_address: non-admins only see an address explicitly marked
+	//     public on the site.
+	//   - title_source / notes_source / content_source: the untranslated English
+	//     text, needed only so the admin edit form saves the source instead of
+	//     the machine translation it is displaying. A public visitor has no use
+	//     for it, and shipping it would double the text in every payload.
 	if middleware.AdminEmailFromContext(r.Context()) == "" {
 		for i := range resp.Events {
 			if !resp.Events[i].AddressPublic {
 				resp.Events[i].PrivateAddress = nil
 			}
+			resp.Events[i].TitleSource = nil
+			resp.Events[i].NotesSource = nil
+		}
+		if resp.MonthNote != nil {
+			resp.MonthNote.ContentSource = nil
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

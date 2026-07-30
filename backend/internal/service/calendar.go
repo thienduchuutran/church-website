@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -25,6 +26,27 @@ func NewCalendarService(repo *repository.CalendarRepository) *CalendarService {
 // still creates events normally; translation just doesn't fan out.
 func (s *CalendarService) SetTranslationQueue(enqueue translation.EnqueueFn) {
 	s.enqueue = enqueue
+}
+
+// resolveSourceLocale decides which language a record's text is in, from the text
+// and nothing else.
+//
+// There is no admin override and no UI-locale input by design. Which language the
+// admin panel is displaying says nothing about which language the admin is typing
+// in, so letting it vote is what would file an English post composed in
+// Vietnamese mode as Vietnamese.
+//
+// `current` covers only the one case with no text to read: an edit that changes
+// no text fields at all (a date-only PATCH) keeps the language already stored
+// rather than resetting it.
+func resolveSourceLocale(fields map[string]string, current string) string {
+	if len(fields) > 0 {
+		return translation.DetectLocaleFields(fields)
+	}
+	if current != "" {
+		return current
+	}
+	return "en"
 }
 
 // GetMonth returns the month's events, optional sidebar note, and optional
@@ -56,6 +78,11 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 	if err := s.requireEventType(ctx, string(req.EventType)); err != nil {
 		return nil, err
 	}
+	// Decide the language before inserting - the column is written directly, not
+	// defaulted, so this is the only chance to get it right. "" for current
+	// because a brand-new event has no prior language to preserve.
+	sourceLocale := resolveSourceLocale(textFields(req.Title, req.Notes), "")
+
 	e := &model.CalendarEvent{
 		Date:           req.Date,
 		EndDate:        req.EndDate,
@@ -67,12 +94,13 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 		Color:          req.Color,
 		Notes:          req.Notes,
 		AdminID:        &adminID,
+		SourceLocale:   sourceLocale,
 	}
 	if err := s.repo.InsertEvent(ctx, e); err != nil {
 		return nil, fmt.Errorf("insert event: %w", err)
 	}
 
-	s.enqueueEventFields(e.ID, map[string]*string{
+	s.enqueueEventFields(e.ID, sourceLocale, map[string]*string{
 		"title": &e.Title,
 		"notes": e.Notes,
 	})
@@ -137,11 +165,27 @@ func (s *CalendarService) seedMonthNote(ctx context.Context, e *model.CalendarEv
 		newContent = current + "\n" + line
 	}
 
-	saved, err := s.repo.UpsertMonthNote(ctx, year, month, newContent, &adminID)
+	// An existing note keeps its own language; only a brand-new one inherits the
+	// seeding event's. A month note is curated text an admin has been editing, and
+	// one event authored in the other language is not a reason to relabel the
+	// whole note - relabelling it would make every line already in there look
+	// like it needs re-translating.
+	//
+	// Known consequence: appending an English seed line to a Vietnamese note
+	// produces a genuinely mixed-language note, which the model will translate as
+	// a unit. Acceptable because the seed line is a starting point the admin is
+	// expected to rewrite ("prefill then edit"), and detection over the whole
+	// note would flip its language back and forth as events accumulate.
+	noteLocale := e.SourceLocale
+	if existing != nil {
+		noteLocale = existing.SourceLocale
+	}
+
+	saved, err := s.repo.UpsertMonthNote(ctx, year, month, newContent, &adminID, noteLocale)
 	if err != nil {
 		return
 	}
-	s.enqueueOne("calendar_month_notes", saved.ID, "content", newContent)
+	s.enqueueOne("calendar_month_notes", saved.ID, "content", newContent, noteLocale)
 }
 
 // UpdateEvent validates the request, fetches the existing event for diffing,
@@ -164,9 +208,36 @@ func (s *CalendarService) UpdateEvent(ctx context.Context, id string, req model.
 		return nil, fmt.Errorf("fetch existing event: %w", err)
 	}
 
-	e, err := s.repo.UpdateEvent(ctx, id, &req)
+	// Resolve against the text as it will be AFTER the patch, not as it was: an
+	// edit that rewrites an English title in Vietnamese has to re-detect. Falling
+	// back to existing values keeps a date-only PATCH from detecting on nothing,
+	// and `existing.SourceLocale` as `current` means such a PATCH preserves the
+	// language rather than resetting it to a default.
+	newTitle := existing.Title
+	if req.Title != nil {
+		newTitle = *req.Title
+	}
+	newNotes := existing.Notes
+	if req.Notes != nil {
+		newNotes = req.Notes
+	}
+	sourceLocale := resolveSourceLocale(textFields(newTitle, newNotes), existing.SourceLocale)
+
+	e, err := s.repo.UpdateEvent(ctx, id, &req, sourceLocale)
 	if err != nil {
 		return nil, fmt.Errorf("update event: %w", err)
+	}
+
+	// The language flipped, so any translation into the NEW source language is
+	// now describing text the record holds natively. Left in place it would show
+	// up in the review queue as pending work whose two sides are the same
+	// language. Best-effort: the event is already saved, and a leftover row is a
+	// review-queue annoyance rather than a serving bug (the direction-aware read
+	// path ignores it).
+	if existing.SourceLocale != sourceLocale {
+		if err := s.repo.DeleteTranslationsForLocale(ctx, id, sourceLocale); err != nil {
+			log.Printf("calendar: purge stale %s translations for event %s: %v", sourceLocale, id, err)
+		}
 	}
 
 	changed := map[string]*string{}
@@ -177,8 +248,17 @@ func (s *CalendarService) UpdateEvent(ctx context.Context, id string, req model.
 	if req.Notes != nil && !stringPtrEqual(req.Notes, existing.Notes) {
 		changed["notes"] = e.Notes
 	}
+	// A language flip re-translates even when the text is byte-identical: the same
+	// words now need to go the other way, and the old direction's output is gone.
+	if existing.SourceLocale != sourceLocale && len(changed) == 0 {
+		title := e.Title
+		changed["title"] = &title
+		if e.Notes != nil && *e.Notes != "" {
+			changed["notes"] = e.Notes
+		}
+	}
 	if len(changed) > 0 {
-		s.enqueueEventFields(e.ID, changed)
+		s.enqueueEventFields(e.ID, sourceLocale, changed)
 	}
 
 	return e, nil
@@ -197,13 +277,36 @@ func (s *CalendarService) DeleteEvent(ctx context.Context, id string) error {
 // but not the prior state, and a single text field with an empty default is
 // cheap to "translate again" (the cache layer absorbs identical content).
 func (s *CalendarService) UpsertMonthNote(ctx context.Context, year, month int, req model.UpsertMonthNoteRequest, adminID string) (*model.CalendarMonthNote, error) {
-	n, err := s.repo.UpsertMonthNote(ctx, year, month, req.Content, &adminID)
+	// The prior note is read raw ("" locale) purely for its source_locale, so a
+	// save that only reformats existing text keeps the language it already had.
+	// A missing note is not an error here - it just means there is no prior
+	// language to preserve.
+	prior, err := s.repo.GetMonthNote(ctx, year, month, "")
+	if err != nil {
+		return nil, fmt.Errorf("fetch existing month note: %w", err)
+	}
+	current := ""
+	if prior != nil {
+		current = prior.SourceLocale
+	}
+
+	sourceLocale := resolveSourceLocale(textFields(req.Content, nil), current)
+
+	n, err := s.repo.UpsertMonthNote(ctx, year, month, req.Content, &adminID, sourceLocale)
 	if err != nil {
 		return nil, fmt.Errorf("upsert month note: %w", err)
 	}
 
+	// Same flip cleanup as UpdateEvent - a translation into the note's new source
+	// language is now redundant with the note itself.
+	if current != "" && current != sourceLocale {
+		if err := s.repo.DeleteTranslationsForLocale(ctx, n.ID, sourceLocale); err != nil {
+			log.Printf("calendar: purge stale %s translations for month note %s: %v", sourceLocale, n.ID, err)
+		}
+	}
+
 	if req.Content != "" {
-		s.enqueueOne("calendar_month_notes", n.ID, "content", req.Content)
+		s.enqueueOne("calendar_month_notes", n.ID, "content", req.Content, sourceLocale)
 	}
 
 	return n, nil
@@ -320,7 +423,16 @@ func (s *CalendarService) DeletePaletteColor(ctx context.Context, id string) err
 // field on one event. Nil values are skipped (e.g., a Notes field cleared to
 // nil has nothing to translate). The cache lookup in the worker would catch
 // duplicates anyway, but skipping nil saves a job row.
-func (s *CalendarService) enqueueEventFields(eventID string, fields map[string]*string) {
+// sourceLocale is passed rather than assumed. TargetLocales used to be a
+// hardcoded {"vi"}, which was only ever correct because English was the sole
+// possible source; a Vietnamese-authored event needs an English translation
+// instead, and leaving the literal in place would have left it untranslated
+// while also asking the worker to translate Vietnamese into Vietnamese.
+//
+// TargetLocales is left empty on purpose: EnqueueTranslation derives it from
+// SourceLocale, so the "translate into everything except the source" rule lives
+// in exactly one place instead of at every call site.
+func (s *CalendarService) enqueueEventFields(eventID, sourceLocale string, fields map[string]*string) {
 	if s.enqueue == nil {
 		return
 	}
@@ -335,23 +447,37 @@ func (s *CalendarService) enqueueEventFields(eventID string, fields map[string]*
 		return
 	}
 	s.enqueue(translation.TranslationJob{
-		TableName:     "calendar_events",
-		RecordID:      eventID,
-		Fields:        payload,
-		TargetLocales: []string{"vi"},
-		ContentType:   translation.ContentTypeGeneral,
+		TableName:    "calendar_events",
+		RecordID:     eventID,
+		Fields:       payload,
+		SourceLocale: sourceLocale,
+		ContentType:  translation.ContentTypeGeneral,
 	})
 }
 
-func (s *CalendarService) enqueueOne(tableName, recordID, fieldName, value string) {
+func (s *CalendarService) enqueueOne(tableName, recordID, fieldName, value, sourceLocale string) {
 	if s.enqueue == nil || value == "" {
 		return
 	}
 	s.enqueue(translation.TranslationJob{
-		TableName:     tableName,
-		RecordID:      recordID,
-		Fields:        map[string]string{fieldName: value},
-		TargetLocales: []string{"vi"},
-		ContentType:   translation.ContentTypeGeneral,
+		TableName:    tableName,
+		RecordID:     recordID,
+		Fields:       map[string]string{fieldName: value},
+		SourceLocale: sourceLocale,
+		ContentType:  translation.ContentTypeGeneral,
 	})
+}
+
+// textFields collects the translatable text of a record into the shape
+// DetectLocaleFields wants, dropping nil and empty values so a cleared Notes
+// field cannot dilute the evidence from a populated title.
+func textFields(title string, notes *string) map[string]string {
+	out := map[string]string{}
+	if strings.TrimSpace(title) != "" {
+		out["title"] = title
+	}
+	if notes != nil && strings.TrimSpace(*notes) != "" {
+		out["notes"] = *notes
+	}
+	return out
 }

@@ -377,6 +377,23 @@ type CalendarEvent struct {
 	// title or notes were served via an unapproved AI translation. Omitted
 	// from JSON on English responses and on approved translations.
 	MachineTranslated bool `json:"machine_translated,omitempty"`
+	// TitleSource/NotesSource carry the canonical English text alongside a
+	// translated Title/Notes, so an admin can VIEW the calendar in Vietnamese
+	// while the edit form still pre-fills (and therefore saves) English. Without
+	// them, saving an event from /vi would write the machine translation back
+	// into the source column.
+	//
+	// Populated only on localized responses, and stripped for non-admins in the
+	// handler - a public visitor has no use for them. Both nil on English
+	// responses, where Title/Notes already ARE the source.
+	TitleSource *string `json:"title_source,omitempty"`
+	NotesSource *string `json:"notes_source,omitempty"`
+	// SourceLocale is the language Title/Notes are actually written in - what the
+	// admin typed, not a policy. 'en' for everything authored before migration
+	// 000013. Serving reads it to decide whether this viewer needs a translation
+	// at all, and the edit form defaults its language control to it so a
+	// correction sticks instead of being re-detected away on the next save.
+	SourceLocale string `json:"source_locale"`
 }
 
 type CalendarMonthNote struct {
@@ -390,6 +407,12 @@ type CalendarMonthNote struct {
 	// MachineTranslated: true when this month note's content was served via
 	// an unapproved AI translation. Omitted on English responses.
 	MachineTranslated bool `json:"machine_translated,omitempty"`
+	// ContentSource: the authored content, so the Notes modal edits the source
+	// even while the sidebar displays a translation. See
+	// CalendarEvent.TitleSource - same rule, same handler-side stripping.
+	ContentSource *string `json:"content_source,omitempty"`
+	// SourceLocale: see CalendarEvent.SourceLocale.
+	SourceLocale string `json:"source_locale"`
 }
 
 // CalendarMonthSettings is the per-month admin-configurable styling for the
@@ -422,6 +445,8 @@ type CreateCalendarEventRequest struct {
 	AddressPublic  bool              `json:"address_public"`
 	Color          string            `json:"color"`
 	Notes          *string           `json:"notes"`
+	// No source_locale field: the language is detected from Title+Notes by the
+	// service and never supplied by the client. See resolveSourceLocale.
 }
 
 func (r *CreateCalendarEventRequest) Validate() error {
@@ -484,6 +509,9 @@ type UpdateCalendarEventRequest struct {
 	AddressPublic  bool               `json:"address_public"`
 	Color          *string            `json:"color"`
 	Notes          *string            `json:"notes"`
+	// No source_locale field - see CreateCalendarEventRequest. An edit re-detects
+	// from the patched text, so rewriting an English event in Vietnamese moves it
+	// to the Vietnamese side automatically.
 }
 
 func (r *UpdateCalendarEventRequest) Validate() error {
@@ -514,6 +542,8 @@ func (r *UpdateCalendarEventRequest) Validate() error {
 
 type UpsertMonthNoteRequest struct {
 	Content string `json:"content"`
+	// No source_locale field - detected from Content. See
+	// CreateCalendarEventRequest.
 }
 
 type UpsertMonthSettingsRequest struct {
