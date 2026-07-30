@@ -15,6 +15,103 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Traps to know before touching bidirectional translation (migration 000013)
+**Date solved:** 2026-07-29
+**Symptom:** Not a bug report - a list of things that looked fine and were not,
+found while making the calendar accept Vietnamese-authored content. Each one
+fails silently.
+**The traps:**
+1. **`Translator.TranslateField` used to refuse English targets** -
+`if targetLocale == "" || targetLocale == "en" { return sourceText }`, commented
+"the English locale is the source of truth, never translated". Any reverse-direction
+job would have returned its input unchanged, with no error. The guard is now
+"target equals source".
+2. **`PromptCache` ignored its own key argument.** It stored a single `content`
+string while accepting `key`, so with two prompts (`vi_translation`,
+`en_translation`) whichever direction translated first would serve its prompt to
+the other for the rest of the 5-minute TTL - Vietnamese output for an English
+target, no error anywhere. Now a map.
+3. **`"en"` is not in `t.supported`.** `SUPPORTED_LOCALES` lists only non-English
+targets, so `if !t.supported[locale] { continue }` drops every reverse job.
+`TranslateRecord` special-cases English.
+4. **Empty locale changed meaning.** It used to be interchangeable with `"en"`
+(the source column *was* English); now it means "raw stored text, no translation".
+The HTTP handler defaults an absent `?locale=` to `"en"` because the frontend
+omits the param for English viewers - without that default, an English reader gets
+Vietnamese-authored events untranslated.
+5. **`fine_tuning_examples` would have been poisoned.** It is
+`(source_en, approved_vi)`; a VI → EN approval inverts the pair, and its English
+side is machine output a human accepted rather than human-authored English.
+Gated on `t.Locale == "vi"`. See `docs/FINE_TUNING_PLAN.md`.
+6. **A `source_locale` flip orphans a translation.** Rewrite an English event in
+Vietnamese and its old `locale='vi'` row now describes the language the record
+holds natively - it sits in the review queue with the same language on both sides
+of the diff. `DeleteTranslationsForLocale` purges it regardless of approval status.
+7. **Detection must be proportional, not presence-based.** The first version
+treated any Vietnamese character as proof, so "Youth Retreat - Hội thánh" filed as
+Vietnamese - meaning a mostly-English post with one borrowed church term got
+translated the wrong way. The rule is a word-share threshold
+(`vietnameseWordRatio`), which as a side effect makes accented vowels safe to
+count: one "café" in an English sentence is 8% of the words, but excluding accents
+outright made ordinary Vietnamese like `Thánh Kinh Hè` undetectable.
+**Files affected:** `backend/migrations/000013_source_locale.{up,down}.sql`,
+`backend/internal/translation/{detect,prompt,translator,queue,worker,models}.go`,
+`backend/internal/{model/types,repository/calendar,service/calendar,service/translation,handler/calendar}.go`,
+`frontend/components/features/calendar/{types.ts,EventModal.tsx}`,
+`frontend/components/features/admin/TranslationReviewRecord.tsx`, `frontend/lib/calendar.ts`
+
+## Calendar event chips flash Vietnamese then snap back to English on a locale switch
+**Date solved:** 2026-07-29
+**Symptom:** Signed in as an admin, switching EN<->VI on `/calendar` made every
+event chip render in Vietnamese for ~200ms and then jump back to English. Roughly
+1 in 50 switches the Vietnamese text stuck instead. No other page did this, and a
+plain hard refresh of `/vi/calendar` reproduced it without any switching.
+**Root cause:** Two separate defects in `CalendarShell`, stacked.
+(1) The request locale is derived from `isAdmin` (`isAdmin ? undefined : locale` -
+admins read the English source so the edit modal pre-fills canonical text), but on
+the client `isAdmin` is `false` until `/auth/me` answers. The locale switch is a
+*hard* navigation (`LanguageSwitcher` uses `window.location.assign`), which wipes
+the module-scoped `authSnapshot` in `lib/auth.tsx` that normally makes remounts
+seamless - so the new document always starts as "not an admin". The fetch effect
+fired immediately with `?locale=vi`, painted Vietnamese, then `requestLocale`
+flipped to `undefined` once auth resolved and it refetched in English.
+(2) `fetchMonth` had no cancellation or sequence guard, so the two overlapping
+requests for the same month raced on `setEvents` - last to *resolve* won. The
+Vietnamese request starts first but isn't always first back (bigger payload from
+the translation COALESCE join), which is the random 1-in-50 stuck case.
+**Fix:** The premise was wrong, so the fix removed it rather than papering over
+the timing. **The calendar now serves every viewer the locale they picked,
+admins included** - `requestLocale` is just `locale`, with no `isAdmin` in it, so
+there is no auth-dependent refetch and the flash cannot occur.
+
+That alone would have corrupted data, which is what the original rule was
+clumsily protecting: `CalendarEvent` has a single `title`/`notes` field that the
+backend COALESCEs to *either* source or translation, and `EventModal` pre-fills
+from the event object in `CalendarShell`'s fetched list. An admin opening an event
+on `/vi` and hitting Save would write the Vietnamese back into the English source
+column, after which the worker re-translates Vietnamese into Vietnamese. So the
+localized response now *also* carries the untranslated text -
+`title_source` / `notes_source` on each event and `content_source` on the month
+note - and `EventModal` pre-fills from those (`event?.title_source ?? event?.title`).
+Those fields cost nothing to produce (the translation row is already joined) and
+are stripped for non-admins in `handler/calendar.go`, in the same
+`AdminEmailFromContext` block that strips `private_address`.
+
+Two independent hardening changes came out of the same investigation: a
+`requestSeq` ref in `fetchMonth` discards stale responses (and stale
+`setLoading(false)` calls), which fixes the 1-in-50 race and fast month-arrow
+clicking; and `supabase.auth.getSession()` in `lib/auth.tsx` gained the `.catch()`
+it never had - it previously left `loading` true forever if the call rejected.
+**Design rule this establishes:** locale follows the *route*, never the viewer's
+role. Admin tokens control which **fields** come back, not which **language**.
+The display-vs-edit-surface distinction is written up in `docs/agents/frontend.md`
+under "Locale-aware fetching".
+**Files affected:** `frontend/components/features/calendar/CalendarShell.tsx`,
+`frontend/components/features/calendar/EventModal.tsx`,
+`frontend/components/features/calendar/types.ts`, `frontend/lib/calendar.ts`,
+`frontend/lib/auth.tsx`, `backend/internal/model/types.go`,
+`backend/internal/repository/calendar.go`, `backend/internal/handler/calendar.go`
+
 ## Clearing a calendar month note leaves a stale translation that "Clean up orphans" won't catch
 **Date solved:** 2026-07-29 (added the `Dismiss` action)
 **Symptom:** Admin clears the text in a month note (via the Notes modal, Save

@@ -144,9 +144,29 @@ Every resource service in `lib/` accepts an optional `locale` parameter:
 - `getMonth(year, month, accessToken?, locale?)` → adds `?locale=vi` to `/calendar` calls.
 - `getPageContent(slug, locale)` (in `lib/pages.ts`) → adds `?locale=vi` to `/pages/:slug` calls.
 
-**Rule:** public read paths pass the locale they resolved via `getLocale()` (server) or `useLocale()` (client). Admin call sites (admin dashboard, edit modal, page editor) deliberately omit the locale so the form pre-fills with the English source - admins always work with the canonical text, never the translation.
+**Rule:** the distinction is **display surface vs. edit surface**, never admin vs. visitor.
 
-`CalendarShell` reads `isAdmin` and only passes the locale when `!isAdmin` - same rule encoded in one component. When you add a new admin surface that calls `listPosts` or `getMonth`, follow the same pattern.
+- **Display surfaces always pass the locale the viewer picked**, resolved via `getLocale()` (server) or `useLocale()` (client). This includes admins. A language toggle means "show me the site in this language" for everybody - an admin on `/vi/calendar` sees the same Vietnamese chips the congregation sees.
+- **Edit surfaces must pre-fill the authored source**, because their Save writes straight back to the source column. Pre-filling a translation means the first save silently overwrites the source with a machine translation, and the worker then re-translates that language into itself.
+
+> "The source" means English for posts and pages, but since migration `000013` a calendar record's source is whatever language the admin wrote it in (`source_locale`). Do not assume English anywhere in the calendar - read `source_locale`.
+
+Two ways to satisfy the second rule, and which one a surface uses depends on whether it's *also* a display surface:
+
+| Surface | Approach |
+|---|---|
+| Admin dashboard, edit modal, page editor (`listPosts`, `getPost`, `getPageContent`) | Omit the locale entirely. These pages exist to edit; there is no display copy to be localized, so the source can live in the display field itself. |
+| `/calendar` (`getMonth`) | Pass the locale **and** send the admin token. The response then carries `title_source` / `notes_source` / `content_source` next to the translated `title` / `notes` / `content`, and `EventModal` pre-fills from the `_source` variants. |
+
+### The calendar declares no language on write
+
+`EventModal` has no language selector and sends no `source_locale` or `ui_locale`. The backend detects the language from the submitted text on every save (majority of words wins - see `docs/agents/backend.md`). Do not add a client-side language field: the UI locale is deliberately not an input, because what the panel is displaying says nothing about what the admin is typing.
+
+An edit re-detects from the patched text, so rewriting an English event in Vietnamese moves it to the Vietnamese side by itself.
+
+The calendar needs the second approach because it's one page doing both jobs - a public month view with admin edit affordances layered on it. The `_source` fields are stripped for non-admins in `handler/calendar.go`, in the same block that strips `private_address`.
+
+**Never gate a request locale on `isAdmin`.** It reads `false` until `/auth/me` answers, so "not an admin" and "don't know yet" are indistinguishable, and a locale switch is a hard navigation that wipes the `authSnapshot` in `lib/auth.tsx` - meaning every switch starts from the wrong answer. A component that does this fetches one language, paints it, then refetches the other. See the flash entry in `known-quirks.md`. Derive the locale from the route, and let the token control which *fields* come back rather than which *language*.
 
 ### Calendar colors: `resolveColor` is the only entry point
 

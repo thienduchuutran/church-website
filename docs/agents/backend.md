@@ -243,7 +243,25 @@ Never leak internal error messages or stack traces to the client. Log them serve
 
 ## Translation engine (`internal/translation/`)
 
-Async EN → VI translation for posts, page sections, calendar events, and month notes. The Go backend never blocks an HTTP write on a model call - it inserts English instantly, enqueues a job, and a background worker drains the queue.
+Async translation for posts, page sections, calendar events, and month notes. The Go backend never blocks an HTTP write on a model call - it saves the authored text instantly, enqueues a job, and a background worker drains the queue.
+
+### Direction is per record (migration `000013`)
+
+**The calendar is bidirectional; posts and pages are not yet.** An admin composes a calendar event in whichever language they are thinking in, and the backend files it under that language and translates the other way. Everything else still assumes an English source.
+
+**The rule is proportional: whichever language most of the words are in wins.** A mostly-English announcement that borrows a few Vietnamese church terms is English and gets translated to Vietnamese; a mostly-Vietnamese one is Vietnamese and gets translated to English. `DetectLocale` in `detect.go` counts words carrying Vietnamese diacritics and compares the share against `vietnameseWordRatio` (0.4) - that constant is the only tunable number in the feature.
+
+**The admin's UI locale is not an input, anywhere.** Which language the panel is displaying says nothing about which language the admin is typing in. There is also no client-supplied `source_locale`: the request bodies carry no language field at all, so a client cannot declare or get it wrong. `resolveSourceLocale` (`service/calendar.go`) is just detection, plus one fallback for an edit that changes no text (a date-only PATCH keeps the stored value rather than re-detecting on nothing).
+
+Because the rule is proportional, accented vowels that also appear in French and Spanish loanwords (à, á, é…) count as Vietnamese marks. A presence-based check could not afford that - one "café" would flip a whole English note - but one accented word in twelve is 8%, nowhere near the threshold. Counting them is what lets ordinary Vietnamese like `Thánh Kinh Hè` register at all, since sắc and huyền are its two commonest tones.
+
+Known limitation: Vietnamese typed without diacritics (`Trung Thu`) is indistinguishable from English and reads as English. That falls out of the rule rather than being a special case; the fix is to type the diacritics.
+
+**Two system prompts, and `PromptCache` must stay keyed.** `PromptKeyFor(targetLocale)` picks `vi_translation` or `en_translation` by *target*, since each row encodes a one-way glossary. `PromptCache` was a single `content` field that still accepted a `key` argument - harmless with one prompt, but with two it would have served whichever direction ran first to the other for the rest of the TTL, producing Vietnamese output for an English target with no error anywhere. It is now a map.
+
+**`"en"` is never in `t.supported`.** `SUPPORTED_LOCALES` lists only non-English targets, so any gate written as `if !t.supported[locale]` silently drops every reverse-direction job. `TranslateRecord` special-cases it.
+
+**Fine-tuning capture is EN → VI only.** `fine_tuning_examples` is `(source_en, approved_vi)`; a `vi->en` approval would invert every pair, and its English side is machine output a human merely accepted - not human-authored English. `captureFinetuningExample` skips anything where `t.Locale != "vi"`.
 
 ### Flow
 

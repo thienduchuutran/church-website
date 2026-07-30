@@ -235,7 +235,29 @@ create table calendar_month_settings (
 
 ## Translation tables
 
-Three tables back the async EN → VI translation engine. They are populated by the Go backend's `internal/translation/` worker; the frontend never writes to them directly. Schema source: `backend/migrations/000004_translations.up.sql`.
+Three tables back the async translation engine. They are populated by the Go backend's `internal/translation/` worker; the frontend never writes to them directly. Schema source: `backend/migrations/000004_translations.up.sql`, extended by `000013_source_locale.up.sql`.
+
+### Direction is data, not policy (migration `000013`)
+
+The engine was originally EN → VI only, and that assumption was baked in three places: the source column *was* English by definition, `translations.locale` could only be `'vi'`, and `Translator.TranslateField` early-returned on an English target. Migration `000013` replaced the assumption with a column.
+
+**`source_locale`** on `calendar_events`, `calendar_month_notes`, and `translation_jobs` records which language that row's own text columns are written in. `'en'` for everything authored before the migration - correct, because the old code path could not have produced anything else.
+
+Consequences worth knowing before touching any of this:
+
+| | Before `000013` | After |
+|---|---|---|
+| Source language | Always English | Per row, in `source_locale` |
+| `translations.locale` | Always `'vi'` | `'vi'` **or** `'en'` (a reverse-direction row) |
+| Read path | `if locale != 'en'` → join | `CASE WHEN source_locale = $viewer THEN own column ELSE COALESCE(translation, own column) END` |
+| System prompts | One row, `vi_translation` | Two: `vi_translation` and `en_translation` |
+| Empty locale on read | Meant "English" | Means **raw stored text**, no translation - internal callers only |
+
+**The two-column pairing.** A localized read returns both the translated text *and* the authored text (`title_source` / `notes_source` / `content_source`), because the calendar is one page doing two jobs: display for everyone, editing for admins. The display fields follow the viewer's locale; the `_source` fields are what the edit form pre-fills, so a save always writes the source and never overwrites it with a machine translation. The `_source` fields are admin-only and stripped in `handler/calendar.go`.
+
+**Language flips purge.** `source_locale` can change - an admin rewrites an English event in Vietnamese. The translation into the *new* source language is then redundant with the record itself, and would sit in the review queue showing the same language on both sides of the diff. `CalendarRepository.DeleteTranslationsForLocale` removes it, and unlike `DeleteUnapproved` it ignores approval status: a human-approved Vietnamese translation of text that is now itself Vietnamese is a leftover, not a reviewer edit worth protecting.
+
+**Phase A only.** `posts` and `page_content` still carry an implicit English source. That is safe to leave - `'en'` plus the direction-aware read path reproduce the old behavior exactly. Converting them means adding `source_locale`, calling `resolveSourceLocale` on their write paths, and flipping their COALESCE joins to the `CASE` form above; do all three together, or rows get relabelled while the serving layer still ignores the label.
 
 ### `translations`
 Stores every translated field for every record across every locale. Generic by design: a single table serves posts, page_content, and calendar_events.
@@ -245,7 +267,7 @@ create table translations (
   table_name      text not null,                  -- 'posts' | 'page_content' | 'calendar_events' | 'calendar_month_notes'
   record_id       uuid not null,                  -- the source row's UUID
   field_name      text not null,                  -- 'title' | 'body' | 'content' | 'notes'
-  locale          text not null,                  -- 'vi' today; extensible
+  locale          text not null,                  -- TARGET locale: 'vi', or 'en' for a reverse-direction row (000013)
   source_hash     text not null,                  -- sha256(trimmed source). Cache key.
   source_text     text not null,                  -- audit trail: what we translated from
   translated_text text not null,

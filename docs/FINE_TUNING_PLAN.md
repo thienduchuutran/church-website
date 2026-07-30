@@ -67,9 +67,28 @@ further instead of unlearning someone else's.
 ## Phase 0: Data collection (NOW - ongoing)
 
 **This is the current phase.** The `fine_tuning_examples` table is live.
-Every admin approval or edit on `/admin/translations` automatically captures
-a gold `(source_en, approved_vi)` pair, fire-and-forget, with deduplication
-on `(record_id, source_field, record_table)`.
+Every EN → VI admin approval or edit on `/admin/translations` automatically
+captures a gold `(source_en, approved_vi)` pair, fire-and-forget, with
+deduplication on `(record_id, source_field, record_table)`.
+
+> **VI → EN approvals are deliberately NOT captured.** Migration `000013` made
+> the calendar bidirectional, so an admin can author in Vietnamese and approve
+> the AI's English. Those approvals are skipped by
+> `TranslationService.captureFinetuningExample` (`t.Locale != "vi"`), for two
+> independent reasons. First, column semantics: this table is
+> `(source_en, approved_vi)`, so a reverse row would put Vietnamese in
+> `source_en` and invert every pair a training run reads. Second, and worse,
+> pair quality: the English side of such a pair is *machine output a human
+> merely accepted*, not human-authored English. Training an EN → VI model on
+> machine English as its input distribution teaches it to expect its own output
+> as input.
+>
+> If a VI → EN model ever becomes interesting, that needs its own columns and
+> its own decision about whether these pairs are wanted at all. Skipping is the
+> conservative default - a smaller clean dataset beats a larger poisoned one,
+> and once mixed in, the bad rows would be indistinguishable from the good ones.
+> **Consequence for the 200-pair target below:** only English-authored content
+> counts toward it, so heavy Vietnamese authoring slows dataset growth.
 
 - **Target: 200+ pairs** before the first fine-tuning run.
 - At ~5-15 new content pieces per month going through approval, expect
