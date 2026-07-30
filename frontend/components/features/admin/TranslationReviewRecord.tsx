@@ -25,6 +25,32 @@ const FIELD_LABELS: Record<string, string> = { title: 'Title', body: 'Body' }
 // because Tailwind 4 purges class names it can't see at build time.
 const SAGE = '#4A7A5C'
 
+// Labels for one translation direction, derived from the TARGET locale.
+//
+// A translation row records its target in `locale`; the source is whatever the
+// record was authored in, which is the other language. That inference is only
+// valid while exactly two languages are supported - the day a third arrives, the
+// source has to come off the record's source_locale instead of being deduced,
+// and this helper is the single place that has to change.
+function directionLabels(targetLocale: string): {
+  badge: string
+  sourceLabel: string
+  targetLabel: string
+} {
+  if (targetLocale === 'en') {
+    return {
+      badge: 'VI → EN',
+      sourceLabel: 'Vietnamese source',
+      targetLabel: 'English translation',
+    }
+  }
+  return {
+    badge: 'EN → VI',
+    sourceLabel: 'English source',
+    targetLabel: 'Vietnamese translation',
+  }
+}
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
@@ -191,6 +217,14 @@ export default function TranslationReviewRecord({
     }
   }
 
+  // Which way this record is being translated. group.locale is the TARGET, so the
+  // source is the other language - the panel used to hardcode "English source /
+  // Vietnamese translation" because English was the only possible source. Since
+  // migration 000013 an admin can author in Vietnamese, which produces genuine
+  // vi->en rows, and mislabelling those would show a reviewer two boxes both
+  // claiming to be the language they are not.
+  const direction = directionLabels(group.locale)
+
   return (
     <article className="rounded-xl border border-border bg-surface p-5 shadow-sm">
       {/* Header: record context + table/locale badges. record_title is the
@@ -202,8 +236,11 @@ export default function TranslationReviewRecord({
         <span className={`rounded-full px-2.5 py-0.5 font-display text-xs font-semibold ${badge.className}`}>
           {badge.label}
         </span>
+        {/* The direction badge replaces a bare target-locale chip. On its own,
+            "VI" was unambiguous only while every row was EN->VI; now the reviewer
+            needs to know which side they are reading before they trust it. */}
         <span className="rounded-full border border-border px-2.5 py-0.5 font-display text-xs font-medium uppercase text-muted">
-          {group.locale}
+          {direction.badge}
         </span>
         {allApproved && (
           <span style={{ color: SAGE }} className="font-display text-xs font-semibold">
@@ -267,10 +304,10 @@ export default function TranslationReviewRecord({
                   which would let a long unbreakable URL stretch the track past
                   the card edge. */}
               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {/* English source (read-only) */}
+                {/* Authored source (read-only) */}
                 <div className="min-w-0">
                   <label className="mb-1 block font-display text-[11px] font-medium uppercase tracking-wider text-muted">
-                    English source
+                    {direction.sourceLabel}
                   </label>
                   {isBody ? (
                     <div className="min-h-[6rem] rounded-lg bg-muted/10 p-3">
@@ -283,10 +320,10 @@ export default function TranslationReviewRecord({
                   )}
                 </div>
 
-                {/* Vietnamese target (editable) */}
+                {/* Translated target (editable) */}
                 <div className="min-w-0">
                   <label className="mb-1 flex items-center justify-between font-display text-[11px] font-medium uppercase tracking-wider text-muted">
-                    <span>Vietnamese translation</span>
+                    <span>{direction.targetLabel}</span>
                     {isBody && (
                       <button
                         type="button"
