@@ -11,12 +11,20 @@ import type {
 
 const BASE = '/api/v1/calendar'
 
-// getMonth accepts an optional locale so public viewers see translated event
-// titles, notes, and the month note. Admins always read in English by omitting
-// the locale, since the admin UI edits the English source. The accessToken,
-// when present, opts the request into the OptionalAdmin middleware path which
-// reveals private fields like private_address - keep these two concerns
-// orthogonal so a Vietnamese-viewing admin still gets the admin-only fields.
+// getMonth accepts an optional locale so viewers see translated event titles,
+// notes, and the month note. EVERY viewer passes the locale they picked, admins
+// included - the calendar is a display surface, and an admin on /vi should see
+// what the congregation sees.
+//
+// The accessToken is a separate concern: when present it opts the request into
+// the OptionalAdmin middleware path, which reveals admin-only fields -
+// private_address, plus title_source/notes_source/content_source carrying the
+// untranslated English that EventModal pre-fills from. That pairing is what lets
+// an admin view Vietnamese and still save English; see CalendarShell.
+//
+// Note this deliberately differs from lib/posts.ts, where admin call sites omit
+// the locale. Those are edit surfaces (the dashboard list feeds the edit modal
+// directly), so they want the source in the display field itself.
 export async function getMonth(
   year: number,
   month: number,
@@ -28,6 +36,9 @@ export async function getMonth(
   return apiGet(`${BASE}?${params.toString()}`, accessToken) as Promise<CalendarMonthResponse>
 }
 
+// No language field on any write. The backend detects the source language from
+// the submitted text (majority of words wins) and sets source_locale itself, so
+// there is nothing for a client to declare or get wrong.
 export async function createEvent(
   payload: {
     date: string

@@ -58,7 +58,23 @@ export interface CalendarEvent {
   // translation. Omitted on English responses. Drives the badge in the
   // calendar tile.
   machine_translated?: boolean
+  // The authored text behind a possibly-translated title/notes - whatever
+  // language the admin actually wrote it in, which since migration 000013 is not
+  // necessarily English. Present only on a response fetched with an admin token;
+  // absent when the viewer's locale already matches source_locale (title/notes
+  // then ARE the source) and for public visitors. EventModal pre-fills from
+  // these so an edit always modifies the source - never read them for display.
+  title_source?: string | null
+  notes_source?: string | null
+  // Which language title/notes are written in. Drives the direction of both the
+  // read path and the translation job, and seeds the edit form's language
+  // control so a correction is not re-detected away on the next save.
+  source_locale: SourceLocale
 }
+
+// The languages a record can be authored in. Mirrors the backend's
+// normalizeLocale, which collapses anything unrecognized to 'en'.
+export type SourceLocale = 'en' | 'vi'
 
 export interface CalendarMonthNote {
   id: string
@@ -71,6 +87,11 @@ export interface CalendarMonthNote {
   // Same semantics as CalendarEvent.machine_translated - applies to the
   // sidebar note's content field.
   machine_translated?: boolean
+  // Same semantics as CalendarEvent.title_source - the authored source the Notes
+  // modal edits while the sidebar displays the translation.
+  content_source?: string | null
+  // See CalendarEvent.source_locale.
+  source_locale: SourceLocale
 }
 
 export interface CalendarMonthSettings {

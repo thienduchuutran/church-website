@@ -79,7 +79,15 @@ export default function EventModal({
   onSaved,
   onClose,
 }: EventModalProps) {
-  const [title, setTitle] = useState(event?.title ?? '')
+  // Text fields pre-fill from the *_source variants, falling back to the
+  // displayed value. The calendar view is localized for everyone now (an admin on
+  // /vi sees Vietnamese chips, same as the congregation), so `event.title` may be
+  // a machine translation - and this form's Save writes straight back to the
+  // source column. Editing English here is what keeps the translation pipeline's
+  // canonical text intact; without the `_source ??` the first save from /vi would
+  // overwrite English with its own Vietnamese translation. The fallback covers
+  // English responses, where title/notes already are the source.
+  const [title, setTitle] = useState(event?.title_source ?? event?.title ?? '')
   const [eventType, setEventType] = useState<CalendarEventType>(event?.event_type ?? 'general')
   const [icon, setIcon] = useState(event?.icon ?? 'star')
   const [color, setColor] = useState(event?.color ?? 'slate')
@@ -88,13 +96,16 @@ export default function EventModal({
   // Whether the address is shown on the public website (the export always shows
   // it). Defaults to private; admin opts each address in.
   const [addressPublic, setAddressPublic] = useState(event?.address_public ?? false)
-  const [notes, setNotes] = useState(event?.notes ?? '')
+  const [notes, setNotes] = useState(event?.notes_source ?? event?.notes ?? '')
   // Multi-day span. startDate is the event's day (fixed); a span exists only
   // when an end date past the start is set. Initialized from the loaded event.
   const startDate = date ?? event?.date ?? ''
   const [endDate, setEndDate] = useState(event?.end_date ?? '')
   const [multiDay, setMultiDay] = useState(!!event?.end_date)
-  const [noteContent, setNoteContent] = useState(monthNote?.content ?? '')
+  const [noteContent, setNoteContent] = useState(monthNote?.content_source ?? monthNote?.content ?? '')
+  // Nothing here declares a language. The backend detects it from the text on
+  // every save, so writing in either language files the record on the matching
+  // side and queues the translation the other way.
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)

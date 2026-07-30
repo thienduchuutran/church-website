@@ -139,28 +139,43 @@ export default function CalendarShell({
   const activeAccent = liveAccent ?? monthSettings?.accent_color ?? theme.header
   const activeTheme = { ...theme, header: activeAccent, title: activeAccent }
 
-  // Admin sessions deliberately do NOT pass the locale - admin viewers always
-  // see the English source so the edit modal pre-fills with the canonical
-  // text. Public viewers pass the page locale so translations come back via
-  // the COALESCE join. This is the same rule applied to lib/posts.ts.
+  // Everyone - admins included - reads the calendar in the locale they picked.
+  // A language toggle means "show me the site in this language", and an admin
+  // viewing /vi should see exactly what the congregation sees.
+  //
+  // The edit modal still writes English: an admin token makes the response carry
+  // title_source/notes_source alongside the translated title/notes, and
+  // EventModal pre-fills from those. Without that pair, saving an event while
+  // viewing Vietnamese would overwrite the canonical English source with a
+  // machine translation.
   const locale = useLocale()
-  const requestLocale = isAdmin ? undefined : locale
+
+  // Stamps every in-flight request so a slow earlier response can't overwrite a
+  // newer one. Overlapping calls are normal here - fast arrow clicks fire one
+  // per month, and the accessToken landing mid-flight refires the current month -
+  // and without this the last one to *resolve* won rather than the last one sent.
+  const requestSeq = useRef(0)
 
   const fetchMonth = useCallback(async (y: number, m: number) => {
+    const seq = ++requestSeq.current
     setLoading(true)
     setError(null)
     try {
-      const data: CalendarMonthResponse = await getMonth(y, m, accessToken, requestLocale)
+      const data: CalendarMonthResponse = await getMonth(y, m, accessToken, locale)
+      if (seq !== requestSeq.current) return
       setEvents(data.events ?? [])
       setMonthNote(data.month_note ?? null)
       setMonthSettings(data.month_settings ?? null)
       setLiveAccent(null)
     } catch {
+      if (seq !== requestSeq.current) return
       setError("Couldn't load calendar. Please try again.")
     } finally {
-      setLoading(false)
+      // Only the newest request owns the spinner - a superseded one clearing it
+      // would un-dim the grid while the real fetch is still running.
+      if (seq === requestSeq.current) setLoading(false)
     }
-  }, [accessToken, requestLocale])
+  }, [accessToken, locale])
 
   // Persist the accent for the currently-viewed month. The picker awaits the
   // returned promise so it can show its own inline error if the PUT fails.
@@ -178,6 +193,10 @@ export default function CalendarShell({
     }
   }
 
+  // Fires immediately - the locale no longer depends on the auth check, so there
+  // is nothing to wait for. When the token lands it refires the same month, but
+  // both responses carry the same language, so the only difference is the
+  // admin-only fields (private_address, title_source) appearing.
   useEffect(() => { fetchMonth(year, month) }, [year, month, fetchMonth])
 
   function prevMonth() {
