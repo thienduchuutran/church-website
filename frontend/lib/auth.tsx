@@ -63,6 +63,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setLoading(false)
       }
+    }).catch(() => {
+      // getSession can reject when Supabase is unreachable or a stored token
+      // fails to refresh. Without this, `loading` would stay true forever and
+      // any consumer that waits on it (CalendarShell holds its fetch back until
+      // auth resolves) would hang. Failing closed = treated as signed out.
+      setSession(null)
+      setIsAdmin(false)
+      setLoading(false)
     })
 
     const {
