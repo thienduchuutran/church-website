@@ -67,8 +67,29 @@ func (s *TranslationService) Approve(ctx context.Context, id, approverID string,
 // enqueue: approval is mandatory, capture is best-effort. A capture failure
 // is logged and never surfaced to the admin. Re-approving the same row is a
 // silent no-op via ON CONFLICT in the repository.
+// Only EN -> VI approvals are captured. Since migration 000013 a record can be
+// authored in Vietnamese, which produces approvals in the other direction - and
+// those are not training pairs for this dataset, in two independent ways:
+//
+//   - Column semantics. fine_tuning_examples is (source_en, approved_vi). A
+//     vi->en row would put Vietnamese in source_en and English in approved_vi,
+//     silently inverting every pair a future training run reads.
+//   - Pair quality. Even transposed it would be the wrong kind of example: the
+//     English side is machine output that a human merely accepted, not
+//     human-authored English. Training an en->vi model on machine English as the
+//     input distribution teaches it to expect its own output as input.
+//
+// Capturing reverse-direction pairs properly needs its own columns and its own
+// judgement about whether they are wanted at all - a decision for whenever a
+// vi->en model is actually on the table. Skipping is the conservative default:
+// a smaller clean dataset beats a larger poisoned one, and nothing here is
+// recoverable after the fact because the rows would be indistinguishable.
 func (s *TranslationService) captureFinetuningExample(t *model.Translation) {
 	if t == nil || t.ApprovedBy == nil {
+		return
+	}
+	if t.Locale != "vi" {
+		log.Printf("fine-tuning capture skipped for translation %s: locale=%q is not an en->vi pair", t.ID, t.Locale)
 		return
 	}
 	ex := repository.FinetuningExample{
