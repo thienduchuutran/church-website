@@ -96,7 +96,7 @@ func (w *Worker) tick(ctx context.Context) error {
 	defer tx.Rollback(ctx)
 
 	rows, err := tx.Query(ctx,
-		`SELECT id, table_name, record_id, fields, target_locales, content_type, attempts
+		`SELECT id, table_name, record_id, fields, source_locale, target_locales, content_type, attempts
 		 FROM translation_jobs
 		 WHERE status = 'pending' AND attempts < $1
 		 ORDER BY created_at ASC
@@ -115,7 +115,7 @@ func (w *Worker) tick(ctx context.Context) error {
 			fieldsRaw []byte
 			ct        string
 		)
-		if err := rows.Scan(&j.ID, &j.TableName, &j.RecordID, &fieldsRaw, &j.TargetLocales, &ct, &j.Attempts); err != nil {
+		if err := rows.Scan(&j.ID, &j.TableName, &j.RecordID, &fieldsRaw, &j.SourceLocale, &j.TargetLocales, &ct, &j.Attempts); err != nil {
 			rows.Close()
 			return err
 		}

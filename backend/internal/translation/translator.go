@@ -78,13 +78,20 @@ func NewTranslator(pool *pgxpool.Pool, geminiKey string, supportedLocales []stri
 	}
 }
 
-// TranslateField returns the translation of sourceText into targetLocale,
-// persisting the result in the translations table along the way.
+// TranslateField returns the translation of sourceText from sourceLocale into
+// targetLocale, persisting the result in the translations table along the way.
+//
+// sourceLocale is a parameter rather than an assumption. It used to be implicit:
+// English was the only possible source, so any request to translate *into*
+// English was a no-op by definition and was short-circuited. Since migration
+// 000013 a record carries its own source_locale, so both directions are real and
+// the skip condition is "target equals source", not "target is English".
 //
 // Steps, in order:
-//  1. Early-return sourceText when targetLocale is "en" or empty. The English
-//     locale is the source of truth, never translated; this skip is the
-//     reason an English-only visit costs zero API calls.
+//  1. Early-return sourceText when targetLocale is empty or equals sourceLocale.
+//     A same-language "translation" is what makes an all-English site cost zero
+//     API calls, and it is also the guard that stops a Vietnamese-authored
+//     record from being re-translated into Vietnamese.
 //  2. Trim and length-check. Strings under minSourceLen bypass the model.
 //  3. Hash the trimmed source (sha256) and look up any prior translation
 //     with the same hash + locale. A cache hit reuses the translated text
@@ -96,9 +103,10 @@ func NewTranslator(pool *pgxpool.Pool, geminiKey string, supportedLocales []stri
 //     intended behavior: human approvals only apply to the text they reviewed.
 func (t *Translator) TranslateField(
 	ctx context.Context,
-	tableName, recordID, fieldName, sourceText, targetLocale string,
+	tableName, recordID, fieldName, sourceText, sourceLocale, targetLocale string,
 ) (string, error) {
-	if targetLocale == "" || targetLocale == "en" {
+	sourceLocale = normalizeLocale(sourceLocale)
+	if targetLocale == "" || normalizeLocale(targetLocale) == sourceLocale {
 		return sourceText, nil
 	}
 	trimmed := strings.TrimSpace(sourceText)
@@ -118,7 +126,15 @@ func (t *Translator) TranslateField(
 		return cached, nil
 	}
 
-	systemPrompt, err := t.promptCache.GetSystemPrompt(ctx, t.pool, SystemPromptKey)
+	// The prompt is chosen by TARGET locale, not by source: each row in
+	// system_prompts encodes a one-way glossary plus the register rules for the
+	// language it produces. vi_translation says "God -> Chúa" and asks for the
+	// Southern Vietnamese register; en_translation (migration 000013) inverts the
+	// glossary and asks for idiomatic American English. Feeding Vietnamese text
+	// to vi_translation would ask the model to translate into the language it is
+	// already in.
+	promptKey := PromptKeyFor(targetLocale)
+	systemPrompt, err := t.promptCache.GetSystemPrompt(ctx, t.pool, promptKey)
 	if err != nil {
 		return "", err
 	}
@@ -131,7 +147,8 @@ func (t *Translator) TranslateField(
 	if translated == "" {
 		return "", errors.New("translation API returned empty result")
 	}
-	log.Printf("translation_api field=%s locale=%s model=%s chars=%d", fieldName, targetLocale, geminiModel, len(translated))
+	log.Printf("translation_api field=%s direction=%s->%s model=%s prompt=%s/%s chars=%d",
+		fieldName, sourceLocale, targetLocale, geminiModel, promptKey, t.promptCache.Version(promptKey), len(translated))
 
 	if err := t.upsertTranslation(ctx, tableName, recordID, fieldName, targetLocale, hash, trimmed, translated); err != nil {
 		return translated, fmt.Errorf("persist translation: %w", err)
@@ -141,22 +158,33 @@ func (t *Translator) TranslateField(
 
 // TranslateRecord translates every (field, locale) pair on a job. Per-field
 // failures are logged but do not abort the job - a partial translation is
-// strictly better than none, since the COALESCE fallback on read covers any
-// still-missing fields with the English source.
+// strictly better than none, since the fallback on read covers any
+// still-missing fields with the record's own source text.
+//
+// job.SourceLocale is the language the enqueued text is in. It is read off the
+// job rather than off the record because by the time the worker claims a row the
+// record may already have been edited again; a job must translate the text it was
+// created with, in the direction it was created for.
 func (t *Translator) TranslateRecord(ctx context.Context, job TranslationJob) error {
+	sourceLocale := normalizeLocale(job.SourceLocale)
+
 	var firstErr error
 	for _, locale := range job.TargetLocales {
 		locale = strings.TrimSpace(locale)
-		if locale == "" || locale == "en" {
+		if locale == "" || normalizeLocale(locale) == sourceLocale {
 			continue
 		}
-		if !t.supported[locale] {
+		// "en" is a legitimate target now (a Vietnamese-authored record needs an
+		// English translation) but it is never in t.supported: SUPPORTED_LOCALES
+		// lists only the non-English targets, so gating on that map alone would
+		// silently drop every reverse-direction job.
+		if locale != "en" && !t.supported[locale] {
 			log.Printf("translation worker: skipping unsupported locale %q on job %s", locale, job.ID)
 			continue
 		}
 		for field, source := range job.Fields {
-			if _, err := t.TranslateField(ctx, job.TableName, job.RecordID, field, source, locale); err != nil {
-				log.Printf("translation field failed (job=%s field=%s locale=%s): %v", job.ID, field, locale, err)
+			if _, err := t.TranslateField(ctx, job.TableName, job.RecordID, field, source, sourceLocale, locale); err != nil {
+				log.Printf("translation field failed (job=%s field=%s %s->%s): %v", job.ID, field, sourceLocale, locale, err)
 				if firstErr == nil {
 					firstErr = err
 				}

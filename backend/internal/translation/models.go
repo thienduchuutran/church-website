@@ -30,10 +30,17 @@ const (
 // -> source text} map the worker iterates over. TargetLocales is normally
 // ["vi"] but is a slice so the same job can fan out to more locales later.
 type TranslationJob struct {
-	ID            string
-	TableName     string
-	RecordID      string
-	Fields        map[string]string
+	ID        string
+	TableName string
+	RecordID  string
+	Fields    map[string]string
+	// SourceLocale is the language Fields is written in. Snapshotted onto the job
+	// (migration 000013) rather than looked up from the record at claim time,
+	// because the record can be edited again between enqueue and claim - a job
+	// must translate the text it was created with, in the direction it was
+	// created for. Empty is treated as "en" by normalizeLocale, which is what
+	// every job enqueued before 000013 implicitly meant.
+	SourceLocale  string
 	TargetLocales []string
 	ContentType   ContentType
 	Status        string

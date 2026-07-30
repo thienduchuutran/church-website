@@ -39,8 +39,18 @@ func EnqueueTranslation(ctx context.Context, pool *pgxpool.Pool, job Translation
 	if len(job.Fields) == 0 {
 		return nil
 	}
+	// Default the direction before defaulting the targets, so the fallback target
+	// cannot contradict the source. An unset SourceLocale means "en" (what every
+	// pre-000013 call site meant implicitly), and an en-sourced job with no
+	// explicit targets still means {'vi'} - preserving the old behavior exactly
+	// for any caller not yet converted.
+	job.SourceLocale = normalizeLocale(job.SourceLocale)
 	if len(job.TargetLocales) == 0 {
-		job.TargetLocales = []string{"vi"}
+		if job.SourceLocale == "en" {
+			job.TargetLocales = []string{"vi"}
+		} else {
+			job.TargetLocales = []string{"en"}
+		}
 	}
 	if job.ContentType == "" {
 		job.ContentType = ContentTypeGeneral
@@ -53,9 +63,9 @@ func EnqueueTranslation(ctx context.Context, pool *pgxpool.Pool, job Translation
 
 	_, err = pool.Exec(ctx,
 		`INSERT INTO translation_jobs
-		   (table_name, record_id, fields, target_locales, content_type, status)
-		 VALUES ($1, $2, $3, $4, $5, 'pending')`,
-		job.TableName, job.RecordID, fieldsJSON, job.TargetLocales, string(job.ContentType),
+		   (table_name, record_id, fields, source_locale, target_locales, content_type, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, 'pending')`,
+		job.TableName, job.RecordID, fieldsJSON, job.SourceLocale, job.TargetLocales, string(job.ContentType),
 	)
 	return err
 }
