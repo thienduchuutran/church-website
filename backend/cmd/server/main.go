@@ -100,6 +100,15 @@ func main() {
 	var (
 		translationWorker  *translation.Worker
 		enqueueTranslation translation.EnqueueFn
+		// placeNamer reuses the translator's Gemini plumbing (key, endpoint,
+		// prompt cache, truncation check) for the one-shot "what is this place
+		// called?" question. Declared out here so the calendar service can be
+		// handed it below; left nil when no key is configured, which is why the
+		// assignment happens inside the block rather than after it - assigning a
+		// nil *Translator into an interface would produce a non-nil interface
+		// holding a nil pointer, and every naming call would panic instead of
+		// no-op'ing.
+		placeNamer service.PlaceNamer
 	)
 	if dbPool != nil {
 		enqueueTranslation = func(job translation.TranslationJob) {
@@ -128,9 +137,12 @@ func main() {
 			translationWorker = translation.NewWorker(translator, dbPool, interval)
 			translationWorker.Start(ctx)
 			defer translationWorker.Stop()
+			placeNamer = translator
 			log.Println("translation worker enabled (gemini)")
+			log.Println("calendar place naming enabled (gemini)")
 		} else {
 			log.Println("translation worker disabled (no GEMINI_API_KEY) - jobs will enqueue but not drain")
+			log.Println("calendar place naming disabled (no GEMINI_API_KEY) - places keep their provisional names")
 		}
 	}
 
@@ -241,6 +253,12 @@ func main() {
 		calendarSvc := service.NewCalendarService(calendarRepo)
 		if enqueueTranslation != nil {
 			calendarSvc.SetTranslationQueue(enqueueTranslation)
+		}
+		// Without this the calendar still resolves and dedupes places; they just
+		// keep the provisional name (the event's own title) instead of being
+		// labelled "Church".
+		if placeNamer != nil {
+			calendarSvc.SetPlaceNamer(placeNamer)
 		}
 		calendarHandler = handler.NewCalendarHandler(calendarSvc)
 

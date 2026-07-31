@@ -49,7 +49,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 			// its [date, end_date] range intersects the month - so a camp that
 			// starts in April and ends in May shows up in BOTH months. A
 			// single-day event (end_date NULL) collapses to date via COALESCE.
-			`SELECT id, date::text, end_date::text, title, event_type, icon, private_address, address_public, color, notes, admin_id, created_at, updated_at, source_locale
+			`SELECT id, date::text, end_date::text, title, event_type, icon, private_address, address_public, place_id, color, notes, admin_id, created_at, updated_at, source_locale
 			 FROM calendar_events
 			 WHERE date < (make_date($1, $2, 1) + interval '1 month')
 			   AND COALESCE(end_date, date) >= make_date($1, $2, 1)
@@ -64,7 +64,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 		var events []model.CalendarEvent
 		for rows.Next() {
 			var e model.CalendarEvent
-			if err := rows.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.Color,
+			if err := rows.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.PlaceID, &e.Color,
 				&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &e.SourceLocale); err != nil {
 				return nil, err
 			}
@@ -90,7 +90,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 		`SELECT e.id, e.date::text, e.end_date::text,
 		        CASE WHEN e.source_locale = $3 THEN e.title
 		             ELSE COALESCE(t_title.translated_text, e.title) END AS title,
-		        e.event_type, e.icon, e.private_address, e.address_public, e.color,
+		        e.event_type, e.icon, e.private_address, e.address_public, e.place_id, e.color,
 		        CASE WHEN e.source_locale = $3 THEN e.notes
 		             ELSE COALESCE(t_notes.translated_text, e.notes) END AS notes,
 		        e.admin_id, e.created_at, e.updated_at,
@@ -130,7 +130,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 			e       model.CalendarEvent
 			machine bool
 		)
-		if err := rows.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.Color,
+		if err := rows.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.PlaceID, &e.Color,
 			&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &machine, &e.TitleSource, &e.NotesSource, &e.SourceLocale); err != nil {
 			return nil, err
 		}
@@ -154,10 +154,10 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 func (r *CalendarRepository) GetEventByID(ctx context.Context, id string) (*model.CalendarEvent, error) {
 	var e model.CalendarEvent
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, date::text, end_date::text, title, event_type, icon, private_address, address_public, color, notes, admin_id, created_at, updated_at, source_locale
+		`SELECT id, date::text, end_date::text, title, event_type, icon, private_address, address_public, place_id, color, notes, admin_id, created_at, updated_at, source_locale
 		 FROM calendar_events WHERE id = $1`,
 		id,
-	).Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.Color,
+	).Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.PlaceID, &e.Color,
 		&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &e.SourceLocale)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, model.ErrNotFound
@@ -253,10 +253,10 @@ func (r *CalendarRepository) InsertEvent(ctx context.Context, e *model.CalendarE
 		// detection) before this runs, so it is written directly rather than
 		// defaulted - relying on the column default here would silently file every
 		// Vietnamese-authored event as English.
-		`INSERT INTO calendar_events (date, end_date, title, event_type, icon, private_address, address_public, color, notes, admin_id, source_locale)
-		 VALUES ($1::date, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		`INSERT INTO calendar_events (date, end_date, title, event_type, icon, private_address, address_public, place_id, color, notes, admin_id, source_locale)
+		 VALUES ($1::date, $2::date, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		 RETURNING id, created_at, updated_at`,
-		e.Date, e.EndDate, e.Title, e.EventType, e.Icon, e.PrivateAddress, e.AddressPublic, e.Color, e.Notes, e.AdminID, e.SourceLocale,
+		e.Date, e.EndDate, e.Title, e.EventType, e.Icon, e.PrivateAddress, e.AddressPublic, e.PlaceID, e.Color, e.Notes, e.AdminID, e.SourceLocale,
 	).Scan(&e.ID, &e.CreatedAt, &e.UpdatedAt)
 }
 
@@ -267,7 +267,13 @@ func (r *CalendarRepository) InsertEvent(ctx context.Context, e *model.CalendarE
 // service resolves it (explicit admin choice, else re-detection, else the value
 // already stored) and the repository should not re-litigate that decision. It is
 // always a concrete value, so it is written unconditionally.
-func (r *CalendarRepository) UpdateEvent(ctx context.Context, id string, req *model.UpdateCalendarEventRequest, sourceLocale string) (*model.CalendarEvent, error) {
+//
+// placeID is an explicit parameter for the same reason - the service resolves
+// the address to a venue (and may have created one) before this runs. Unlike
+// sourceLocale it is guarded by the SAME boolean as private_address, because the
+// two are one fact: if this PATCH did not submit an address, it must not touch
+// which place the event belongs to either.
+func (r *CalendarRepository) UpdateEvent(ctx context.Context, id string, req *model.UpdateCalendarEventRequest, sourceLocale string, placeID *string) (*model.CalendarEvent, error) {
 	row := r.pool.QueryRow(ctx,
 		// end_date is written directly (not COALESCE-guarded like the other
 		// fields) so an edit can both set a span AND clear one back to a single
@@ -282,20 +288,25 @@ func (r *CalendarRepository) UpdateEvent(ctx context.Context, id string, req *mo
 		   event_type      = COALESCE($5::text,                  event_type),
 		   icon            = COALESCE($6,                        icon),
 		   private_address = CASE WHEN $7::boolean THEN $8 ELSE private_address END,
+		   -- Same guard as private_address above, deliberately sharing $7: the
+		   -- place is derived from the address, so an edit that leaves the
+		   -- address alone must leave the venue alone too. Writing this
+		   -- unconditionally would blank place_id on every date-only PATCH.
+		   place_id        = CASE WHEN $7::boolean THEN $14::uuid ELSE place_id END,
 		   color           = COALESCE($9,                        color),
 		   notes           = CASE WHEN $10::boolean THEN $11 ELSE notes END,
 		   address_public  = $12,
 		   source_locale   = $13,
 		   updated_at      = now()
 		 WHERE id = $1
-		 RETURNING id, date::text, end_date::text, title, event_type, icon, private_address, address_public, color, notes, admin_id, created_at, updated_at, source_locale`,
+		 RETURNING id, date::text, end_date::text, title, event_type, icon, private_address, address_public, place_id, color, notes, admin_id, created_at, updated_at, source_locale`,
 		id, req.Date, req.EndDate, req.Title, req.EventType, req.Icon,
 		req.PrivateAddress != nil, req.PrivateAddress,
 		req.Color, req.Notes != nil, req.Notes,
-		req.AddressPublic, sourceLocale,
+		req.AddressPublic, sourceLocale, placeID,
 	)
 	var e model.CalendarEvent
-	err := row.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.Color,
+	err := row.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.PlaceID, &e.Color,
 		&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &e.SourceLocale)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, model.ErrNotFound
@@ -316,6 +327,133 @@ func (r *CalendarRepository) DeleteEvent(ctx context.Context, id string) error {
 		return model.ErrNotFound
 	}
 	return nil
+}
+
+// --- Places (the venue registry behind the Locations strip) ---
+
+// placeColumns is the one place the column list lives, so the three queries
+// below cannot drift apart. address_key is deliberately absent: it is a matching
+// detail that never leaves this package.
+const placeColumns = `id, address, name, name_source, created_at, updated_at`
+
+// GetPlaceByKey looks up a venue by its normalized address. Returns ErrNotFound
+// when this address has never been seen.
+//
+// This is the hot path and the reason the places table exists: every event at an
+// already-known address resolves through a single primary-key-ish lookup and
+// never reaches the model.
+func (r *CalendarRepository) GetPlaceByKey(ctx context.Context, addressKey string) (*model.CalendarPlace, error) {
+	var p model.CalendarPlace
+	err := r.pool.QueryRow(ctx,
+		`SELECT `+placeColumns+` FROM calendar_places WHERE address_key = $1`,
+		addressKey,
+	).Scan(&p.ID, &p.Address, &p.Name, &p.NameSource, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, model.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// CreatePlaceIfAbsent inserts a venue keyed by addressKey. The bool reports
+// whether this call actually created the row.
+//
+// False means a concurrent request won the race and already owns this address;
+// the caller re-reads rather than treating it as an error. That distinction is
+// what stops two events saved at the same moment from both asking the model to
+// name one address - the loser of the race simply adopts the winner's place.
+//
+// ON CONFLICT DO NOTHING rather than DO UPDATE: an existing place's name and
+// address belong to whoever wrote them (possibly an admin), and a later event
+// mentioning the same address is not a reason to overwrite either.
+func (r *CalendarRepository) CreatePlaceIfAbsent(ctx context.Context, addressKey, address, name string) (*model.CalendarPlace, bool, error) {
+	var p model.CalendarPlace
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO calendar_places (address_key, address, name)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (address_key) DO NOTHING
+		 RETURNING `+placeColumns,
+		addressKey, address, name,
+	).Scan(&p.ID, &p.Address, &p.Name, &p.NameSource, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	return &p, true, nil
+}
+
+// UpdatePlaceNameFromAI stores a model-derived name, but only over a name the
+// model itself wrote.
+//
+// The `name_source = 'ai'` predicate is the whole point: an admin who renames a
+// place has made a decision, and a naming call still in flight from another
+// event must not quietly undo it. A no-op update is a success, not an error -
+// "the admin already named it" is the expected outcome, not a failure.
+func (r *CalendarRepository) UpdatePlaceNameFromAI(ctx context.Context, id, name string) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE calendar_places
+		    SET name = $2, updated_at = now()
+		  WHERE id = $1 AND name_source = $3`,
+		id, name, model.PlaceNameSourceAI,
+	)
+	return err
+}
+
+// ListPlaceNames returns the venue names already in use, most-used first. Fed to
+// the model as context so a new place is named consistently with the vocabulary
+// the church already reads ("Church", not "Main St Building").
+func (r *CalendarRepository) ListPlaceNames(ctx context.Context) ([]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT p.name
+		   FROM calendar_places p
+		   LEFT JOIN calendar_events e ON e.place_id = p.id
+		  GROUP BY p.id, p.name
+		  ORDER BY count(e.id) DESC, p.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	names := []string{}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			return nil, err
+		}
+		names = append(names, n)
+	}
+	return names, rows.Err()
+}
+
+// ListPlaces returns every venue with how many events use it. Backs the
+// admin-only places endpoint (the event form's suggestions), so the ordering is
+// "what you most likely want" rather than alphabetical.
+func (r *CalendarRepository) ListPlaces(ctx context.Context) ([]model.CalendarPlace, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT p.id, p.address, p.name, p.name_source, p.created_at, p.updated_at, count(e.id) AS event_count
+		   FROM calendar_places p
+		   LEFT JOIN calendar_events e ON e.place_id = p.id
+		  GROUP BY p.id
+		  ORDER BY count(e.id) DESC, p.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	places := []model.CalendarPlace{}
+	for rows.Next() {
+		var p model.CalendarPlace
+		if err := rows.Scan(&p.ID, &p.Address, &p.Name, &p.NameSource,
+			&p.CreatedAt, &p.UpdatedAt, &p.EventCount); err != nil {
+			return nil, err
+		}
+		places = append(places, p)
+	}
+	return places, rows.Err()
 }
 
 // --- Event types (the admin-managed category vocabulary) ---

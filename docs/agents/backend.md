@@ -357,6 +357,70 @@ summary). Roadmap, base-model choice, and eval gates: `docs/FINE_TUNING_PLAN.md`
 
 ---
 
+## Place naming (`internal/service/place_namer.go`)
+
+The calendar's Locations strip lists **venues**, not events. A place name is a
+function of its address - two different places cannot share one - so
+`calendar_places` is keyed by the normalized address (migration `000014`) and
+the model is asked "what is this place called?" **once per address, ever**.
+
+```
+admin saves "Saturday BBS Church 7pm" @ "101 Main St, Saugus MA"
+   │
+   ▼  placeResolver.resolve
+model.NormalizeAddressKey  ->  "101 main street saugus massachusetts"
+   │
+   ├── HIT  in calendar_places  ->  place_id attached. NO model call.   ← common path
+   │
+   └── MISS ->  insert { address_key, address, name: <event title>, name_source:'ai' }
+                return to the admin immediately
+                   │
+                   └── go func():  Translator.Complete("place_name", ...)
+                                   -> "Church" -> sanitize -> UpdatePlaceNameFromAI
+```
+
+**The three invariants**, each pinned by a test in `place_namer_test.go`:
+
+| Invariant | Enforced by |
+|---|---|
+| A known address never costs a model call | `resolve` returns `isNew=false`; only the caller's `isNew` branch spends a call |
+| An admin's rename is never undone | `UPDATE ... WHERE name_source = 'ai'` in `UpdatePlaceNameFromAI` |
+| A failed call degrades to the event title | the place is created with a provisional name before the call is made |
+
+**Reuses the translation engine, does not duplicate it.**
+`Translator.Complete(ctx, promptKey, userText, maxTokens)` is the seam: same API
+key, endpoint, TTL'd `PromptCache`, and `finishReason != STOP` rejection, but no
+hashing, no caching by source text, and nothing written to `translations` - a
+place name is a one-shot question about an address, not a translation.
+
+**Fire-and-forget**, on `context.Background()` in a goroutine, same shape as the
+fine-tuning capture above: an admin saving an event must never wait on Gemini,
+and a Gemini outage must never fail a save. Known trade-off - a crash between
+insert and answer leaves the provisional name, which an admin can fix by
+renaming the place.
+
+`placeNameMaxTokens` is **2048 for a one-to-four-word answer, deliberately**.
+Gemini 2.5 thinks by default and thinking tokens count against
+`maxOutputTokens`; a budget sized to the visible answer starves it. See
+`docs/agents/known-quirks.md` → "Vietnamese AI translations truncated to a
+single word". Do not tune this down.
+
+The `place_name` prompt lives in `system_prompts`, so it is editable in Supabase
+and picked up within the 5-minute `PromptCache` TTL. It encodes local knowledge
+(which address is the church building) that changes as the church adds venues.
+
+Model output never reaches the page raw. `sanitizePlaceName` takes the first
+non-empty line, strips quotes, collapses whitespace, drops trailing sentence
+punctuation, and rejects anything empty or over 40 runes - it lands on a public
+page and inside the PNG shared to Discord, and `callGemini` guarantees the text
+is *complete*, not that it is *sensible*.
+
+Without `GEMINI_API_KEY` the namer is nil: addresses still resolve and still
+dedupe, places just keep the provisional name. Same opt-in degradation as the
+translation worker.
+
+---
+
 ## Environment variables
 
 In production all env vars live in **Render's dashboard** (Settings → Environment). There is no `.env` file on the Render container disk.

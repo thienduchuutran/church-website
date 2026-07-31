@@ -194,6 +194,34 @@ func (t *Translator) TranslateRecord(ctx context.Context, job TranslationJob) er
 	return firstErr
 }
 
+// Complete runs one prompted completion using the system prompt stored under
+// promptKey, and returns the model's raw answer.
+//
+// It is the general-purpose seam for callers that need this package's Gemini
+// plumbing - API key, endpoint, the TTL'd prompt cache, and the finishReason
+// check that rejects truncated output - without TranslateField's
+// translate-and-persist semantics. Place naming (system_prompts key
+// 'place_name') is the first such caller: it is a one-shot question about an
+// address, not a translation, so none of the hashing, caching by source text,
+// or writing into the translations table applies.
+//
+// Nothing is persisted here. The caller decides what to do with the answer,
+// including validating it - callGemini guarantees the text is complete, not
+// that it is sensible.
+func (t *Translator) Complete(ctx context.Context, promptKey, userText string, maxTokens int) (string, error) {
+	systemPrompt, err := t.promptCache.GetSystemPrompt(ctx, t.pool, promptKey)
+	if err != nil {
+		return "", err
+	}
+	answer, err := t.callGemini(ctx, systemPrompt, userText, maxTokens)
+	if err != nil {
+		return "", err
+	}
+	log.Printf("completion_api prompt=%s/%s model=%s chars=%d",
+		promptKey, t.promptCache.Version(promptKey), geminiModel, len(answer))
+	return strings.TrimSpace(answer), nil
+}
+
 // hashSource produces a stable cache key for a piece of source text. The
 // trim happens at the caller; this function only hashes what it gets.
 func hashSource(s string) string {

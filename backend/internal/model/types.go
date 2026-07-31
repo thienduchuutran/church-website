@@ -368,6 +368,12 @@ type CalendarEvent struct {
 	// AddressPublic controls whether private_address is shown on the public
 	// website. The PNG export always includes the address regardless.
 	AddressPublic  bool              `json:"address_public"`
+	// PlaceID is the venue this event's address resolved to (migration 000014),
+	// or nil for an event with no address and for every event authored before
+	// that migration. Resolved server-side on write from PrivateAddress - never
+	// supplied by a client - which is why it appears on the response type but on
+	// neither request type.
+	PlaceID        *string           `json:"place_id,omitempty"`
 	Color          string            `json:"color"`
 	Notes     *string           `json:"notes"`
 	AdminID   *string           `json:"admin_id"`
@@ -395,6 +401,37 @@ type CalendarEvent struct {
 	// correction sticks instead of being re-detected away on the next save.
 	SourceLocale string `json:"source_locale"`
 }
+
+// CalendarPlace is one venue in the calendar's Locations strip - a name and the
+// address it stands for. Mirrors a row in calendar_places (migration 000014).
+//
+// The name is a function of the address (two different places cannot share one),
+// which is why places are keyed by the normalized address rather than hung off
+// each event: the model is asked what a place is called exactly once, the first
+// time that address appears, and every later event there reuses the answer.
+type CalendarPlace struct {
+	ID string `json:"id"`
+	// Address as an admin typed it - this is what gets printed. The normalized
+	// address_key it is stored under is a matching detail and never leaves the
+	// database.
+	Address string `json:"address"`
+	Name    string `json:"name"`
+	// NameSource is 'ai' or 'admin'. The naming worker only ever writes over an
+	// 'ai' row, so an admin's rename is permanent.
+	NameSource string    `json:"name_source"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+	// EventCount is populated only by the list endpoint, where it orders the
+	// suggestions an admin sees. Zero elsewhere.
+	EventCount int `json:"event_count,omitempty"`
+}
+
+// PlaceNameSource values for CalendarPlace.NameSource. Kept as constants
+// because the guard that protects an admin rename compares against them.
+const (
+	PlaceNameSourceAI    = "ai"
+	PlaceNameSourceAdmin = "admin"
+)
 
 type CalendarMonthNote struct {
 	ID        string    `json:"id"`

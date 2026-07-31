@@ -15,10 +15,11 @@ import (
 type CalendarService struct {
 	repo    *repository.CalendarRepository
 	enqueue translation.EnqueueFn // optional - nil-safe; no jobs fire when nil
+	places  *placeResolver
 }
 
 func NewCalendarService(repo *repository.CalendarRepository) *CalendarService {
-	return &CalendarService{repo: repo}
+	return &CalendarService{repo: repo, places: &placeResolver{store: repo}}
 }
 
 // SetTranslationQueue wires the async translation enqueuer. Same opt-in
@@ -26,6 +27,47 @@ func NewCalendarService(repo *repository.CalendarRepository) *CalendarService {
 // still creates events normally; translation just doesn't fan out.
 func (s *CalendarService) SetTranslationQueue(enqueue translation.EnqueueFn) {
 	s.enqueue = enqueue
+}
+
+// SetPlaceNamer wires the model call that names a newly-seen address. Same
+// opt-in pattern: without it, addresses still resolve to places and still
+// dedupe - the places just keep the provisional name (the event title) instead
+// of being labelled "Church".
+func (s *CalendarService) SetPlaceNamer(n PlaceNamer) {
+	s.places.namer = n
+}
+
+// resolveEventPlace maps an event's address to a venue and, when that venue is
+// new, spends one model call naming it.
+//
+// The naming call is deliberately detached: it runs on context.Background() in
+// a goroutine, so an admin saving an event never waits on Gemini and a Gemini
+// outage can never fail a save. Same fire-and-forget shape as the fine-tuning
+// capture in service/translation.go. The trade-off is that a crash in the
+// window between insert and answer leaves the provisional name - recoverable,
+// because an admin can rename the place, and invisible to the congregation
+// because the provisional name is the event's own title.
+//
+// A resolution failure is logged and swallowed rather than failing the save.
+// Losing the venue grouping costs a duplicate row in the Locations strip, which
+// is exactly what this feature replaced; losing the event would be worse.
+func (s *CalendarService) resolveEventPlace(ctx context.Context, address *string, title string) *string {
+	placeID, isNew, err := s.places.resolve(ctx, address, title)
+	if err != nil {
+		log.Printf("calendar: resolve place for %q: %v", title, err)
+		return nil
+	}
+	if isNew && placeID != nil {
+		id, addr := *placeID, strings.TrimSpace(*address)
+		go func() {
+			nctx, cancel := context.WithTimeout(context.Background(), placeNameTimeout)
+			defer cancel()
+			if err := s.places.name(nctx, id, addr, title); err != nil {
+				log.Printf("calendar: name place %s: %v", id, err)
+			}
+		}()
+	}
+	return placeID
 }
 
 // resolveSourceLocale decides which language a record's text is in, from the text
@@ -83,6 +125,10 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 	// because a brand-new event has no prior language to preserve.
 	sourceLocale := resolveSourceLocale(textFields(req.Title, req.Notes), "")
 
+	// Resolve the venue before inserting, so the event lands with its place_id
+	// already set and the Locations strip groups it on the very first render.
+	placeID := s.resolveEventPlace(ctx, req.PrivateAddress, req.Title)
+
 	e := &model.CalendarEvent{
 		Date:           req.Date,
 		EndDate:        req.EndDate,
@@ -91,6 +137,7 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 		Icon:           req.Icon,
 		PrivateAddress: req.PrivateAddress,
 		AddressPublic:  req.AddressPublic,
+		PlaceID:        placeID,
 		Color:          req.Color,
 		Notes:          req.Notes,
 		AdminID:        &adminID,
@@ -223,7 +270,17 @@ func (s *CalendarService) UpdateEvent(ctx context.Context, id string, req model.
 	}
 	sourceLocale := resolveSourceLocale(textFields(newTitle, newNotes), existing.SourceLocale)
 
-	e, err := s.repo.UpdateEvent(ctx, id, &req, sourceLocale)
+	// Only re-resolve when this PATCH actually submitted an address. The
+	// repository guards place_id behind the same condition, so a date-only edit
+	// keeps the venue it already had instead of being handed a nil that would
+	// blank it. Titles matter here too: the resolved place is named from the
+	// title, so the post-patch title is what a brand-new venue gets named after.
+	var placeID *string
+	if req.PrivateAddress != nil {
+		placeID = s.resolveEventPlace(ctx, req.PrivateAddress, newTitle)
+	}
+
+	e, err := s.repo.UpdateEvent(ctx, id, &req, sourceLocale, placeID)
 	if err != nil {
 		return nil, fmt.Errorf("update event: %w", err)
 	}
