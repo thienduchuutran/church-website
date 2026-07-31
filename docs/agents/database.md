@@ -138,6 +138,7 @@ create table calendar_events (
   color        text not null default 'slate',   -- a palette key OR a 6-digit hex
   private_address text,
   address_public  boolean not null default false,
+  place_id     uuid references calendar_places(id) on delete set null,
   notes        text,
   admin_id     uuid,
   created_at   timestamptz default now(),
@@ -145,11 +146,36 @@ create table calendar_events (
 );
 ```
 
+> `place_id` (migration `000014`) is the resolved venue behind `private_address`. The two coexist on purpose: `private_address` stays the source of truth for what this event's admin typed and is what `address_public` gates, while `place_id` answers "which venue is that" so the Locations strip can group. Nullable and never backfilled - pre-`000014` events render address-only until they are next saved.
+
 > **`event_type` was a Postgres enum until migration `000012`.** That was the actual blocker on admin flexibility - an enum only gains values through a migration, so "add a category" could never be a runtime action. It is now `text` with a foreign key, which keeps referential integrity while letting an `INSERT` into `calendar_event_types` create a legal value at runtime.
 >
 > The `calendar_event_type` enum **type** is deliberately left in place (unused) so the down migration has something to cast back to. Do not drop it.
 >
 > Two easy traps: any SQL casting this column must use `$n::text`, **not** `$n::calendar_event_type` (this bit `repository/calendar.go`'s `UpdateEvent`), and the seed of `calendar_event_types` must run *before* the FK is added or every existing row fails the constraint.
+
+---
+
+### `calendar_places`
+The venue registry behind the calendar's Locations strip. Added in migration `000014`.
+```sql
+create table calendar_places (
+  id          uuid primary key default gen_random_uuid(),
+  address_key text not null unique,          -- normalized address = the identity
+  address     text not null,                 -- as typed, for display
+  name        text not null,                 -- 'Church', 'Chris & Sebs'
+  name_source text not null default 'ai'     -- 'ai' | 'admin'
+                check (name_source in ('ai', 'admin')),
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+```
+
+**Why a table and not a column on the event.** A place name is a function of its address - two different places cannot share one - so `101 Main St` is "Church" no matter which event mentions it. Keying on the address makes dedupe structural (a group-by on `place_id`) instead of a string comparison redone on every render, and it means the name is worked out **once per address for the life of the church** rather than once per event.
+
+`address_key` carries the `unique` constraint and is written by `model.NormalizeAddressKey` (case folded, diacritics stripped, punctuation dropped, `St`/`Street` and `MA`/`Massachusetts` collapsed). An admin who types the same address two different ways still lands on one row. It is never displayed - `address` is what gets printed.
+
+`name` is proposed by Gemini through the `place_name` system prompt (see `docs/agents/backend.md` → "Place naming"), which is why `name_source` exists: the naming worker only ever writes over an `'ai'` row, so an admin rename is permanent and cannot be silently undone by a later model call.
 
 ---
 
@@ -425,6 +451,12 @@ backend/migrations/
 ├── 000010_calendar_event_address_public.down.sql
 ├── 000011_page_blocks.up.sql           ← page_content += block_type, position, title, props; backfills About heading/body pairs into blocks
 ├── 000011_page_blocks.down.sql
+├── 000012_calendar_flexible_types_and_palette.up.sql  ← calendar_event_types + calendar_palette_colors; event_type enum → text + FK
+├── 000012_calendar_flexible_types_and_palette.down.sql
+├── 000013_source_locale.up.sql         ← posts/calendar_events/calendar_month_notes/translation_jobs += source_locale (seeds en_translation prompt)
+├── 000013_source_locale.down.sql
+├── 000014_calendar_places.up.sql       ← calendar_places + calendar_events.place_id (seeds place_name prompt)
+├── 000014_calendar_places.down.sql
 └── embed.go                            ← exposes the SQL files as embed.FS to main.go
 ```
 

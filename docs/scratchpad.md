@@ -1,8 +1,223 @@
-## Scratchpad (deprecated for new features - use progress.md)
+﻿## Scratchpad (deprecated for new features - use progress.md)
 
 We are consolidating design/progress tracking into `docs/progress.md`.
 
 `docs/progress.md` now contains feature-level design decisions, architecture notes, metrics, and implementation diary entries.
+
+Plans still stage here while they await approval; once shipped, the write-up moves to `progress.md`.
+
+---
+
+# PLANNED - Calendar places: AI-named, address-keyed, deduped
+
+**Status:** awaiting approval. Nothing implemented. Supersedes an earlier draft of this plan that
+stored a hand-typed `place_name` on each event - see "Why this shape" below.
+
+## The problem
+
+`CalendarShell`'s Locations strip maps 1:1 over every event carrying an address and prints
+`{day} {title} - {address}`. It is an event list wearing a "Locations" heading, and since the strip
+is not marked `data-export-hide`, that repetition prints into the PNG shared to Discord.
+
+The paper calendar the congregation already knows does it correctly. May's footer reads:
+
+```
+Youth Camp Address: 1414 Plank Road, Hooversville, PA 15936
+Church Address:     101 Main St, Saugus, MA 01906
+
+Friday Bible Study:
+Chris & Sebs - 39 Bridle Ridge Dr, North Grafton, MA 01536
+MST House    - 203 Essex Street, Saugus MA 01906
+```
+
+Four places for eleven address-bearing events. `Church Clean up/renovation` (May 8, 9),
+`Church Service 10am` (May 10, 24), `Saturday BBS Church 7pm` (May 16, 30) and
+`Church renovation` (May 24-25) all collapse into one line: **Church**.
+
+## Why this shape
+
+Two facts drive the whole design.
+
+**1. A place name is a function of its address.** Two different places cannot share an address, so
+`101 Main St` is "Church" regardless of which event mentions it. That makes the name a property of
+the *address*, not of the event - which means it belongs in a table keyed by address, and dedupe
+becomes structural rather than a string comparison performed at render time.
+
+**2. That function only has to be computed once per address, ever.** The LLM is asked "what is this
+place called?" the first time an address appears. Every later event at that address reuses the
+stored answer: no API call, and no chance of the same building being named "Church" one month and
+"Church Renovation" the next.
+
+This is why the earlier draft was wrong. It hung a `place_name` on each event, which would have
+asked the model the same question repeatedly and let the answers disagree.
+
+## What the model is actually asked to do
+
+Given an event title and an address, return the place label a church bulletin would print:
+
+| Event title | Address | → Place |
+|---|---|---|
+| `Friday BBS Chris & Sebs` | 39 Bridle Ridge Dr, North Grafton | `Chris & Sebs` |
+| `Saturday BBS Church 7pm` | 101 Main St, Saugus | `Church` |
+| `Church Clean up/renovation` | 101 Main St, Saugus | `Church` |
+| `Friday BBS MST's House` | 203 Essex Street, Saugus | `MST House` |
+| `Youth Camp` | 1414 Plank Road, Hooversville | `Youth Camp` |
+
+The judgment being bought: strip the weekday, the time, and the activity (`BBS`, `Bible Study`,
+`meeting`, `clean up`, `renovation`, `service`) - keep the venue or host. Sometimes the activity
+word *is* the venue (`Church`), sometimes the event name *is* the destination (`Youth Camp`).
+That distinction is why this is a model call and not a regex.
+
+---
+
+## Phase 1 - Database
+
+| File | Change | Why |
+|---|---|---|
+| `backend/migrations/000014_calendar_places.up.sql` | New table `calendar_places (id uuid pk, address_key text not null unique, address text not null, name text not null, name_source text not null default 'ai', created_at, updated_at)` | `address_key` (the normalized address) carries the `unique` constraint, so "same place" is enforced by Postgres instead of re-derived on every render. `address` keeps the human formatting for display; `name_source` distinguishes an AI guess from an admin's correction so a later re-derive can never overwrite a human. |
+| same file | `alter table calendar_events add column place_id uuid references calendar_places(id) on delete set null;` + index | Resolved once at write time. `on delete set null` rather than cascade - deleting a place must never delete events. |
+| same file | `insert into system_prompts (key, content, version) values ('place_name', ...) on conflict do nothing` | Puts the prompt in the same table as `vi_translation`/`en_translation`, which means it is editable in Supabase and picked up within the 5-minute `PromptCache` TTL - prompt tuning with no redeploy. `on conflict do nothing` matches the 000004/000013 seeds so a re-run never clobbers an edited copy. |
+| `backend/migrations/000014_calendar_places.down.sql` | Drop the column, the table, and the prompt row | Migrations auto-apply on boot; the round trip gets tested in a rolled-back transaction before this goes near prod, same as 000012. |
+| `docs/agents/database.md` | New table section + `place_id` on the `calendar_events` DDL + migration list | That doc is what the next agent reads instead of the DB. |
+
+No backfill. Existing events keep `place_id = null` and render address-only until they are next
+saved, so nothing breaks on deploy.
+
+## Phase 2 - Address normalization (pure, tested first)
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/model/address_test.go` | Written **first**. Cases: exact, case, whitespace/newlines, punctuation, `St`/`Street`, `Ave`/`Avenue`, `Rd`/`Road`, `MA`/`Massachusetts`, diacritics, and the negative cases - two genuinely different addresses must **not** collapse | TDD rule. The abbreviation table is exactly the thing that quietly over-matches; the negative cases are the real value. |
+| `backend/internal/model/address.go` | `NormalizeAddressKey(raw string) string` - lowercase, fold diacritics, strip punctuation, collapse whitespace, expand street-type and state abbreviations | Server-side rather than in TypeScript because resolution happens at **write** time. One implementation, no Go/TS pair that can drift. It reuses the diacritic-folding approach already in `model.SlugifyEventType`. |
+
+## Phase 3 - Place resolution + the model call
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/repository/calendar.go` | `GetPlaceByKey`, `UpsertPlace`, `UpdatePlaceName`, `ListPlaces`; add `place_id` to the 4 SELECT/RETURNING column lists and their `rows.Scan` targets, plus `InsertEvent`/`UpdateEvent` | The 4 scan sites are the real risk in this phase - a missed one is a runtime scan error, not a compile error. |
+| `backend/internal/service/calendar.go` | `resolvePlace(ctx, address, title)`: normalize → look up by key → **hit: attach `place_id`, no model call** → miss: insert with the event title as a provisional name, attach, then fire the naming goroutine | The cache-hit path is the whole point: one model call per address for the life of the church. The provisional name means the strip is never blank even if the call never lands. |
+| `backend/internal/service/place_namer.go` **(new)** | `deriveName` loads the `place_name` prompt via the existing `PromptCache`, calls Gemini through the translator's `callGemini`, validates, and writes the result **only when `name_source = 'ai'`** | Reuses the engine that already exists rather than adding a second AI client. The `name_source` guard is what makes an admin rename permanent. |
+| same file | Validation before persisting: trim, collapse to one line, reject empty, cap at 40 chars, fall back to the provisional name on any failure | The model's output goes straight onto a public page and into the exported image. A bad or empty answer must degrade to the event title, never to a blank row or a paragraph. |
+| `backend/internal/service/calendar.go` | The naming call is **fire-and-forget** (`go func()` + `context.Background()`), exactly like `captureFinetuningExample` in `service/translation.go` | Saving an event must not wait on Gemini, and a Gemini outage must not fail a save. Known trade-off: a crash between insert and naming leaves the provisional name, which the admin can fix with the Phase 5 rename. A durable queue is deliberately not worth it for one call per new address. |
+| `backend/internal/service/calendar_test.go` | Cases: second event at a known address makes **zero** model calls; a failed call leaves the provisional name; `name_source='admin'` is never overwritten | These three are the behaviours that cost money or lose an admin's work if they regress. |
+
+### The `place_name` system prompt (seeded in Phase 1, editable in Supabase after)
+
+```
+You name PLACES for a Vietnamese-American church calendar's locations list.
+The church building is 101 Main St, Saugus, MA 01906 - always call it "Church".
+
+Given an event title and its street address, reply with ONLY the short name of the place,
+the way a church bulletin would label it.
+
+- Drop weekdays, times, and activity words (BBS, Bible Study, meeting, clean up,
+  renovation, service, camp registration).
+- Keep the venue or the host: "Friday BBS Chris & Sebs" -> "Chris & Sebs"
+- When the event happens at the church building, answer "Church".
+- When the event name IS the destination, keep it: "Youth Camp" -> "Youth Camp"
+- Answer in the same language the title is written in.
+- 1 to 4 words. No address, no trailing punctuation, no explanation.
+```
+
+The existing place names are passed as context on each call so a new place is named consistently
+with the vocabulary already in use.
+
+## Phase 4 - API + display
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/model/types.go` | `CalendarEvent.Place *CalendarPlace \`json:"place,omitempty"\`` carrying `{id, name, address}` | One nested object rather than loose fields - it travels and gets stripped as a unit. |
+| `backend/internal/handler/calendar.go` | In the existing non-admin strip block, `resp.Events[i].Place = nil` whenever `!AddressPublic`, alongside `PrivateAddress` | One boundary to audit. "MST House" identifies a family as much as their street number does, so name and address are hidden together. |
+| `frontend/components/features/calendar/types.ts` | `CalendarPlace` + `place` on `CalendarEvent` | Mirrors the Go model. |
+| `frontend/components/features/calendar/CalendarShell.tsx` | Replace the `eventsWithAddress.map` block with a group-by-`place.id` pass, rendering `dot + Name: address` - no day, no event title | Dedupe is now a group-by on a FK, not string matching. The strip finally lists what its heading claims. |
+| `frontend/components/features/calendar/CalendarShell.tsx` | Row is click-to-edit when the place maps to exactly one event; otherwise not clickable, with an admin-only `×3` badge marked `data-export-hide` | Dropping the day removes the unambiguous click target. The count says why the row went quiet and how many events sit behind it, and stays out of the exported image. |
+
+## Phase 5 - Admin control
+
+| File | Change | Why |
+|---|---|---|
+| `backend/cmd/server/main.go` | `GET /calendar/places` and `PATCH /calendar/places/{id}` **inside** the `RequireAdmin` group | Unlike `/event-types` and `/palette` (deliberately public lists of labels and hex codes), these expose addresses regardless of `address_public`. The route comment will say so. |
+| `frontend/components/features/calendar/EventModal.tsx` | Under the address, show the resolved place name in an editable "Shown in Locations as" field, with a "renames this place everywhere" note; saving it sets `name_source='admin'` | The model will occasionally be wrong, and the fix has to be one edit in an obvious place - not eleven event edits. This is also the escape hatch that makes shipping an AI guess safe. |
+| `frontend/components/features/calendar/EventModal.tsx` | Typing an address that resolves to a known place shows an inline "Same place as **Church**" hint before saving | The "auto recognize" half made visible: the admin sees the dedupe happen rather than discovering it later in the footer. |
+
+## Phase 6 - Docs (same commit, per AGENTS.md)
+
+`docs/api.md` (places endpoints + the `place` object) · `docs/agents/backend.md` (route table,
+admin-only rationale, a "Place naming" section next to "Translation engine") ·
+`docs/agents/database.md` (Phase 1) · `docs/agents/frontend.md` · `docs/components.md` ·
+`docs/progress.md` (the shipped write-up)
+
+---
+
+## End-to-end flow
+
+```
+admin saves "Saturday BBS Church 7pm" with address "101 Main St, Saugus MA"
+   │
+   ▼  service.resolvePlace
+NormalizeAddressKey  ->  "101 main street saugus massachusetts"
+   │
+   ├── HIT  in calendar_places  ->  place_id attached.  NO model call.      ← the common path
+   │
+   └── MISS ->  insert { address_key, address, name: "Saturday BBS Church 7pm", name_source:'ai' }
+                attach place_id, return to the admin immediately
+                   │
+                   └── go func():  system_prompts['place_name'] -> Gemini 2.5 Flash
+                                   -> "Church" -> validate -> update name (only if still 'ai')
+   ▼
+GET /calendar  ->  event.place = { name:"Church", address:"101 Main St, Saugus MA" }
+                   stripped entirely for non-admins when address_public = false
+   ▼
+Locations strip groups by place.id  ->  one row:  ● Church: 101 Main St, Saugus MA
+   ▼
+same row in the PNG export shared to Discord
+```
+
+## Security callouts
+
+- `GET /calendar/places` and `PATCH /calendar/places/{id}` are **admin-only** - the one pair of
+  calendar reads/writes that touches addresses regardless of `address_public`, which is why they do
+  not join the public group.
+- `place.name` is stripped with `private_address` in the same non-admin block, gated on the same
+  flag. A place name can identify a household as precisely as a street number.
+- Model output is never trusted raw: trimmed, single-lined, length-capped, and falls back to the
+  event title. It reaches a public page, so an unvalidated answer is a content-injection surface.
+- The FK is `on delete set null`; deleting a place cannot delete events.
+- Export behaviour unchanged: still prints every address, public or not.
+
+## Cost
+
+One Gemini 2.5 Flash call per address that has never been seen, with a ~100-token prompt and a
+~5-token answer. A congregation with a handful of venues will make single-digit calls per year.
+Every repeat is a primary-key lookup. If `GEMINI_API_KEY` is unset the naming goroutine no-ops and
+places keep their provisional names - same opt-in degradation as the translation worker.
+
+## Out of scope (flagged, not done)
+
+- **Translating place names.** `place.name` is not enqueued for translation, matching how
+  `private_address` is already treated. It displays as the model wrote it, in the language of the
+  title that created it.
+- **The "Friday Bible Study:" grouping header** in the paper calendar's footer. That is a second
+  level of structure (a category above places), and the flat deduped list is the prerequisite.
+- **Backfilling existing events.** They stay `place_id = null` and render address-only until saved.
+- **Merging two places that turn out to be one** (typo'd address saved before the fix). The rename
+  covers the name; merging rows needs its own admin action.
+
+## Scope estimate
+
+| Phase | Estimate |
+|---|---|
+| 1 - Database | ~30 min (table + column + prompt seed; the down/up round trip is the real work) |
+| 2 - Normalization | ~45 min (tests first) |
+| 3 - Resolution + model call | ~2 h (the cache-hit path and the validation are the careful parts) |
+| 4 - API + display | ~1.5 h |
+| 5 - Admin control | ~1 h |
+| 6 - Docs | ~45 min |
+
+Verification before calling it done: `go build ./... && go vet ./... && go test ./...`,
+`npx tsc --noEmit`, `npm run build`, `npm run test:color`, plus a manual pass creating
+`Saturday BBS Church 7pm` and `Church Clean up/renovation` at the same address typed two different
+ways, confirming one model call, one row in the strip, and one entry in the export.
 
 ---
 
