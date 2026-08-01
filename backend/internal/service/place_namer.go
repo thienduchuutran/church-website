@@ -81,7 +81,11 @@ type placeResolver struct {
 	namer PlaceNamer
 }
 
-// resolve maps a typed address to a place id.
+// resolve maps a typed address to a venue.
+//
+// The place itself comes back rather than just its id because every path here
+// already holds the row - returning it lets a create response carry its place
+// without a second query.
 //
 // The bool reports whether the place was newly created and therefore still
 // carries a provisional name. Callers use it to decide whether to spend a model
@@ -90,7 +94,7 @@ type placeResolver struct {
 //
 // A blank or unusable address is not an error: plenty of events have no
 // location at all, and they simply get no place.
-func (r *placeResolver) resolve(ctx context.Context, address *string, title string) (placeID *string, isNew bool, err error) {
+func (r *placeResolver) resolve(ctx context.Context, address *string, title string) (place *model.CalendarPlace, isNew bool, err error) {
 	if address == nil {
 		return nil, false, nil
 	}
@@ -107,7 +111,7 @@ func (r *placeResolver) resolve(ctx context.Context, address *string, title stri
 
 	existing, err := r.store.GetPlaceByKey(ctx, key)
 	if err == nil {
-		return &existing.ID, false, nil
+		return existing, false, nil
 	}
 	if !errors.Is(err, model.ErrNotFound) {
 		return nil, false, fmt.Errorf("look up place: %w", err)
@@ -121,7 +125,7 @@ func (r *placeResolver) resolve(ctx context.Context, address *string, title stri
 		return nil, false, fmt.Errorf("create place: %w", err)
 	}
 	if ok {
-		return &created.ID, true, nil
+		return created, true, nil
 	}
 
 	// Lost the race to a concurrent save. Adopt the winner's place rather than
@@ -131,7 +135,7 @@ func (r *placeResolver) resolve(ctx context.Context, address *string, title stri
 	if err != nil {
 		return nil, false, fmt.Errorf("re-read place after conflict: %w", err)
 	}
-	return &winner.ID, false, nil
+	return winner, false, nil
 }
 
 // name asks the model what a place is called and stores the answer.

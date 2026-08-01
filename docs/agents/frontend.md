@@ -97,6 +97,7 @@ frontend/
 │   ├── confirm.tsx                     ← ConfirmProvider + useConfirm() promise dialog. NEVER use window.confirm/alert/prompt
 │   ├── edit-modal.tsx                  ← EditModalProvider + useEditModal hook (in-place edit)
 │   ├── pages.ts                        ← Page-content API service. Typed { sections, blocks, machine_translated } response; replacePageBlocks is a FULL replace (absent blocks are deleted server-side)
+│   ├── places.ts                       ← groupEventsByPlace: the calendar's Locations strip, one row per VENUE not per event. A plain group-by on event.place.id - all address matching lives server-side (see below). `npm run test:places`
 │   ├── post-types.ts                   ← Form state types, payload mapper, type-config tables
 │   ├── posts.ts                        ← Post API service (list/get takes optional locale)
 │   ├── posts.ts                        ← Post API service (list/get/create/update/delete)
@@ -186,6 +187,21 @@ Named keys return their hand-tuned values. A hex is expanded by `deriveRamp` in 
 `dot` is never adjusted - it is the admin's exact choice, so the picker swatch matches what they picked.
 
 The PNG export needs no involvement in any of this: `exportCalendarToPng` runs `html-to-image` over the live DOM, so whatever renders on screen is already in the export.
+
+### The Locations strip is a list of places, not events
+
+`CalendarShell`'s Locations strip renders **one row per venue**: `Church - 101 Main St, Saugus, MA 01906`. It used to map 1:1 over every event carrying an address, so eleven events at the church printed the church eleven times - and because the strip is deliberately *not* `data-export-hide`, that repetition landed in the shared PNG. The paper calendar it imitates names each place once.
+
+**Do not add address matching here.** `lib/places.ts` groups on `event.place.id` and nothing else. Places are keyed server-side by the *normalized* address (migration `000014`, `model.NormalizeAddressKey`), so two events typed as `101 Main St, Saugus MA 01906` and `101 main street, saugus, massachusetts` already arrive with the same place id. All the fuzzy matching - abbreviations, ZIPs, diacritics, the `Ct` = Court vs Connecticut ambiguity - lives in one tested Go function. A second implementation in TypeScript would silently drift from it.
+
+Two consequences worth knowing:
+
+- **An event saved before `000014` has an address but no place.** It falls back to grouping on the trimmed lowercase address, so it still prints, but it will **not** merge into a resolved place at the same address - one key is a place id, the other is an address string. Printing both rows is the honest outcome and it fixes itself the moment the old event is saved.
+- **The day and event title are gone from the row.** Both are already in the grid directly above. That removed the unambiguous click target, so a row is click-to-edit only when it stands for exactly one event; otherwise it shows an admin-only `×3` count (marked `data-export-hide`) explaining why it went quiet.
+
+`hiddenFromPublic` on a group is true only when **no** event at that place is public. `address_public` is per event, but one row now stands for several, and if any one of them is public the address does appear on the public site.
+
+Run `npm run test:places` - same Node built-in runner as the color tests.
 
 The middleware in `frontend/proxy.ts` handles all locale detection. It checks (in order): the URL prefix, the `NEXT_LOCALE` cookie, and the `Accept-Language` header. The cookie persistence means once a visitor picks Vietnamese via the language switcher, they stay there on subsequent pageloads.
 

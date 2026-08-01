@@ -556,6 +556,34 @@ The block builder for prose pages. Lets an admin add, remove and reorder page se
 
 ---
 
+## `CalendarShell` - the Locations strip
+The full-width row under the calendar's three info columns, listing where the month's events happen.
+
+**File:** `components/features/calendar/CalendarShell.tsx` (helper: `lib/places.ts`)
+
+It renders **one row per venue**, not per event:
+
+```
+LOCATIONS
+● Church - 101 Main St, Saugus, MA 01906              ×4
+● Youth Camp - 1414 Plank Road, Hooversville, PA 15936
+```
+
+This mirrors the paper calendar's footer, which names each place once regardless of how many events are held there. Before migration `000014` the strip mapped 1:1 over events with an address, so the church printed once per event - and since the strip is deliberately **not** `data-export-hide`, that repetition went into the PNG shared to Discord.
+
+| Rendering rule | Why |
+|---|---|
+| Grouped by `event.place.id` via `groupEventsByPlace` | Places are keyed server-side by the *normalized* address, so two spellings already share an id. **No address matching belongs in the frontend** - it lives in one tested Go function. |
+| No day, no event title | Both are in the grid directly above; repeating them is what caused the duplication. |
+| Name omitted when the place has none | An event saved before `000014` has an address but no venue; the address stands alone rather than printing an empty label. |
+| Click-to-edit only when the row means exactly one event | Dropping the day removed the unambiguous click target. Three events behind one row have no single event to open. |
+| Admin-only `×N` count, `data-export-hide` | Explains why a multi-event row is not clickable, and stays out of the shared image. |
+| Admin-only `hidden` cue when **no** event there is public | `address_public` is per event, but one row stands for several; if any one is public the address does appear publicly. |
+
+Public visitors never see a private venue: the handler strips `place` and `place_id` under the same condition as `private_address`, since `"MST House"` identifies a household as precisely as its street number.
+
+---
+
 ## `EventModal`
 The admin create/edit sheet for a calendar event, and the "Monthly Note" editor (same component, three modes: `create`, `edit`, `note`).
 

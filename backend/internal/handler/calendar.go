@@ -49,6 +49,10 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 	// to audit:
 	//   - private_address: non-admins only see an address explicitly marked
 	//     public on the site.
+	//   - place / place_id: the venue that address resolved to. Stripped under
+	//     the SAME condition, because a place name identifies a household as
+	//     precisely as its street number - leaving "MST House" behind while
+	//     hiding "203 Essex Street" would defeat the whole point of the flag.
 	//   - title_source / notes_source / content_source: the untranslated English
 	//     text, needed only so the admin edit form saves the source instead of
 	//     the machine translation it is displaying. A public visitor has no use
@@ -57,6 +61,8 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 		for i := range resp.Events {
 			if !resp.Events[i].AddressPublic {
 				resp.Events[i].PrivateAddress = nil
+				resp.Events[i].Place = nil
+				resp.Events[i].PlaceID = nil
 			}
 			resp.Events[i].TitleSource = nil
 			resp.Events[i].NotesSource = nil

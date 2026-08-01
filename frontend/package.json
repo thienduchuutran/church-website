@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:color": "node --experimental-strip-types --test lib/__tests__/color.test.ts"
+    "test:color": "node --experimental-strip-types --test lib/__tests__/color.test.ts",
+    "test:places": "node --experimental-strip-types --test lib/__tests__/places.test.ts"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",

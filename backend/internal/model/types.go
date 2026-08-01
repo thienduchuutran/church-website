@@ -374,6 +374,14 @@ type CalendarEvent struct {
 	// supplied by a client - which is why it appears on the response type but on
 	// neither request type.
 	PlaceID        *string           `json:"place_id,omitempty"`
+	// Place is that venue expanded - the name and address the Locations strip
+	// prints. Joined on read rather than stored, so an admin renaming a place
+	// changes every event at it at once.
+	//
+	// Stripped for non-admins under the SAME condition as PrivateAddress: a
+	// place name identifies a household as precisely as its street number does,
+	// so "MST House" must not survive a hidden address.
+	Place          *CalendarPlace    `json:"place,omitempty"`
 	Color          string            `json:"color"`
 	Notes     *string           `json:"notes"`
 	AdminID   *string           `json:"admin_id"`
@@ -418,9 +426,13 @@ type CalendarPlace struct {
 	Name    string `json:"name"`
 	// NameSource is 'ai' or 'admin'. The naming worker only ever writes over an
 	// 'ai' row, so an admin's rename is permanent.
-	NameSource string    `json:"name_source"`
-	CreatedAt  time.Time `json:"created_at"`
-	UpdatedAt  time.Time `json:"updated_at"`
+	NameSource string `json:"name_source"`
+	// Kept off the wire entirely. A place is most often served nested inside an
+	// event, where it comes from a LEFT JOIN that selects only the three columns
+	// above - serializing these would emit "0001-01-01T00:00:00Z" and claim the
+	// church was created in year one. Nothing downstream needs them.
+	CreatedAt time.Time `json:"-"`
+	UpdatedAt time.Time `json:"-"`
 	// EventCount is populated only by the list endpoint, where it orders the
 	// suggestions an admin sees. Zero elsewhere.
 	EventCount int `json:"event_count,omitempty"`

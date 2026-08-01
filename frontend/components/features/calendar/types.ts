@@ -36,6 +36,26 @@ export interface PaletteColor {
 // picker rather than an empty string, matching the backend's model.IconNone.
 export const ICON_NONE = 'none'
 
+// One venue in the Locations strip - a name and the address it stands for.
+// Mirrors a row in calendar_places (migration 000014).
+//
+// Places are keyed server-side by the NORMALIZED address, which is why the
+// frontend never compares address strings: two events at "101 Main St, Saugus
+// MA 01906" and "101 main street, saugus, massachusetts" arrive carrying the
+// same place id, and grouping is a plain group-by rather than fuzzy matching.
+export interface CalendarPlace {
+  id: string
+  // The address as an admin typed it - this is what gets printed.
+  address: string
+  // 'Church', 'Chris & Sebs'. Proposed by the model the first time this address
+  // was seen, and editable by an admin.
+  name: string
+  // 'admin' means a human named it and the model may not overwrite it.
+  name_source: 'ai' | 'admin'
+  // Populated only by the places list endpoint, where it orders suggestions.
+  event_count?: number
+}
+
 export interface CalendarEvent {
   id: string
   date: string // YYYY-MM-DD
@@ -50,6 +70,12 @@ export interface CalendarEvent {
   // Whether private_address is shown on the public website. The export always
   // includes the address regardless of this flag.
   address_public?: boolean
+  // The venue private_address resolved to, resolved server-side on save. Absent
+  // on events with no address, on events last saved before migration 000014,
+  // and - for public visitors - on every event whose address_public is false,
+  // since a place name identifies a household as precisely as a street number.
+  place?: CalendarPlace | null
+  place_id?: string | null
   notes: string | null
   admin_id: string | null
   created_at: string

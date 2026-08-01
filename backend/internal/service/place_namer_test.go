@@ -127,8 +127,8 @@ func TestPlaceResolver_KnownAddressIsNotResolvedTwice(t *testing.T) {
 	if isNew {
 		t.Error("second event at a known address reported isNew=true - this is the wasted model call")
 	}
-	if *id1 != *id2 {
-		t.Errorf("two spellings of one address produced places %q and %q", *id1, *id2)
+	if id1.ID != id2.ID {
+		t.Errorf("two spellings of one address produced places %q and %q", id1.ID, id2.ID)
 	}
 	if store.creates != 1 {
 		t.Errorf("created %d place rows for one address, want 1", store.creates)
@@ -171,10 +171,10 @@ func TestPlaceResolver_AdminRenameSurvivesALaterModelCall(t *testing.T) {
 	store.byKey[model.NormalizeAddressKey(addr)].Name = "Church"
 	store.byKey[model.NormalizeAddressKey(addr)].NameSource = model.PlaceNameSourceAdmin
 
-	if err := r.name(ctx, *id, addr, "Church Service"); err != nil {
+	if err := r.name(ctx, id.ID, addr, "Church Service"); err != nil {
 		t.Fatalf("name: %v", err)
 	}
-	if got := store.placeNamed(*id); got != "Church" {
+	if got := store.placeNamed(id.ID); got != "Church" {
 		t.Errorf("admin rename was overwritten: place is now %q, want %q", got, "Church")
 	}
 }
@@ -192,14 +192,14 @@ func TestPlaceResolver_FailedModelCallLeavesProvisionalName(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if got := store.placeNamed(*id); got != "Youth Camp" {
+	if got := store.placeNamed(id.ID); got != "Youth Camp" {
 		t.Fatalf("provisional name = %q, want the event title", got)
 	}
 
-	if err := r.name(ctx, *id, addr, "Youth Camp"); err == nil {
+	if err := r.name(ctx, id.ID, addr, "Youth Camp"); err == nil {
 		t.Error("name() swallowed a model failure; the caller needs it to log")
 	}
-	if got := store.placeNamed(*id); got != "Youth Camp" {
+	if got := store.placeNamed(id.ID); got != "Youth Camp" {
 		t.Errorf("a failed naming call changed the name to %q; it must stay provisional", got)
 	}
 	if store.updates != 0 {
@@ -222,10 +222,10 @@ func TestPlaceResolver_WithoutANamerPlacesStillDedupe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve b: %v", err)
 	}
-	if *idA != *idB {
+	if idA.ID != idB.ID {
 		t.Error("dedupe stopped working when no namer was configured")
 	}
-	if err := r.name(ctx, *idA, a, "Prayer Night"); err != nil {
+	if err := r.name(ctx, idA.ID, a, "Prayer Night"); err != nil {
 		t.Errorf("name() with a nil namer should no-op, got %v", err)
 	}
 }
@@ -366,7 +366,7 @@ func TestPlaceResolver_NamePromptCarriesTitleAndAddress(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolve: %v", err)
 	}
-	if err := r.name(ctx, *id, addr, "Friday BBS Chris & Sebs"); err != nil {
+	if err := r.name(ctx, id.ID, addr, "Friday BBS Chris & Sebs"); err != nil {
 		t.Fatalf("name: %v", err)
 	}
 	if namer.calls != 1 {
@@ -375,7 +375,7 @@ func TestPlaceResolver_NamePromptCarriesTitleAndAddress(t *testing.T) {
 	if !strings.Contains(namer.lastText, "Friday BBS Chris & Sebs") || !strings.Contains(namer.lastText, addr) {
 		t.Errorf("prompt did not carry both title and address:\n%s", namer.lastText)
 	}
-	if got := store.placeNamed(*id); got != "Chris & Sebs" {
+	if got := store.placeNamed(id.ID); got != "Chris & Sebs" {
 		t.Errorf("place name = %q, want %q", got, "Chris & Sebs")
 	}
 }

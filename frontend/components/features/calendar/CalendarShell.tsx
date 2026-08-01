@@ -5,6 +5,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useLocale } from 'next-intl'
 import { CaretLeft, CaretRight, Plus, Palette, DownloadSimple } from '@phosphor-icons/react'
 import { getMonth, upsertMonthSettings } from '@/lib/calendar'
+import { groupEventsByPlace } from '@/lib/places'
 import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP, resolveColor } from './types'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 import CalendarGrid from './CalendarGrid'
@@ -288,7 +289,10 @@ export default function CalendarShell({
 
   const birthdays = events.filter(e => e.event_type === 'birthday')
   const bibleStudyDays = events.filter(e => e.event_type === 'bible_study')
-  const eventsWithAddress = events.filter(e => e.private_address)
+  // One row per venue, not per event - see lib/places.ts. The backend already
+  // resolved each address to a place, so this is a group-by rather than any
+  // kind of address matching.
+  const placeGroups = groupEventsByPlace(events)
 
   return (
     <>
@@ -596,7 +600,7 @@ export default function CalendarShell({
         </div>
 
         {/* Info strip below grid - compact 3 columns */}
-        {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin || eventsWithAddress.length > 0) && (
+        {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin || placeGroups.length > 0) && (
           <div
             className="grid grid-cols-1 @xl:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-2 border-gray-900 mt-4 @3xl:mt-0 @3xl:border-t-0"
             style={{ backgroundColor: '#fafafa' }}
@@ -687,29 +691,54 @@ export default function CalendarShell({
               )}
             </div>
 
-            {/* Locations - admin only, full-width row after the 3 columns, entries flow inline */}
-            {eventsWithAddress.length > 0 && (
+            {/* Locations - one row per VENUE, full-width after the 3 columns.
+                This mirrors the paper calendar's footer ("Church Address: 101
+                Main St..."), which names each place once no matter how many
+                events are held there. The day and the event title are gone on
+                purpose: both are already in the grid above, and repeating them
+                is what made the church appear eleven times. */}
+            {placeGroups.length > 0 && (
               <div className="@xl:col-span-3 min-w-0 border-t border-gray-200 pt-2">
                 <p className="font-display text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                   Locations
                 </p>
                 <div className="flex flex-wrap gap-x-5 gap-y-0.5">
-                  {eventsWithAddress.map(e => {
-                    const day = parseInt(e.date.split('-')[2], 10)
-                    const colors = resolveColor(e.color)
+                  {placeGroups.map(g => {
+                    const colors = resolveColor(g.color)
+                    // Dropping the day removed the unambiguous click target: a
+                    // row standing for three events has no single event to
+                    // open. So it stays clickable only when it means exactly
+                    // one, and the count below explains why the others went
+                    // quiet.
+                    const singleEvent = g.events.length === 1 ? g.events[0] : null
+                    const clickable = isAdmin && singleEvent !== null
                     return (
                       <div
-                        key={e.id}
-                        onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
-                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                        key={g.key}
+                        onClick={clickable ? () => handleEditFromStrip(singleEvent) : undefined}
+                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${clickable ? 'cursor-pointer hover:bg-gray-100' : ''}`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
-                        <span className="font-display font-semibold text-gray-700">{day} {e.title}</span>
-                        <span className="font-sans text-gray-400">-</span>
-                        <span className="font-sans text-sky-700">{e.private_address}</span>
-                        {/* Admin-only cue: this address is hidden from the public
-                            site (it still prints in the export). */}
-                        {isAdmin && !e.address_public && (
+                        {/* A place saved before migration 000014 has no name
+                            yet, so the address stands alone rather than
+                            printing an empty label. */}
+                        {g.name && (
+                          <>
+                            <span className="font-display font-semibold text-gray-700">{g.name}</span>
+                            <span className="font-sans text-gray-400">-</span>
+                          </>
+                        )}
+                        <span className="font-sans text-sky-700">{g.address}</span>
+                        {/* Admin-only cues, both kept out of the exported image:
+                            how many events share this venue, and whether it is
+                            hidden from the public site (it still prints in the
+                            export either way). */}
+                        {isAdmin && g.events.length > 1 && (
+                          <span className="font-sans text-[9px] text-gray-400" data-export-hide>
+                            ×{g.events.length}
+                          </span>
+                        )}
+                        {isAdmin && g.hiddenFromPublic && (
                           <span className="font-sans text-[9px] uppercase tracking-wide text-gray-400 italic" data-export-hide>hidden</span>
                         )}
                       </div>

@@ -49,11 +49,13 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 			// its [date, end_date] range intersects the month - so a camp that
 			// starts in April and ends in May shows up in BOTH months. A
 			// single-day event (end_date NULL) collapses to date via COALESCE.
-			`SELECT id, date::text, end_date::text, title, event_type, icon, private_address, address_public, place_id, color, notes, admin_id, created_at, updated_at, source_locale
-			 FROM calendar_events
-			 WHERE date < (make_date($1, $2, 1) + interval '1 month')
-			   AND COALESCE(end_date, date) >= make_date($1, $2, 1)
-			 ORDER BY date ASC, created_at ASC`,
+			`SELECT e.id, e.date::text, e.end_date::text, e.title, e.event_type, e.icon, e.private_address, e.address_public, e.place_id, e.color, e.notes, e.admin_id, e.created_at, e.updated_at, e.source_locale,
+			        p.address, p.name, p.name_source
+			 FROM calendar_events e
+			 LEFT JOIN calendar_places p ON p.id = e.place_id
+			 WHERE e.date < (make_date($1, $2, 1) + interval '1 month')
+			   AND COALESCE(e.end_date, e.date) >= make_date($1, $2, 1)
+			 ORDER BY e.date ASC, e.created_at ASC`,
 			year, month,
 		)
 		if err != nil {
@@ -64,10 +66,13 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 		var events []model.CalendarEvent
 		for rows.Next() {
 			var e model.CalendarEvent
+			var pAddress, pName, pSource *string
 			if err := rows.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.PlaceID, &e.Color,
-				&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &e.SourceLocale); err != nil {
+				&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &e.SourceLocale,
+				&pAddress, &pName, &pSource); err != nil {
 				return nil, err
 			}
+			e.Place = buildPlace(e.PlaceID, pAddress, pName, pSource)
 			events = append(events, e)
 		}
 		if events == nil {
@@ -108,12 +113,18 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 		        -- two more columns off it. Stripped for non-admins in the handler.
 		        e.title AS title_source,
 		        e.notes AS notes_source,
-		        e.source_locale
+		        e.source_locale,
+		        -- The venue, joined rather than stored on the event, so renaming a
+		        -- place updates every event at it at once. Never translated: an
+		        -- address and a household's name are not prose, same rule that
+		        -- keeps private_address out of the translation pipeline.
+		        p.address, p.name, p.name_source
 		 FROM calendar_events e
 		 LEFT JOIN translations t_title
 		   ON t_title.record_id = e.id AND t_title.field_name = 'title' AND t_title.locale = $3
 		 LEFT JOIN translations t_notes
 		   ON t_notes.record_id = e.id AND t_notes.field_name = 'notes' AND t_notes.locale = $3
+		 LEFT JOIN calendar_places p ON p.id = e.place_id
 		 WHERE e.date < (make_date($1, $2, 1) + interval '1 month')
 		   AND COALESCE(e.end_date, e.date) >= make_date($1, $2, 1)
 		 ORDER BY e.date ASC, e.created_at ASC`,
@@ -130,11 +141,14 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 			e       model.CalendarEvent
 			machine bool
 		)
+		var pAddress, pName, pSource *string
 		if err := rows.Scan(&e.ID, &e.Date, &e.EndDate, &e.Title, &e.EventType, &e.Icon, &e.PrivateAddress, &e.AddressPublic, &e.PlaceID, &e.Color,
-			&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &machine, &e.TitleSource, &e.NotesSource, &e.SourceLocale); err != nil {
+			&e.Notes, &e.AdminID, &e.CreatedAt, &e.UpdatedAt, &machine, &e.TitleSource, &e.NotesSource, &e.SourceLocale,
+			&pAddress, &pName, &pSource); err != nil {
 			return nil, err
 		}
 		e.MachineTranslated = machine
+		e.Place = buildPlace(e.PlaceID, pAddress, pName, pSource)
 		events = append(events, e)
 	}
 	if events == nil {
@@ -329,6 +343,24 @@ func (r *CalendarRepository) DeleteEvent(ctx context.Context, id string) error {
 	return nil
 }
 
+// buildPlace assembles the joined venue columns into a CalendarPlace, or nil
+// when the event has no place.
+//
+// Both month-read paths LEFT JOIN calendar_places, so every column comes back
+// nullable and the nil check has to be on the join succeeding, not on the FK
+// alone - a place_id pointing at a row that is somehow gone must produce no
+// place rather than a half-built one with an empty name.
+func buildPlace(placeID, address, name, nameSource *string) *model.CalendarPlace {
+	if placeID == nil || address == nil || name == nil {
+		return nil
+	}
+	p := &model.CalendarPlace{ID: *placeID, Address: *address, Name: *name}
+	if nameSource != nil {
+		p.NameSource = *nameSource
+	}
+	return p
+}
+
 // --- Places (the venue registry behind the Locations strip) ---
 
 // placeColumns is the one place the column list lives, so the three queries
@@ -347,6 +379,23 @@ func (r *CalendarRepository) GetPlaceByKey(ctx context.Context, addressKey strin
 	err := r.pool.QueryRow(ctx,
 		`SELECT `+placeColumns+` FROM calendar_places WHERE address_key = $1`,
 		addressKey,
+	).Scan(&p.ID, &p.Address, &p.Name, &p.NameSource, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, model.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
+// GetPlaceByID looks up a venue by its primary key. Used on the write path to
+// expand the place onto a create/update response, so the API shape of an event
+// is the same whether it came from a month read or a PATCH.
+func (r *CalendarRepository) GetPlaceByID(ctx context.Context, id string) (*model.CalendarPlace, error) {
+	var p model.CalendarPlace
+	err := r.pool.QueryRow(ctx,
+		`SELECT `+placeColumns+` FROM calendar_places WHERE id = $1`, id,
 	).Scan(&p.ID, &p.Address, &p.Name, &p.NameSource, &p.CreatedAt, &p.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, model.ErrNotFound

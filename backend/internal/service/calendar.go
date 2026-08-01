@@ -51,14 +51,14 @@ func (s *CalendarService) SetPlaceNamer(n PlaceNamer) {
 // A resolution failure is logged and swallowed rather than failing the save.
 // Losing the venue grouping costs a duplicate row in the Locations strip, which
 // is exactly what this feature replaced; losing the event would be worse.
-func (s *CalendarService) resolveEventPlace(ctx context.Context, address *string, title string) *string {
-	placeID, isNew, err := s.places.resolve(ctx, address, title)
+func (s *CalendarService) resolveEventPlace(ctx context.Context, address *string, title string) *model.CalendarPlace {
+	place, isNew, err := s.places.resolve(ctx, address, title)
 	if err != nil {
 		log.Printf("calendar: resolve place for %q: %v", title, err)
 		return nil
 	}
-	if isNew && placeID != nil {
-		id, addr := *placeID, strings.TrimSpace(*address)
+	if isNew && place != nil {
+		id, addr := place.ID, strings.TrimSpace(*address)
 		go func() {
 			nctx, cancel := context.WithTimeout(context.Background(), placeNameTimeout)
 			defer cancel()
@@ -67,7 +67,22 @@ func (s *CalendarService) resolveEventPlace(ctx context.Context, address *string
 			}
 		}()
 	}
-	return placeID
+	return place
+}
+
+// attachPlace expands an event's place_id onto the response so a create or
+// update returns the same shape a month read does. Best-effort: the event is
+// already saved, and a missing place object costs the caller a refetch at worst.
+func (s *CalendarService) attachPlace(ctx context.Context, e *model.CalendarEvent) {
+	if e == nil || e.PlaceID == nil || e.Place != nil {
+		return
+	}
+	place, err := s.repo.GetPlaceByID(ctx, *e.PlaceID)
+	if err != nil {
+		log.Printf("calendar: expand place %s on event %s: %v", *e.PlaceID, e.ID, err)
+		return
+	}
+	e.Place = place
 }
 
 // resolveSourceLocale decides which language a record's text is in, from the text
@@ -127,7 +142,11 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 
 	// Resolve the venue before inserting, so the event lands with its place_id
 	// already set and the Locations strip groups it on the very first render.
-	placeID := s.resolveEventPlace(ctx, req.PrivateAddress, req.Title)
+	place := s.resolveEventPlace(ctx, req.PrivateAddress, req.Title)
+	var placeID *string
+	if place != nil {
+		placeID = &place.ID
+	}
 
 	e := &model.CalendarEvent{
 		Date:           req.Date,
@@ -138,6 +157,7 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 		PrivateAddress: req.PrivateAddress,
 		AddressPublic:  req.AddressPublic,
 		PlaceID:        placeID,
+		Place:          place,
 		Color:          req.Color,
 		Notes:          req.Notes,
 		AdminID:        &adminID,
@@ -277,13 +297,18 @@ func (s *CalendarService) UpdateEvent(ctx context.Context, id string, req model.
 	// title, so the post-patch title is what a brand-new venue gets named after.
 	var placeID *string
 	if req.PrivateAddress != nil {
-		placeID = s.resolveEventPlace(ctx, req.PrivateAddress, newTitle)
+		if place := s.resolveEventPlace(ctx, req.PrivateAddress, newTitle); place != nil {
+			placeID = &place.ID
+		}
 	}
 
 	e, err := s.repo.UpdateEvent(ctx, id, &req, sourceLocale, placeID)
 	if err != nil {
 		return nil, fmt.Errorf("update event: %w", err)
 	}
+	// The PATCH may have kept a place it did not submit an address for, so the
+	// response is expanded from whatever place_id actually survived the write.
+	s.attachPlace(ctx, e)
 
 	// The language flipped, so any translation into the NEW source language is
 	// now describing text the record holds natively. Left in place it would show

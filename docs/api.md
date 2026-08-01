@@ -719,8 +719,15 @@ Tags are reusable labels created by admins and can be applied to multiple galler
   "title": "Youth Camp",
   "event_type": "general",
   "icon": "star",
-  "private_address": "123 Main St",
+  "private_address": "1414 Plank Road, Hooversville, PA 15936",
   "address_public": false,
+  "place_id": "uuid",
+  "place": {
+    "id": "uuid",
+    "address": "1414 Plank Road, Hooversville, PA 15936",
+    "name": "Youth Camp",
+    "name_source": "ai"
+  },
   "color": "sky",
   "notes": "Bring your study guide.",
   "admin_id": "uuid",
@@ -730,6 +737,10 @@ Tags are reusable labels created by admins and can be applied to multiple galler
 }
 ```
 `date` is a `YYYY-MM-DD` string (no time component) - the first day of the event. `end_date` is the inclusive last day of a multi-day span (also `YYYY-MM-DD`); it is **omitted/null for a single-day event**, and when set must be `>= date` (enforced by request validation and a DB `CHECK`). A multi-day event renders as a banner ribbon spanning its days, and the month query returns it for **every** month its range overlaps (a span crossing a month boundary appears in both). `event_type` is a **slug from the `calendar_event_types` table**, not a fixed enum - the six built-ins are `birthday`, `bible_study`, `general`, `announcement`, `prayer`, `graduation`, and admins create more at runtime via `POST /api/v1/calendar/event-types`. Request validation only checks shape (`^[a-z0-9_]{1,40}$`); existence is enforced by the foreign key and a pre-flight check in the service. `icon` is a Phosphor icon key (one of: `cake`, `book-open`, `bell`, `heart`, `star`, `users`, `music-notes`, `cross`, `flame`, `sparkle`, `graduation-cap`) **or `none`**, which renders the event with no icon at all. `color` is either a named palette key (`slate`, `red`, `amber`, `emerald`, `sky`, `violet`, `rose`, `stone`, `black`) **or a 6-digit hex** like `#2E7D9A`. Named keys carry hand-tuned tints; a hex is expanded client-side by `deriveRamp` (`frontend/lib/color.ts`) into the same four values, with the derived text color guaranteed to clear WCAG AA against both white and its own highlight tint. `private_address` is returned to admins always, and to the public **only when `address_public` is `true`**; otherwise public viewers see `null` even when an address exists. `address_public` defaults to `false` (privacy-safe). The PNG export is admin-driven, so it always includes the address regardless of this flag. `machine_translated` follows the same rule as on Post.
+
+`place` and `place_id` (migration `000014`) are the **venue** `private_address` resolved to, and are **stripped under exactly the same condition as `private_address`** - a place name like `"MST House"` identifies a household as precisely as its street number, so hiding the address while leaking the name would defeat the flag. Both are omitted when the event has no address, and on every event last saved before `000014` (there is no backfill; they populate on the next save).
+
+Resolution happens server-side on write and is never client-supplied, which is why neither field appears on the create or update request bodies. The address is normalized (`model.NormalizeAddressKey`: case, punctuation, diacritics, ZIP, and `St`/`Street`, `MA`/`Massachusetts` abbreviations all folded) and looked up in `calendar_places`; a new address inserts a place named after the event title and then asks Gemini for a proper label asynchronously. **Two events at the same address always carry the same `place.id`**, which is what lets clients group by venue without doing any address matching of their own - `frontend/lib/places.ts` is a plain group-by for this reason. `name_source` is `"ai"` or `"admin"`; `"admin"` means a human named it and the model may not overwrite it. See `docs/agents/backend.md` → "Place naming".
 
 ### CalendarMonthNote
 ```json
