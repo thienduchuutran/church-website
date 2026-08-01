@@ -6,6 +6,7 @@ import type {
   CalendarMonthNote,
   CalendarMonthResponse,
   CalendarMonthSettings,
+  CalendarPlace,
   PaletteColor,
 } from '@/components/features/calendar/types'
 
@@ -77,6 +78,23 @@ export async function updateEvent(
 
 export async function deleteEvent(id: string, token: string): Promise<void> {
   await apiDelete(`${BASE}/events/${id}`, token)
+}
+
+// --- Places (the venue registry behind the Locations strip) ---
+
+// Admin-only, unlike getEventTypes/getPaletteColors below. Those are public
+// lists of labels and hex codes; this one returns street addresses including
+// every address never marked "show on website", so the token is required rather
+// than optional.
+export async function getPlaces(token: string): Promise<CalendarPlace[]> {
+  return apiGet(`${BASE}/places`, token) as Promise<CalendarPlace[]>
+}
+
+// Renames a venue. One call relabels every event at that address, because the
+// name lives on the place rather than on each event - and it pins the label so
+// the naming model can never overwrite it again.
+export async function renamePlace(id: string, name: string, token: string): Promise<CalendarPlace> {
+  return apiPatch(`${BASE}/places/${id}`, { name }, token) as Promise<CalendarPlace>
 }
 
 // --- Event types (the admin-managed category vocabulary) ---

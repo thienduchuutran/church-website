@@ -611,9 +611,28 @@ All three sets used to be closed and could only grow via a deploy. Since migrati
 
 **Color** - built-in swatches, then the shared custom palette from `GET /calendar/palette`, then a dashed `+` that opens `CustomColorPopover`. An **Edit** toggle (shown only when saved swatches exist) reveals per-swatch remove badges; it is a toggle rather than hover so it works on touch, mirroring GoodNotes' "Edit → Remove Color".
 
+### The Location section
+
+Behind the "Location" toggle sit three controls that together keep the calendar's venue list clean.
+
+**Address box + suggestions.** Typing filters the venues from `GET /calendar/places` (admin-only, unlike the two vocabulary reads above - it returns street addresses regardless of `address_public`). Tapping one fills the address *and* pins which place this event belongs to.
+
+> **Do not add address matching to the filter.** It is a plain case-insensitive substring test over the name and address, purely for presentation. Whether two addresses *are* the same place is decided server-side by `model.NormalizeAddressKey`, and a second implementation here would drift from it.
+
+Picking a suggestion is what actually **prevents** a duplicate rather than hiding one. Normalization folds `101 Main Street` into `101 Main St`, but it cannot fold a genuine typo like `10 Main St` - that becomes a second venue with its own model call and its own row in the Locations strip.
+
+**"Shown in Locations as"** appears once the event has a venue, and is the only way to fix a wrong AI-proposed name. It has to exist: the name renders on the public calendar and inside the exported PNG, and re-typing the address resolves back to the *same* place by design, so there is no editing around a bad label. Saving calls `PATCH /calendar/places/:id`, which sets `name_source='admin'` and permanently locks the naming worker out of that row. The helper line ("Renaming updates all 4 events at this address") is shown whenever the count is above one, because a rename here is not a local edit.
+
+The input is capped at 40 characters to match `model.MaxPlaceNameLen`, so an admin hits a stop rather than a 400.
+
+**"Show on website"** is unchanged and still per event. Note it now governs the *venue* too: the handler strips `place` alongside `private_address`, since `"MST House"` identifies a household as precisely as its street number.
+
+Not implemented, deliberately: a "this looks like an existing place" hint on blur. It would need the frontend to decide address identity, which is exactly the drift the filter comment warns against.
+
 ### Details worth knowing
 
-- **Fetches fail soft.** Both vocabulary requests are `.catch(() => {})`. A flaky network degrades the *flexibility* (built-in chips and swatches still work) rather than blocking event creation.
+- **Fetches fail soft.** All three requests are `.catch(() => {})`. A flaky network degrades the *flexibility* (built-in chips and swatches still work, the address box stays a plain textarea) rather than blocking event creation.
+- **Suggestion blur is delayed 150ms.** `mousedown` fires before `blur`, but the `click` that picks a suggestion would be lost if the list unmounted on blur.
 - **Escape is layered.** The inline type input and `CustomColorPopover` each call `stopPropagation()` on Escape, so the first press cancels the inner control instead of discarding the whole form.
 - **Unknown values are never dropped.** If the event's type is missing from the fetched list, or its hex is no longer in the shared palette, the chip/swatch is appended anyway - so editing an old event never silently reassigns its category or looks like nothing is selected.
 

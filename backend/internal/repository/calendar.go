@@ -452,6 +452,36 @@ func (r *CalendarRepository) UpdatePlaceNameFromAI(ctx context.Context, id, name
 	return err
 }
 
+// RenamePlace stores an admin's label and pins it against the model.
+//
+// Setting name_source = 'admin' is the point of this query, not a side effect:
+// it is what makes UpdatePlaceNameFromAI skip this row forever after, so a
+// naming call still in flight for another event cannot undo the correction. It
+// is deliberately unconditional - an admin may rewrite another admin's label,
+// and only the model is locked out.
+//
+// The address is not editable here. It is the place's identity (address_key is
+// derived from it), so changing it would silently redefine which events belong
+// to this venue; fixing a mistyped address is an edit to the EVENT, which
+// re-resolves it to the correct place.
+func (r *CalendarRepository) RenamePlace(ctx context.Context, id, name string) (*model.CalendarPlace, error) {
+	var p model.CalendarPlace
+	err := r.pool.QueryRow(ctx,
+		`UPDATE calendar_places
+		    SET name = $2, name_source = $3, updated_at = now()
+		  WHERE id = $1
+		  RETURNING `+placeColumns,
+		id, name, model.PlaceNameSourceAdmin,
+	).Scan(&p.ID, &p.Address, &p.Name, &p.NameSource, &p.CreatedAt, &p.UpdatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, model.ErrNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &p, nil
+}
+
 // ListPlaceNames returns the venue names already in use, most-used first. Fed to
 // the model as context so a new place is named consistently with the vocabulary
 // the church already reads ("Church", not "Main St Building").

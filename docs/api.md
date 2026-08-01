@@ -216,6 +216,41 @@ Events already using that hex **keep it** - the color is copied onto the event, 
 
 ---
 
+### `GET /api/v1/calendar/places`
+Every venue in `calendar_places`, most-used first. **Admin only.**
+
+Unlike `GET /calendar/event-types` and `GET /calendar/palette` - deliberately public lists of labels and hex codes - this returns **street addresses, including every address never marked `address_public`**. That is why it sits inside the `RequireAdmin` group.
+
+Backs the address suggestions in the event form. Picking a suggestion is what actually *prevents* a duplicate: `NormalizeAddressKey` folds two spellings of one address, but it cannot fold a genuine typo (`10 Main St` for `101 Main St`), which would otherwise become a second venue with its own model call and its own row in the Locations strip.
+
+**Response `200`** - `CalendarPlace[]` (always an array, never `null`), each carrying `event_count`  
+**Response `401` / `403`** - unauthenticated or not an admin
+
+---
+
+### `PATCH /api/v1/calendar/places/:id`
+Rename a venue. **Admin only.**
+
+**Request body**
+```json
+{ "name": "Church" }
+```
+
+This is the correction path for a wrong model-proposed name, and it is the only one: re-typing the event's address resolves back to the *same* place by design, so there is no way to edit around a bad label. Saving sets `name_source` to `"admin"`, which **permanently** locks the naming worker out of this row - `UpdatePlaceNameFromAI` filters on `name_source = 'ai'`.
+
+One rename relabels **every event at that address**, because the name lives on the place rather than on each event.
+
+The address is deliberately **not** editable here: it is the place's identity (`address_key` is derived from it), so changing it would silently redefine which events belong to this venue. Fixing a mistyped address is an edit to the *event*, which re-resolves it to the correct place.
+
+`name` must be non-empty, 40 characters or fewer (counted in **runes**, so a Vietnamese name is never cut mid-character), and single-line. The same ceiling applies to model answers, so a human can never type a label the model would have been refused for.
+
+**Response `200`** - the updated `CalendarPlace`  
+**Response `400`** - empty, too long, or multi-line name  
+**Response `404`** - no place with that id  
+**Response `401` / `403`** - unauthenticated or not an admin
+
+---
+
 ### `GET /api/v1/pages/:slug`
 Returns all editable content for a static page (e.g. `about`, `connect`). The response contains two projections of the same `page_content` rows:
 

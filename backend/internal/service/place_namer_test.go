@@ -317,8 +317,8 @@ func TestProvisionalPlaceName(t *testing.T) {
 		t.Errorf("empty title should fall back to a printable label, got %q", got)
 	}
 	long := provisionalPlaceName(strings.Repeat("Đêm ", 40))
-	if n := len([]rune(long)); n > maxPlaceNameLen {
-		t.Errorf("provisional name is %d runes, want <= %d", n, maxPlaceNameLen)
+	if n := len([]rune(long)); n > model.MaxPlaceNameLen {
+		t.Errorf("provisional name is %d runes, want <= %d", n, model.MaxPlaceNameLen)
 	}
 	if !strings.HasPrefix(long, "Đêm") {
 		t.Errorf("truncation mangled the Vietnamese text: %q", long)

@@ -38,7 +38,7 @@ backend/
 │   │   ├── tag.go              ← GET /tags, POST /tags, POST/DELETE /posts/{id}/tags
 │   │   ├── reactions.go        ← POST /reactions, DELETE /reactions
 │   │   ├── gallery.go          ← POST /gallery (album + images)
-│   │   ├── calendar.go         ← GET /calendar (locale-aware), POST/PATCH/DELETE /calendar/events, GET/POST /calendar/event-types, GET/POST/DELETE /calendar/palette, PUT month note + settings
+│   │   ├── calendar.go         ← GET /calendar (locale-aware), POST/PATCH/DELETE /calendar/events, GET/POST /calendar/event-types, GET/POST/DELETE /calendar/palette, GET/PATCH /calendar/places (admin-only), PUT month note + settings
 │   │   ├── pages.go            ← GET /pages/:slug (locale-aware, returns sections + blocks), PUT /pages/:slug (sections OR blocks)
 │   │   └── admin_translations.go  ← GET list, PATCH approve, POST retranslate (admin review panel)
 │   │   ├── pages.go            ← GET /pages/:slug, PUT /pages/:slug
@@ -140,6 +140,8 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | POST | `/api/v1/calendar/event-types` | Create a reusable event type from a label (get-or-create; slug derived server-side) |
 | POST | `/api/v1/calendar/palette` | Save a custom hex as a shared swatch (idempotent) |
 | DELETE | `/api/v1/calendar/palette/:id` | Remove a saved swatch (does not affect events already using that hex) |
+| GET | `/api/v1/calendar/places` | The venue registry with usage counts, for the event form's address suggestions. **Admin-only unlike the two vocabulary reads above** - it returns street addresses regardless of `address_public` |
+| PATCH | `/api/v1/calendar/places/:id` | Rename a venue. Sets `name_source='admin'`, which permanently locks the naming worker out of that row. One rename relabels every event at the address |
 | PUT | `/api/v1/calendar/months/:year/:month/note` | Upsert the month's sidebar note |
 | PUT | `/api/v1/calendar/months/:year/:month/settings` | Upsert the month's per-month styling (accent color) |
 | GET | `/api/v1/admin/translations` | List translations for the review panel. Query params: `?locale=vi`, `?approved=false\|true`, `?limit=20`, `?offset=0`. Response includes `record_title` synthesized from a JOIN to each possible parent table. |
@@ -418,6 +420,21 @@ is *complete*, not that it is *sensible*.
 Without `GEMINI_API_KEY` the namer is nil: addresses still resolve and still
 dedupe, places just keep the provisional name. Same opt-in degradation as the
 translation worker.
+
+### Correcting a name
+
+`PATCH /calendar/places/{id}` is the **only** correction path, and it has to
+exist: the answer renders on the public calendar and inside the exported PNG,
+and re-typing the event's address resolves back to the same place by design, so
+there is no way to edit around a bad label. The rename sets
+`name_source='admin'`, which permanently locks `UpdatePlaceNameFromAI` out of
+that row - so a naming call still in flight for another event cannot undo it.
+
+One rename relabels every event at the address, because the name lives on the
+place. **The address is not editable through this endpoint**: it is the place's
+identity (`address_key` derives from it), so changing it would silently redefine
+which events belong here. Fixing a mistyped address is an edit to the *event*,
+which re-resolves it to the correct place and leaves the old one behind.
 
 ---
 

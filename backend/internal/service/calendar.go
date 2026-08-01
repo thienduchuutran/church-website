@@ -427,6 +427,40 @@ func (s *CalendarService) requireEventType(ctx context.Context, slug string) err
 	return nil
 }
 
+// ListPlaces returns every venue with its usage count. Backs the event form's
+// address suggestions, which is the half of this feature that prevents
+// duplicates rather than merely hiding them: normalization folds two spellings
+// of one address, but it cannot fold a genuine typo ("10 Main St" for "101 Main
+// St"), and only picking a known place avoids that.
+func (s *CalendarService) ListPlaces(ctx context.Context) ([]model.CalendarPlace, error) {
+	places, err := s.repo.ListPlaces(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list places: %w", err)
+	}
+	return places, nil
+}
+
+// RenamePlace applies an admin's correction to a venue label.
+//
+// This is the escape hatch that makes shipping a model-proposed name onto a
+// public page defensible at all. The model is occasionally wrong, the answer
+// renders on the calendar and inside the exported PNG, and without this an
+// admin has no recourse: re-typing the address resolves to the same place by
+// design, so there is no way to "edit around" a bad label.
+//
+// One rename fixes every event at the address, because the name lives on the
+// place rather than on each event.
+func (s *CalendarService) RenamePlace(ctx context.Context, id string, req model.UpdateCalendarPlaceRequest) (*model.CalendarPlace, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("validation: %w", err)
+	}
+	p, err := s.repo.RenamePlace(ctx, id, strings.TrimSpace(req.Name))
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
 // ListEventTypes returns the full category vocabulary for the picker.
 func (s *CalendarService) ListEventTypes(ctx context.Context) ([]model.CalendarEventTypeDef, error) {
 	types, err := s.repo.ListEventTypes(ctx)

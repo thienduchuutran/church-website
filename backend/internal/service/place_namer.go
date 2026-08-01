@@ -44,12 +44,11 @@ const (
 	// save, so the only thing this protects is a goroutine leaking on a hung
 	// connection.
 	placeNameTimeout = 30 * time.Second
-
-	// maxPlaceNameLen caps what may reach the page, in runes rather than bytes
-	// so a Vietnamese name is not cut mid-character. Four words of headroom; the
-	// prompt asks for one to four.
-	maxPlaceNameLen = 40
 )
+
+// The label ceiling lives in model.MaxPlaceNameLen rather than here, because the
+// admin rename validator has to enforce the identical limit - otherwise a human
+// could type a name the model would have been refused for.
 
 // PlaceNamer is the slice of the translation engine this file needs: one
 // prompted completion, no persistence. *translation.Translator satisfies it.
@@ -231,7 +230,7 @@ func sanitizePlaceName(raw string) (string, bool) {
 	if name == "" {
 		return "", false
 	}
-	if len([]rune(name)) > maxPlaceNameLen {
+	if len([]rune(name)) > model.MaxPlaceNameLen {
 		return "", false
 	}
 	return name, true
@@ -247,8 +246,8 @@ func provisionalPlaceName(title string) string {
 	if name == "" {
 		return "Location"
 	}
-	if r := []rune(name); len(r) > maxPlaceNameLen {
-		return strings.TrimSpace(string(r[:maxPlaceNameLen]))
+	if r := []rune(name); len(r) > model.MaxPlaceNameLen {
+		return strings.TrimSpace(string(r[:model.MaxPlaceNameLen]))
 	}
 	return name
 }

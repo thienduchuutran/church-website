@@ -438,6 +438,8 @@ func main() {
 		//     The event-type vocabulary and the saved color palette are read-only
 		//     lists of labels and hex strings - nothing sensitive, and the public
 		//     day modal needs the type labels to name an event's category.
+		//     GET /calendar/places is NOT among them: it is the one calendar read
+		//     that exposes street addresses regardless of address_public.
 		//   ADMIN-ONLY: every mutation below, including growing those two lists.
 		if calendarHandler != nil {
 			r.With(appMiddleware.OptionalAdmin(adminRepo, jwksCache)).Get("/calendar", calendarHandler.GetMonth)
@@ -452,6 +454,12 @@ func main() {
 				r.Post("/calendar/event-types", calendarHandler.CreateEventType)
 				r.Post("/calendar/palette", calendarHandler.CreatePaletteColor)
 				r.Delete("/calendar/palette/{id}", calendarHandler.DeletePaletteColor)
+				// Places are admin-only, unlike the two public vocabulary reads
+				// above: this list returns street addresses including every one
+				// never marked address_public. The rename is what corrects a
+				// wrong AI-proposed venue label.
+				r.Get("/calendar/places", calendarHandler.ListPlaces)
+				r.Patch("/calendar/places/{id}", calendarHandler.RenamePlace)
 				r.Put("/calendar/months/{year}/{month}/note", calendarHandler.UpsertMonthNote)
 				r.Put("/calendar/months/{year}/{month}/settings", calendarHandler.UpsertMonthSettings)
 			})

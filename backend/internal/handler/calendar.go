@@ -124,6 +124,44 @@ func (h *CalendarHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// ListPlaces handles GET /api/v1/calendar/places (admin only).
+//
+// Unlike /calendar/event-types and /calendar/palette - deliberately public
+// lists of labels and hex codes - this one returns addresses, including every
+// address never marked address_public. It must stay inside the RequireAdmin
+// group; see the route comments in cmd/server/main.go.
+func (h *CalendarHandler) ListPlaces(w http.ResponseWriter, r *http.Request) {
+	places, err := h.svc.ListPlaces(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to load places")
+		return
+	}
+	writeJSON(w, http.StatusOK, places)
+}
+
+// RenamePlace handles PATCH /api/v1/calendar/places/{id} (admin only).
+//
+// Renaming pins the label against the naming model, so this is how a wrong
+// model answer gets corrected - and one call fixes every event at the address.
+func (h *CalendarHandler) RenamePlace(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var req model.UpdateCalendarPlaceRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	p, err := h.svc.RenamePlace(r.Context(), id, req)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "place not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
 // ListEventTypes handles GET /api/v1/calendar/event-types.
 // Public, like GET /calendar: the category vocabulary is not sensitive, and the
 // day modal needs the labels to render an event's category to visitors.

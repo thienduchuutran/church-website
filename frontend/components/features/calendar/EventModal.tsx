@@ -11,6 +11,8 @@ import {
   deletePaletteColor,
   getEventTypes,
   getPaletteColors,
+  getPlaces,
+  renamePlace,
   updateEvent,
   upsertMonthNote,
 } from '@/lib/calendar'
@@ -19,6 +21,7 @@ import {
   CalendarEventType,
   CalendarEventTypeDef,
   CalendarMonthNote,
+  CalendarPlace,
   COLOR_MAP,
   EVENT_TYPE_LABELS,
   ICON_LABELS,
@@ -68,6 +71,10 @@ const FALLBACK_TYPE_DEFAULTS: Record<string, { icon: string; color: string }> = 
 
 const EXIT_MS = 280
 
+// Mirrors model.MaxPlaceNameLen on the backend, which rejects anything longer.
+// Capping the input means an admin hits a stop rather than a 400.
+const MAX_PLACE_NAME_LEN = 40
+
 export default function EventModal({
   mode,
   date,
@@ -115,6 +122,19 @@ export default function EventModal({
   // requests fail.
   const [eventTypes, setEventTypes] = useState<CalendarEventTypeDef[]>([])
   const [palette, setPalette] = useState<PaletteColor[]>([])
+
+  // Known venues, for the address suggestions. This is the half of the places
+  // feature that PREVENTS duplicates rather than hiding them: the server folds
+  // two spellings of one address, but it cannot fold a genuine typo ("10 Main
+  // St" for "101 Main St"), and only picking a known place avoids that.
+  const [places, setPlaces] = useState<CalendarPlace[]>([])
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false)
+  // The venue this event currently resolves to, so an admin can correct a wrong
+  // model-proposed label without leaving the form. Seeded from the event and
+  // re-pointed when the address is changed to a known place.
+  const [place, setPlace] = useState<CalendarPlace | null>(event?.place ?? null)
+  const [placeName, setPlaceName] = useState(event?.place?.name ?? '')
+  const [renamingPlace, setRenamingPlace] = useState(false)
 
   // Inline "create a type as you type" state (the Linear/Airtable pattern).
   const [addingType, setAddingType] = useState(false)
@@ -180,6 +200,23 @@ export default function EventModal({
     }
   }, [])
 
+  // Known venues are a separate fetch because, unlike the two above, this
+  // endpoint is admin-only - it returns street addresses regardless of whether
+  // they were ever marked public. Same swallow-and-degrade rule: without it the
+  // address box is just a plain textarea, which is what it was before.
+  useEffect(() => {
+    if (!accessToken) return
+    let cancelled = false
+    getPlaces(accessToken)
+      .then((p) => {
+        if (!cancelled) setPlaces(p)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [accessToken])
+
   // Sync icon/color with event type selection for smart defaults. The defaults
   // now travel with the type row in the database, so an admin-created type
   // brings its own look; FALLBACK_TYPE_DEFAULTS only covers the window before
@@ -239,6 +276,59 @@ export default function EventModal({
     } catch {
       setPalette(previous)
       setError("Couldn't remove that color")
+    }
+  }
+
+  // Suggestions are filtered by plain substring, on both the label and the
+  // address, so "main" and "church" both find the church. This is presentation
+  // filtering only - it never decides that two addresses ARE the same place.
+  // That question is answered server-side by model.NormalizeAddressKey, and a
+  // second implementation here would drift from it.
+  const addressQuery = privateAddress.trim().toLowerCase()
+  const matchingPlaces = places
+    .filter((p) => {
+      if (place && p.id === place.id) return false // already adopted
+      if (!addressQuery) return true
+      return p.address.toLowerCase().includes(addressQuery) || p.name.toLowerCase().includes(addressQuery)
+    })
+    .slice(0, 5)
+
+  // The nested place on an event carries no usage count (it comes from a join
+  // that selects three columns), so the count comes from the list instead.
+  const placeEventCount = place ? (places.find((p) => p.id === place.id)?.event_count ?? 0) : 0
+
+  // Adopting a known venue: fills the address AND pins which place this event
+  // belongs to, so a typo can't quietly create a second row for one building.
+  function handlePickPlace(p: CalendarPlace) {
+    setPrivateAddress(p.address)
+    setPlace(p)
+    setPlaceName(p.name)
+    setSuggestionsOpen(false)
+  }
+
+  // Correcting the venue label. This is the escape hatch that makes shipping an
+  // AI-proposed name defensible: the answer renders on the public calendar and
+  // inside the exported PNG, and re-typing the address can't fix it (it
+  // resolves back to the same place by design). Saving also pins the name so
+  // the model can never overwrite it.
+  async function handleRenamePlace() {
+    const next = placeName.trim()
+    if (!place || !accessToken || !next || next === place.name) return
+    setRenamingPlace(true)
+    setError(null)
+    try {
+      const updated = await renamePlace(place.id, next, accessToken)
+      setPlace(updated)
+      setPlaceName(updated.name)
+      // Keep the suggestion list in step, preserving the usage count the
+      // rename response does not carry.
+      setPlaces((prev) =>
+        prev.map((p) => (p.id === updated.id ? { ...updated, event_count: p.event_count } : p)),
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't rename this place")
+    } finally {
+      setRenamingPlace(false)
     }
   }
 
@@ -619,11 +709,13 @@ export default function EventModal({
                 </div>
               </div>
 
-              {/* Location address - toggle reveals textarea, available for all event types */}
+              {/* Location - toggle reveals the address box, the known-venue
+                  suggestions, and (once this event has a venue) its label.
+                  Available for all event types. */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
-                    Location address
+                    Location
                   </label>
                   <button
                     type="button"
@@ -645,13 +737,94 @@ export default function EventModal({
                 </div>
                 {showAddress && (
                   <>
-                    <textarea
-                      value={privateAddress}
-                      onChange={(e) => setPrivateAddress(e.target.value)}
-                      rows={2}
-                      placeholder="123 Street, City"
-                      className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
-                    />
+                    <div className="relative">
+                      <textarea
+                        value={privateAddress}
+                        onChange={(e) => {
+                          setPrivateAddress(e.target.value)
+                          setSuggestionsOpen(true)
+                        }}
+                        onFocus={() => setSuggestionsOpen(true)}
+                        // Blur is delayed so a click on a suggestion lands
+                        // before the list unmounts - mousedown fires first, but
+                        // the click that actually picks would be lost.
+                        onBlur={() => setTimeout(() => setSuggestionsOpen(false), 150)}
+                        rows={2}
+                        placeholder="123 Street, City"
+                        className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                      />
+                      {/* Known venues. Tapping one is what actually prevents a
+                          duplicate - the server folds two spellings of one
+                          address, but it cannot fold a typo like "10 Main St"
+                          for "101 Main St". Plain substring filtering, NOT
+                          address matching: deciding whether two addresses are
+                          the same place is the server's job and must not be
+                          reimplemented here. */}
+                      {suggestionsOpen && matchingPlaces.length > 0 && (
+                        <ul className="absolute z-10 mt-1 w-full overflow-hidden rounded-lg border border-border bg-background shadow-lg">
+                          {matchingPlaces.map((p) => (
+                            <li key={p.id}>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => handlePickPlace(p)}
+                                className="flex w-full items-baseline gap-2 px-3 py-2 text-left transition-colors hover:bg-muted/10"
+                              >
+                                <span className="font-display text-xs font-semibold text-foreground">{p.name}</span>
+                                <span className="truncate font-sans text-[11px] text-muted">{p.address}</span>
+                                {!!p.event_count && (
+                                  <span className="ml-auto shrink-0 font-sans text-[10px] text-muted">
+                                    {p.event_count}×
+                                  </span>
+                                )}
+                              </button>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+
+                    {/* The venue label, editable in place. Only shown once this
+                        event actually has a place - a brand-new address gets
+                        one on save, named by the model. */}
+                    {place && (
+                      <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-muted/5 px-3 py-2.5">
+                        <span className="flex items-center gap-1.5 font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
+                          Shown in Locations as
+                          <InfoTip label="About the place name">
+                            <p className="font-sans text-xs leading-relaxed text-muted">
+                              The calendar footer lists <strong className="font-semibold text-foreground">places</strong>, not events - so this address appears once no matter how many events are held there.
+                            </p>
+                            <p className="mt-1.5 font-sans text-xs leading-relaxed text-muted">
+                              The name is suggested automatically the first time an address is used. Renaming it here changes it for <strong className="font-semibold text-foreground">every</strong> event at this address, and stops it being renamed automatically again.
+                            </p>
+                          </InfoTip>
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <input
+                            value={placeName}
+                            onChange={(e) => setPlaceName(e.target.value)}
+                            maxLength={MAX_PLACE_NAME_LEN}
+                            placeholder="Church"
+                            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+                          />
+                          <button
+                            type="button"
+                            onClick={handleRenamePlace}
+                            disabled={renamingPlace || !placeName.trim() || placeName.trim() === place.name}
+                            className="shrink-0 rounded-lg border border-border px-3 py-2 font-display text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:bg-muted/10 disabled:opacity-40 disabled:hover:bg-transparent"
+                          >
+                            {renamingPlace ? 'Saving…' : 'Rename'}
+                          </button>
+                        </div>
+                        {placeEventCount > 1 && (
+                          <p className="font-sans text-[11px] leading-snug text-muted">
+                            Renaming updates all {placeEventCount} events at this address.
+                          </p>
+                        )}
+                      </div>
+                    )}
+
                     <div className="flex items-center justify-between">
                       <span className="flex items-center gap-1.5 font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
                         Show on website

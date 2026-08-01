@@ -445,6 +445,38 @@ const (
 	PlaceNameSourceAdmin = "admin"
 )
 
+// MaxPlaceNameLen caps a venue label, in runes rather than bytes so a
+// Vietnamese name is never cut mid-character. Shared by the model-answer
+// sanitizer and the admin rename validator - the same ceiling has to apply to
+// both, or a human could type a label the model would have been refused.
+const MaxPlaceNameLen = 40
+
+// UpdateCalendarPlaceRequest renames a venue. Only the name is editable: the
+// address is the place's identity (it is what address_key is derived from), so
+// changing it would silently redefine which events belong here. Correcting a
+// mistyped address is an edit to the EVENT, which re-resolves it to the right
+// place and leaves this one behind.
+type UpdateCalendarPlaceRequest struct {
+	Name string `json:"name"`
+}
+
+func (r *UpdateCalendarPlaceRequest) Validate() error {
+	name := strings.TrimSpace(r.Name)
+	if name == "" {
+		return errors.New("name is required")
+	}
+	if len([]rune(name)) > MaxPlaceNameLen {
+		return fmt.Errorf("name must be %d characters or fewer", MaxPlaceNameLen)
+	}
+	// A label goes into a single-line strip and into the exported image; a
+	// newline would break both. Rejecting beats silently rewriting what the
+	// admin typed.
+	if strings.ContainsAny(name, "\n\r") {
+		return errors.New("name must be a single line")
+	}
+	return nil
+}
+
 type CalendarMonthNote struct {
 	ID        string    `json:"id"`
 	Year      int       `json:"year"`
