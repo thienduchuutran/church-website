@@ -15,6 +15,39 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## The Locations strip shows two rows for what is obviously one address
+**Date solved:** 2026-08-01
+**Symptom:** After migration `000014`, the calendar footer prints the same address twice - once
+labelled (`Church - 101 Main St, Saugus MA`) and once bare (`101 Main St, Saugus MA`). The dedupe
+that this whole feature exists to provide appears broken.
+
+**Root cause:** Not broken - the two rows are keyed differently on purpose. `000014` has **no
+backfill**, so every event that existed before it has a `private_address` but a null `place_id`.
+`groupEventsByPlace` (`frontend/lib/places.ts`) keys a resolved event on `place:<uuid>` and a legacy
+one on `address:<lowercased address>`. Those keys can never collide, so a legacy event will not merge
+into a resolved place even at a byte-identical address.
+
+This is deliberate. Merging them would require the frontend to decide whether two typed addresses are
+the same place - reimplementing `model.NormalizeAddressKey` in TypeScript, where it would silently
+drift from the Go original that the database's `address_key` UNIQUE constraint depends on. One
+normalizer, server-side, is the rule.
+
+**Fix:** Open the older event and save it. Resolution runs on write, so it picks up its `place_id`
+and the rows merge. Nothing else is needed, and it is pinned by a test
+(`"a legacy event does not merge into a resolved place"`) so the behaviour stays a decision rather
+than a regression.
+
+**Related trap in the same area:** when editing `NormalizeAddressKey`, the state table is consulted
+for the **final token only** and must then *fall through* to the street-type table. Skipping that
+fallthrough (to keep `Hartford, CT` = Connecticut from becoming Court) breaks bare addresses:
+`101 Main St` stops matching `101 Main Street`, which half the seeded dev data is written as. Both
+directions are covered in `internal/model/address_test.go`.
+
+**Files affected:** `frontend/lib/places.ts`, `backend/internal/model/address.go`,
+`backend/migrations/000014_calendar_places.up.sql`
+
+---
+
 ## Traps to know before touching bidirectional translation (migration 000013)
 **Date solved:** 2026-07-29
 **Symptom:** Not a bug report - a list of things that looked fine and were not,

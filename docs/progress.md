@@ -3,6 +3,101 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-08-01 - Calendar places: the Locations strip lists venues, named by AI
+
+The calendar's Locations strip mapped 1:1 over every event carrying an address, printing
+`{day} {title} - {address}`. Four May events at the church printed the church four times - and since
+the strip is deliberately **not** `data-export-hide`, that repetition went into the PNG shared to
+Discord. The paper calendar the congregation already reads gets this right: its footer names each
+place once (`Church Address: 101 Main St...`, `Friday Bible Study: Chris & Sebs - 39 Bridle Ridge Dr`).
+
+**The modelling insight, which came from the owner.** A place name is a *function of its address* -
+two different places cannot share one. An earlier draft of this plan stored a hand-typed `place_name`
+on each event so dedupe could compare addresses while ignoring names; that was unnecessary, because
+deduping by address already dedupes the name. Storing the name against the **address** instead makes
+dedupe structural (a group-by on a foreign key) and - the part that actually matters - means the
+model is asked "what is this place called?" **once per address for the life of the church**. One
+address can therefore only ever carry one name: the church cannot be "Church" in May and "Church
+Renovation" in June.
+
+**What the model is buying.** Given `Friday BBS Chris & Sebs` → `Chris & Sebs`;
+`Church Clean up/renovation` → `Church`; `Youth Camp` → `Youth Camp`. Sometimes the activity word
+*is* the venue, sometimes the event name *is* the destination. No regex separates those.
+
+Phase 1 - Database (`000014`):
+
+| File | Change | Why |
+|---|---|---|
+| `migrations/000014_calendar_places.up.sql` | `calendar_places (address_key unique, address, name, name_source)` + `calendar_events.place_id` FK + seeds the `place_name` system prompt | `address_key` carries the UNIQUE constraint, so "same place" is a database guarantee. `ON DELETE SET NULL`, never CASCADE - removing a place must not take events with it. No backfill: pre-`000014` events render address-only until next saved |
+
+Phase 2 - Normalization (`internal/model/address.go`, TDD-first):
+
+`NormalizeAddressKey` folds diacritics (matching `SlugifyEventType`), drops apostrophes without
+splitting words, treats punctuation as whitespace, drops a trailing ZIP, and expands street-type,
+directional, unit and US state abbreviations. **The two failure modes are not symmetric and the tests
+are weighted accordingly**: failing to collapse two spellings leaves a duplicate row (today's
+behaviour), while collapsing two different addresses prints the wrong family's house in the exported
+PNG. So it folds only what is unambiguous - `St Mary's Church Rd` folding `St` to "street" rather
+than "Saint" is a known, accepted miss.
+
+`CT` is Connecticut in `Hartford, CT` and Court in `8 Bridle Ct`. The state table is consulted for
+the final token only, then **falls through** to the street table. That fallthrough is load-bearing:
+without it a bare `101 Main St` never matches `101 Main Street`, which the seeded dev data
+(`123 main st`) hit immediately. Caught by a probe, not by review.
+
+Phase 3 - Resolution + the model call:
+
+| File | Change | Why |
+|---|---|---|
+| `internal/translation/translator.go` | `Complete(ctx, promptKey, userText, maxTokens)` | A seam, not a second Gemini client: same key, endpoint, TTL'd prompt cache and `finishReason` truncation check, none of `TranslateField`'s hashing or persistence. A place name is a one-shot question, not a translation |
+| `internal/service/place_namer.go` | `placeResolver.resolve()` (sync, never calls the model) and `.name()` (the call) | Splitting them is what makes "a known address costs zero API calls" an assertion in a test rather than a hope, and puts the goroutine in the service where it is visible |
+| `internal/service/calendar.go` | Naming runs fire-and-forget on `context.Background()` | An admin saving an event must never wait on Gemini; an outage must never fail a save. Same shape as the fine-tuning capture |
+
+Three invariants, each pinned by a test: a known address costs no model call; `WHERE name_source =
+'ai'` means an admin rename is permanent; the place is created with the event title as a provisional
+name *before* the call, so any failure degrades to something printable rather than a blank row.
+
+`placeNameMaxTokens = 2048` for a one-to-four-word answer is **deliberate** - Gemini 2.5 thinks by
+default and thinking tokens count against `maxOutputTokens`. See known-quirks
+("Vietnamese AI translations truncated to a single word"). Do not tune it down.
+
+Phase 4 - API + display: the month read `LEFT JOIN`s `calendar_places`, and `lib/places.ts` groups on
+`place.id`. **Deliberately a plain group-by, not address matching** - two spellings already arrive
+with the same id, and a second normalizer in TypeScript would silently drift from the Go one. The day
+and event title are gone from each row (both are in the grid above; repeating them caused the
+duplication), which removed the unambiguous click target - so a row is click-to-edit only when it
+stands for exactly one event, with an admin-only export-hidden `×N` count explaining the rest.
+`place` and `place_id` are stripped for non-admins under **exactly** the same condition as
+`private_address`: `"MST House"` identifies a household as precisely as its street number.
+
+Phase 5 - Admin control: `PATCH /calendar/places/:id` is the *only* correction path, and it has to
+exist - the answer renders publicly and re-typing the address resolves back to the same place by
+design. It sets `name_source='admin'`, permanently locking the naming worker out, and one rename
+relabels every event at the address. `GET /calendar/places` backs the event form's suggestions;
+picking one **prevents** a duplicate rather than hiding it, since normalization cannot fold a genuine
+typo (`10 Main St` for `101 Main St`). Both routes are admin-only, unlike the public event-types and
+palette reads, because they return addresses regardless of `address_public`.
+
+**Dropped from the plan:** a "same place as X" hint on address blur. It would require the frontend to
+decide address identity - the exact drift avoided everywhere else. The suggestion dropdown covers the
+need.
+
+Cost: one Gemini 2.5 Flash call per never-before-seen address. A congregation with a handful of
+venues makes single-digit calls per year; every repeat is an indexed lookup. Without `GEMINI_API_KEY`
+addresses still resolve and dedupe, places just keep the provisional name - same opt-in degradation
+as the translation worker.
+
+Verified: `go build`/`go vet`/`go test ./...`, `tsc --noEmit`, `npm run build`, `test:color` 8/8,
+`test:places` 12/12. Plus throwaway probes against the local dev Postgres, since fakes prove nothing
+about SQL: migration up/down/up with events intact, `ON DELETE SET NULL`, `ON CONFLICT DO NOTHING`,
+the admin-name guard refusing an AI overwrite, both month read paths scanning and joining, a
+title-only PATCH keeping its `place_id`, and one rename relabelling every event at the address. Two
+bugs were caught this way that review had missed: the bare-address fallthrough above, and a nested
+place serializing `"created_at": "0001-01-01T00:00:00Z"` because the join selects only three columns.
+
+**Untested until it reaches an environment with a key:** no real Gemini call has run. The prompt's
+accuracy on actual event titles is unproven - worth watching on the first few real events.
+
 ## 2026-07-29 - Dismiss a pending translation without re-queueing it
 
 The review panel had two ways to clear a pending row: approve it, or retranslate it (delete + re-enqueue). Neither fit "the source no longer needs a translation but I don't want a fresh one either" - e.g. clearing a calendar month note's text leaves the old translation of the previous content behind, because `UpsertMonthNote` upserts the same `(year, month)` row rather than deleting it, so it's not an orphan by the cleanup sweep's definition (parent row still exists). Added `Dismiss`: delete the translation row, don't touch the queue. Built TDD-first per the AGENTS.md workflow (handler test → service → handler → route → UI → docs); no repository change needed since `GetByID`/`Delete` already existed for the `Retranslate` path.

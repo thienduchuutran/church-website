@@ -8,10 +8,28 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
-# PLANNED - Calendar places: AI-named, address-keyed, deduped
+# SHIPPED - Calendar places: AI-named, address-keyed, deduped
 
-**Status:** awaiting approval. Nothing implemented. Supersedes an earlier draft of this plan that
-stored a hand-typed `place_name` on each event - see "Why this shape" below.
+**Status:** implemented 2026-08-01 across six commits, one per phase. Migration `000014` applied and
+verified on the local dev DB (up / down / up with all events intact, `ON DELETE SET NULL` confirmed
+against real rows). Backend `go build` / `go vet` / `go test ./...` green; frontend `tsc --noEmit`
+clean, `npm run build` succeeds, `test:color` 8/8, `test:places` 12/12.
+
+**The shipped write-up lives in `docs/progress.md` (2026-08-01)** - read that first. The plan below is
+kept as the design record.
+
+**Deviations from the plan:**
+- The "same place as X" hint on address blur (Phase 5) was **dropped**. Implementing it would have
+  required the frontend to decide whether two addresses are the same place, which is exactly the
+  Go/TypeScript drift the rest of the design avoids. The suggestion dropdown covers the need.
+- Docs were written per-phase rather than saved for a final Phase 6, so Phase 6 reduced to this
+  status block plus the `progress.md` entry.
+- Two bugs surfaced during phase verification that the plan did not anticipate: the street-type
+  fallthrough on a bare address (Phase 2) and zero-valued timestamps on a joined place (Phase 4).
+  Both are recorded in `progress.md`.
+
+Supersedes an earlier draft of this plan that stored a hand-typed `place_name` on each event - see
+"Why this shape" below.
 
 ## The problem
 
