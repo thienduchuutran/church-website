@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"time"
 
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
@@ -172,87 +171,14 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 		"notes": e.Notes,
 	})
 
-	// Prefill the month's footer note with a line for this event ("prefill then
-	// edit"). Best-effort: it never blocks or fails the create.
-	s.seedMonthNote(ctx, e, adminID)
+	// Creating an event deliberately does NOT touch the month note. It used to
+	// append a "• May 22: Youth Camp" line ("prefill then edit"), which meant
+	// every event was restated in the footer whether or not it belonged there -
+	// the admin's curated note filled up with lines they had to delete. The note
+	// is hand-written commentary about the month, not an index of it; the grid
+	// already lists every event.
 
 	return e, nil
-}
-
-// buildSeedLine renders a one-line summary of an event for the month note, e.g.
-// "• May 22-25: Youth Camp" or "• May 22: Game Night". Uses a hyphen for date
-// ranges (same-month "May 22-25", cross-month "May 30 - Jun 2").
-func buildSeedLine(e *model.CalendarEvent) string {
-	start, err := time.Parse("2006-01-02", e.Date)
-	if err != nil {
-		return "• " + e.Title
-	}
-	datePart := start.Format("Jan 2")
-	if e.EndDate != nil && *e.EndDate != "" && *e.EndDate != e.Date {
-		if end, err := time.Parse("2006-01-02", *e.EndDate); err == nil {
-			if end.Month() == start.Month() && end.Year() == start.Year() {
-				datePart = fmt.Sprintf("%s-%d", start.Format("Jan 2"), end.Day())
-			} else {
-				datePart = fmt.Sprintf("%s - %s", start.Format("Jan 2"), end.Format("Jan 2"))
-			}
-		}
-	}
-	return fmt.Sprintf("• %s: %s", datePart, e.Title)
-}
-
-// seedMonthNote appends a one-line summary of a newly created event to that
-// month's note. It is KEEP-EDIT: it only ever appends a new line and never
-// rewrites existing text, so an admin's curation is never clobbered. Best-effort
-// - any failure here is swallowed so it can't fail event creation (the event is
-// already persisted by the time this runs).
-func (s *CalendarService) seedMonthNote(ctx context.Context, e *model.CalendarEvent, adminID string) {
-	start, err := time.Parse("2006-01-02", e.Date)
-	if err != nil {
-		return
-	}
-	year, month := start.Year(), int(start.Month())
-
-	line := buildSeedLine(e)
-
-	existing, err := s.repo.GetMonthNote(ctx, year, month, "")
-	if err != nil {
-		return
-	}
-	current := ""
-	if existing != nil {
-		current = existing.Content
-	}
-	// Dedupe so a retry (or a duplicate event) doesn't append the same line twice.
-	if strings.Contains(current, line) {
-		return
-	}
-
-	newContent := line
-	if strings.TrimSpace(current) != "" {
-		newContent = current + "\n" + line
-	}
-
-	// An existing note keeps its own language; only a brand-new one inherits the
-	// seeding event's. A month note is curated text an admin has been editing, and
-	// one event authored in the other language is not a reason to relabel the
-	// whole note - relabelling it would make every line already in there look
-	// like it needs re-translating.
-	//
-	// Known consequence: appending an English seed line to a Vietnamese note
-	// produces a genuinely mixed-language note, which the model will translate as
-	// a unit. Acceptable because the seed line is a starting point the admin is
-	// expected to rewrite ("prefill then edit"), and detection over the whole
-	// note would flip its language back and forth as events accumulate.
-	noteLocale := e.SourceLocale
-	if existing != nil {
-		noteLocale = existing.SourceLocale
-	}
-
-	saved, err := s.repo.UpsertMonthNote(ctx, year, month, newContent, &adminID, noteLocale)
-	if err != nil {
-		return
-	}
-	s.enqueueOne("calendar_month_notes", saved.ID, "content", newContent, noteLocale)
 }
 
 // UpdateEvent validates the request, fetches the existing event for diffing,

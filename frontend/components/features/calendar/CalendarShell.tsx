@@ -708,8 +708,8 @@ export default function CalendarShell({
                     // Dropping the day removed the unambiguous click target: a
                     // row standing for three events has no single event to
                     // open. So it stays clickable only when it means exactly
-                    // one, and the count below explains why the others went
-                    // quiet.
+                    // one - the rest are edited from the grid, which is where
+                    // an admin is already looking.
                     const singleEvent = g.events.length === 1 ? g.events[0] : null
                     const clickable = isAdmin && singleEvent !== null
                     return (
@@ -729,15 +729,9 @@ export default function CalendarShell({
                           </>
                         )}
                         <span className="font-sans text-sky-700">{g.address}</span>
-                        {/* Admin-only cues, both kept out of the exported image:
-                            how many events share this venue, and whether it is
-                            hidden from the public site (it still prints in the
-                            export either way). */}
-                        {isAdmin && g.events.length > 1 && (
-                          <span className="font-sans text-[9px] text-gray-400" data-export-hide>
-                            ×{g.events.length}
-                          </span>
-                        )}
+                        {/* Admin-only cue, kept out of the exported image: this
+                            address is hidden from the public site (it still
+                            prints in the export). */}
                         {isAdmin && g.hiddenFromPublic && (
                           <span className="font-sans text-[9px] uppercase tracking-wide text-gray-400 italic" data-export-hide>hidden</span>
                         )}

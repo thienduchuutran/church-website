@@ -3,6 +3,26 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-08-01 - Removed: creating an event no longer writes a line into the month note
+
+Creating a calendar event appended `• May 22: Youth Camp` to that month's sidebar note
+(`CalendarService.seedMonthNote`, shipped as "prefill then edit" - see the older entry
+"Calendar: graduation category, address privacy, auto-seeded footer notes", which is now historical).
+
+In practice the note filled up with a restatement of the grid. Every event was echoed into the
+footer whether it belonged there or not, and the admin's job became deleting lines rather than
+writing them. The note is hand-written commentary *about* the month; the grid already lists what is
+in it. The 1:1 mapping was the whole problem - the same shape of mistake the Locations strip had.
+
+Removed `seedMonthNote`, `buildSeedLine`, and `TestBuildSeedLine`. The month note is now only ever
+written by the admin through `PUT /calendar/months/:year/:month/note`. Two repository comments that
+cited `seedMonthNote` as the reason the raw-locale read path exists were corrected - that path still
+has real callers (the `UpdateEvent` PATCH diff, and `UpsertMonthNote` reading the prior note's
+`source_locale`), so `calendarRawRead` stays.
+
+Existing notes are untouched. Any auto-seeded lines already in a note remain until an admin edits
+them out, since nothing here rewrites stored content.
+
 ## 2026-08-01 - Calendar places: the Locations strip lists venues, named by AI
 
 The calendar's Locations strip mapped 1:1 over every event carrying an address, printing
@@ -66,7 +86,7 @@ Phase 4 - API + display: the month read `LEFT JOIN`s `calendar_places`, and `lib
 with the same id, and a second normalizer in TypeScript would silently drift from the Go one. The day
 and event title are gone from each row (both are in the grid above; repeating them caused the
 duplication), which removed the unambiguous click target - so a row is click-to-edit only when it
-stands for exactly one event, with an admin-only export-hidden `×N` count explaining the rest.
+stands for exactly one event, and the rest are edited from the grid.
 `place` and `place_id` are stripped for non-admins under **exactly** the same condition as
 `private_address`: `"MST House"` identifies a household as precisely as its street number.
 

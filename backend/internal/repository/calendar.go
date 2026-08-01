@@ -27,9 +27,9 @@ func NewCalendarRepository(pool *pgxpool.Pool) *CalendarRepository {
 // equivalence: a Vietnamese-authored row needs a translation to serve an English
 // viewer, so "en" is now an ordinary target locale and only "" means raw.
 //
-// The raw path still has real callers - CalendarService.seedMonthNote appends to
-// a note's own text, and the PATCH diff in UpdateEvent compares against what is
-// actually stored. Both would be wrong if handed a translation.
+// The raw path still has real callers - the PATCH diff in UpdateEvent compares
+// against what is actually stored, and UpsertMonthNote reads the prior note for
+// its source_locale. Both would be wrong if handed a translation.
 func calendarRawRead(locale string) bool {
 	return strings.TrimSpace(locale) == ""
 }
@@ -185,7 +185,8 @@ func (r *CalendarRepository) GetEventByID(ctx context.Context, id string) (*mode
 // GetMonthNote returns the sidebar note for a given year+month, or nil if none
 // exists. Served in `locale` when a translation exists, in the note's own
 // source_locale otherwise. An empty locale returns raw stored text - see
-// calendarRawRead; seedMonthNote relies on that to append to the note's own text.
+// calendarRawRead, which is how UpsertMonthNote reads the prior note's language
+// without a translation standing in for it.
 func (r *CalendarRepository) GetMonthNote(ctx context.Context, year, month int, locale string) (*model.CalendarMonthNote, error) {
 	if calendarRawRead(locale) {
 		var n model.CalendarMonthNote

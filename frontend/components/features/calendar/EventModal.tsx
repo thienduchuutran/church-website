@@ -293,10 +293,6 @@ export default function EventModal({
     })
     .slice(0, 5)
 
-  // The nested place on an event carries no usage count (it comes from a join
-  // that selects three columns), so the count comes from the list instead.
-  const placeEventCount = place ? (places.find((p) => p.id === place.id)?.event_count ?? 0) : 0
-
   // Adopting a known venue: fills the address AND pins which place this event
   // belongs to, so a typo can't quietly create a second row for one building.
   function handlePickPlace(p: CalendarPlace) {
@@ -320,11 +316,10 @@ export default function EventModal({
       const updated = await renamePlace(place.id, next, accessToken)
       setPlace(updated)
       setPlaceName(updated.name)
-      // Keep the suggestion list in step, preserving the usage count the
-      // rename response does not carry.
-      setPlaces((prev) =>
-        prev.map((p) => (p.id === updated.id ? { ...updated, event_count: p.event_count } : p)),
-      )
+      // Keep the suggestion list in step. Spread over the existing row rather
+      // than replacing it, so the usage count the rename response does not
+      // carry survives - it is what the server orders suggestions by.
+      setPlaces((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't rename this place")
     } finally {
@@ -772,11 +767,6 @@ export default function EventModal({
                               >
                                 <span className="font-display text-xs font-semibold text-foreground">{p.name}</span>
                                 <span className="truncate font-sans text-[11px] text-muted">{p.address}</span>
-                                {!!p.event_count && (
-                                  <span className="ml-auto shrink-0 font-sans text-[10px] text-muted">
-                                    {p.event_count}×
-                                  </span>
-                                )}
                               </button>
                             </li>
                           ))}
@@ -817,11 +807,9 @@ export default function EventModal({
                             {renamingPlace ? 'Saving…' : 'Rename'}
                           </button>
                         </div>
-                        {placeEventCount > 1 && (
-                          <p className="font-sans text-[11px] leading-snug text-muted">
-                            Renaming updates all {placeEventCount} events at this address.
-                          </p>
-                        )}
+                        <p className="font-sans text-[11px] leading-snug text-muted">
+                          Renaming updates every event at this address.
+                        </p>
                       </div>
                     )}
 

@@ -576,8 +576,8 @@ This mirrors the paper calendar's footer, which names each place once regardless
 | Grouped by `event.place.id` via `groupEventsByPlace` | Places are keyed server-side by the *normalized* address, so two spellings already share an id. **No address matching belongs in the frontend** - it lives in one tested Go function. |
 | No day, no event title | Both are in the grid directly above; repeating them is what caused the duplication. |
 | Name omitted when the place has none | An event saved before `000014` has an address but no venue; the address stands alone rather than printing an empty label. |
-| Click-to-edit only when the row means exactly one event | Dropping the day removed the unambiguous click target. Three events behind one row have no single event to open. |
-| Admin-only `×N` count, `data-export-hide` | Explains why a multi-event row is not clickable, and stays out of the shared image. |
+| Click-to-edit only when the row means exactly one event | Dropping the day removed the unambiguous click target. Three events behind one row have no single event to open; those are edited from the grid, where the admin is already looking. |
+| No usage count shown | A count of how many events share an address is noise in a list of places. The server still orders suggestions by it; nothing renders it. |
 | Admin-only `hidden` cue when **no** event there is public | `address_public` is per event, but one row stands for several; if any one is public the address does appear publicly. |
 
 Public visitors never see a private venue: the handler strips `place` and `place_id` under the same condition as `private_address`, since `"MST House"` identifies a household as precisely as its street number.
@@ -621,7 +621,7 @@ Behind the "Location" toggle sit three controls that together keep the calendar'
 
 Picking a suggestion is what actually **prevents** a duplicate rather than hiding one. Normalization folds `101 Main Street` into `101 Main St`, but it cannot fold a genuine typo like `10 Main St` - that becomes a second venue with its own model call and its own row in the Locations strip.
 
-**"Shown in Locations as"** appears once the event has a venue, and is the only way to fix a wrong AI-proposed name. It has to exist: the name renders on the public calendar and inside the exported PNG, and re-typing the address resolves back to the *same* place by design, so there is no editing around a bad label. Saving calls `PATCH /calendar/places/:id`, which sets `name_source='admin'` and permanently locks the naming worker out of that row. The helper line ("Renaming updates all 4 events at this address") is shown whenever the count is above one, because a rename here is not a local edit.
+**"Shown in Locations as"** appears once the event has a venue, and is the only way to fix a wrong AI-proposed name. It has to exist: the name renders on the public calendar and inside the exported PNG, and re-typing the address resolves back to the *same* place by design, so there is no editing around a bad label. Saving calls `PATCH /calendar/places/:id`, which sets `name_source='admin'` and permanently locks the naming worker out of that row. The helper line ("Renaming updates every event at this address") is always shown, because a rename here is not a local edit.
 
 The input is capped at 40 characters to match `model.MaxPlaceNameLen`, so an admin hits a stop rather than a 400.
 

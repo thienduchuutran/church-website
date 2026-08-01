@@ -52,7 +52,8 @@ export interface CalendarPlace {
   name: string
   // 'admin' means a human named it and the model may not overwrite it.
   name_source: 'ai' | 'admin'
-  // Populated only by the places list endpoint, where it orders suggestions.
+  // Populated only by the places list endpoint, where it orders suggestions
+  // most-used first. Not displayed - the ordering is the whole use.
   event_count?: number
 }
 

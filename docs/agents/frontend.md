@@ -197,7 +197,7 @@ The PNG export needs no involvement in any of this: `exportCalendarToPng` runs `
 Two consequences worth knowing:
 
 - **An event saved before `000014` has an address but no place.** It falls back to grouping on the trimmed lowercase address, so it still prints, but it will **not** merge into a resolved place at the same address - one key is a place id, the other is an address string. Printing both rows is the honest outcome and it fixes itself the moment the old event is saved.
-- **The day and event title are gone from the row.** Both are already in the grid directly above. That removed the unambiguous click target, so a row is click-to-edit only when it stands for exactly one event; otherwise it shows an admin-only `×3` count (marked `data-export-hide`) explaining why it went quiet.
+- **The day and event title are gone from the row.** Both are already in the grid directly above. That removed the unambiguous click target, so a row is click-to-edit only when it stands for exactly one event; a row standing for several is edited from the grid instead. No usage count is rendered - `event_count` exists only so the server can order the form's suggestions most-used first.
 
 `hiddenFromPublic` on a group is true only when **no** event at that place is public. `address_public` is per event, but one row now stands for several, and if any one of them is public the address does appear on the public site.
 
