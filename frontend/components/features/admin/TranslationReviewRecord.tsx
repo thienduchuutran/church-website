@@ -226,7 +226,7 @@ export default function TranslationReviewRecord({
   const direction = directionLabels(group.locale)
 
   return (
-    <article className="rounded-xl border border-border bg-surface p-5 shadow-sm">
+    <article className="card-rest rounded-xl border border-border bg-surface p-5">
       {/* Header: record context + table/locale badges. record_title is the
           reviewer's anchor - which post/page/event this is. */}
       <div className="mb-4 flex flex-wrap items-center gap-2">

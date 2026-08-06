@@ -49,7 +49,7 @@ export default function DiscordLinkCard() {
   const isLinked = status?.linked === true
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
+    <div className="card-rest rounded-xl border border-border bg-surface p-6 space-y-5">
       <div>
         <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">
           Discord

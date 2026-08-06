@@ -85,7 +85,7 @@ export default function HeroVideoUpload() {
   }
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6 space-y-5">
+    <div className="card-rest rounded-xl border border-border bg-surface p-6 space-y-5">
       <div>
         <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">
           Background Video For Homepage
