@@ -45,7 +45,7 @@ These fonts only, never substituted.
 - Glanceable: full page understood in one look, no scrolling required to grasp structure
 - Generous negative space. Space separates sections, not background color changes
 - Max width: 760px single-column, 960px two-column
-- Card borders: 0.5px solid #EAE5DE. No shadows except on hover: 0 8px 28px rgba(28,20,16,0.09)
+- Card borders: 0.5px solid #EAE5DE. Cards rest on a clearly visible two-layer shadow (`0 1px 3px rgba(28,20,16,0.07), 0 6px 16px -3px rgba(28,20,16,0.11)`) and rise 3px into a larger one on hover (`0 2px 5px rgba(28,20,16,0.08), 0 16px 36px -6px rgba(28,20,16,0.17)`). Panels and section blocks stay flat, so elevation still means "this is a discrete object"
 - Border radius: 14px cards, 8px buttons, 20px badge pills - not uniform everywhere
 
 ## Hero Spec
@@ -60,7 +60,7 @@ These fonts only, never substituted.
 - No pure #000000 or #FFFFFF backgrounds
 - No gray borders - all borders warm-tinted
 - No more than one accent at equal visual weight per page
-- No shadows on non-hovered elements
+- No shadows on anything that is not a card - alerts, section blocks, and inline panels stay flat
 - No gradients except hero bottom rule and hero glow
 - No Be Vietnam Pro at weight 700
 - No section background color changes to separate content - use space

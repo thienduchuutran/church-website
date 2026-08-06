@@ -62,21 +62,38 @@
     },
     "shadows": [
       {
-        "name": "card-hover-lift",
-        "value": "0 8px 28px rgba(28, 20, 16, 0.09)",
-        "purpose": "PostCard hover only; flat at rest per PRODUCT."
+        "name": "elevation-card",
+        "value": "0 1px 3px rgba(28, 20, 16, 0.07), 0 6px 16px -3px rgba(28, 20, 16, 0.11)",
+        "valueDark": "0 1px 3px rgba(0, 0, 0, 0.38), 0 6px 18px -3px rgba(0, 0, 0, 0.52)",
+        "purpose": "Resting elevation for every card. Two layers: tight contact shadow plus wide ambient. Dark mode uses near-black at high alpha because ink-tinted low-alpha is invisible on #141210."
+      },
+      {
+        "name": "elevation-card-hover",
+        "value": "0 2px 5px rgba(28, 20, 16, 0.08), 0 16px 36px -6px rgba(28, 20, 16, 0.17)",
+        "valueDark": "0 2px 6px rgba(0, 0, 0, 0.42), 0 18px 40px -6px rgba(0, 0, 0, 0.68)",
+        "purpose": "Hover elevation for interactive cards only, paired with translateY(-3px). Must be raised alongside elevation-card: the effect is carried by the gap between the two levels, not by either value alone."
       }
     ],
     "motion": [
       {
         "name": "ease-page-entry",
         "value": "cubic-bezier(0.22, 1, 0.36, 1)",
-        "purpose": "PageTransition fade; disabled when prefers-reduced-motion."
+        "purpose": "PageTransition fade and card lift; disabled when prefers-reduced-motion."
       },
       {
         "name": "duration-page-fade",
         "value": "1.15s",
         "purpose": "Opacity + translateY entry animation length."
+      },
+      {
+        "name": "card-lift-distance",
+        "value": "-3px",
+        "purpose": "How far a card rises on hover. Small on purpose: the shadow carries the effect, the travel only confirms it."
+      },
+      {
+        "name": "duration-card-lift",
+        "value": "200ms in / 320ms out",
+        "purpose": "Faster on approach than on release, so the rise reads as a reaction and the settle as the card relaxing back down."
       }
     ],
     "breakpoints": [
@@ -106,9 +123,9 @@
       "name": "Post card",
       "kind": "card",
       "refersTo": "card-article",
-      "description": "Warm surface, 14px radius, border, shadow only on hover.",
+      "description": "Warm surface, 14px radius, border, resting shadow, rises 3px on hover.",
       "html": "<article class=\"ds-card\"><div class=\"ds-card-inner\"><span class=\"ds-badge\">Announcement</span><h3 class=\"ds-card-title\">Title</h3><p class=\"ds-card-body\">Body preview.</p></div></article>",
-      "css": ".ds-card { max-width: 760px; border-radius: 14px; border: 1px solid #eae5de; background: #fffefb; color: #1c1a18; overflow: hidden; transition: box-shadow 0.2s ease; } .ds-card:hover { box-shadow: 0 8px 28px rgba(28, 20, 16, 0.09); } .ds-card-inner { padding: 20px; } .ds-badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 9999px; background: rgba(196, 102, 60, 0.12); color: #c4663c; } .ds-card-title { font-family: Georgia, 'Playfair Display', serif; font-size: 18px; font-weight: 600; margin: 8px 0 4px; } .ds-card-body { font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.75; color: #6b6560; margin: 0; }"
+      "css": ".ds-card { max-width: 760px; border-radius: 14px; border: 1px solid #eae5de; background: #fffefb; color: #1c1a18; overflow: hidden; box-shadow: 0 1px 3px rgba(28, 20, 16, 0.07), 0 6px 16px -3px rgba(28, 20, 16, 0.11); transition: box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1), transform 320ms cubic-bezier(0.22, 1, 0.36, 1); } @media (hover: hover) { .ds-card:hover { box-shadow: 0 2px 5px rgba(28, 20, 16, 0.08), 0 16px 36px -6px rgba(28, 20, 16, 0.17); transform: translateY(-3px); transition-duration: 200ms; } } @media (prefers-reduced-motion: reduce) { .ds-card { transition: none; } .ds-card:hover { transform: none; } } .ds-card-inner { padding: 20px; } .ds-badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 9999px; background: rgba(196, 102, 60, 0.12); color: #c4663c; } .ds-card-title { font-family: Georgia, 'Playfair Display', serif; font-size: 18px; font-weight: 600; margin: 8px 0 4px; } .ds-card-body { font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.75; color: #6b6560; margin: 0; }"
     }
   ],
   "narrative": {
@@ -117,7 +134,7 @@
     "keyCharacteristics": [
       "Warm cream (#faf7f2) page field; ink (#1c1a18) body copy; terracotta (#c4663c) for all primary interactive emphasis.",
       "Hero is type-only (no photography): radial terracotta glow + thin terracotta-to-gold rule at the foot of the hero.",
-      "Flat cards at rest; one soft shadow recipe on card hover only.",
+      "Cards float, everything else is flat: cards carry a resting shadow and rise 3px on hover; panels, alerts, and section blocks never cast one.",
       "System prefers-color-scheme: dark uses warm charcoal surfaces, never blue-gray chrome."
     ],
     "rules": [
@@ -137,8 +154,13 @@
         "section": "typography"
       },
       {
-        "name": "The Flat-Until-You-Lean Rule",
-        "body": "If an element is not receiving pointer hover as part of its affordance, it does not cast a shadow. Elevation is feedback, not decoration.",
+        "name": "The Two-Layer Rule",
+        "body": "There are only two heights in this system: cards, and the page they sit on. Nothing nests a third. If a surface is not a card, it does not cast a shadow, and a card never contains another card.",
+        "section": "elevation"
+      },
+      {
+        "name": "The Lift Confirms Rule",
+        "body": "Hover elevation is reserved for surfaces that actually do something when clicked. A panel that rises under the cursor but does nothing is a lie about its affordance - static panels use .card-rest, interactive cards use .card-lift.",
         "section": "elevation"
       }
     ],

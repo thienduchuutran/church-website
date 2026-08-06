@@ -6,6 +6,25 @@ Add `"use client"` only when the component needs `useState`, `useEffect`, event 
 
 ---
 
+## Card elevation
+
+Two utility classes in `frontend/app/globals.css`. **Never hardcode a `shadow-*` utility or an arbitrary shadow string on a card** - if a surface needs elevation, it needs one of these.
+
+| Class | Behaviour | Use on |
+|---|---|---|
+| `.card-lift` | Resting shadow, plus `translateY(-3px)` and a larger shadow on `:hover` | Cards you can click or that hold a distinct piece of content: `PostCard`, `AlbumGrid` tiles |
+| `.card-rest` | Resting shadow only, no hover response | Static panels: `DiscordLinkCard`, `HeroVideoUpload`, `TranslationReviewRecord` |
+
+Why the split: a panel that rises under the cursor but does nothing when clicked is a lie about its affordance. Hover elevation is reserved for surfaces that respond.
+
+Both classes are declared **outside `@layer`** on purpose. Tailwind utilities live in `@layer utilities`, so an un-layered rule outranks them, and a stray `shadow-sm` left on a card can never fight the token.
+
+**Things that must stay flat:** alerts, dashed empty states, and `bg-surface/50` section blocks. There are only two heights in this system - the card layer and the page - and a card never contains another card. See the Elevation section of repo-root `DESIGN.md` for the token values and the dark-mode variants.
+
+**If you wrap cards in a scrolling container,** give it vertical padding. `overflow-x-auto` clips on both axes and will slice the resting shadow off (this is why `PastEventsCarousel` carries `pb-6 pt-3`).
+
+---
+
 ## UI primitives (`components/ui/`)
 
 Reusable, stateless building blocks. No business logic or API calls.
@@ -174,7 +193,7 @@ Facebook-style card rendered for every post.
 
 **Anatomy** (top to bottom): date badge → title → body text → optional image(s) → optional external link button → `ReactionBar`  
 Event date line uses a decorative calendar emoji with `aria-hidden` so screen readers read the formatted date only. Event cards with no `event_date` show a muted "📅 Date TBD" chip in place of a date; admins also see an `EventArchiveButton` in the header to move the event between the Upcoming and Past sections.  
-**Visual system (PRODUCT):** **`rounded-[14px]`** and warm **`border-border`**; **no shadow at rest**, **`hover:shadow-[0_8px_28px_rgba(28,20,16,0.09)]`** only on hover. **Event** badges use **sage** (`accent`); **announcement** badges use **terracotta** (`primary`). Card titles use **`font-serif font-semibold`**.  
+**Visual system (PRODUCT):** **`rounded-[14px]`** and warm **`border-border`**; elevation comes from the shared **`.card-lift`** class (see [Card elevation](#card-elevation) below) - never a hardcoded `shadow-*` utility. **Event** badges use **sage** (`accent`); **announcement** badges use **terracotta** (`primary`). Card titles use **`font-serif font-semibold`**.  
 **Client component:** no (server component; `ReactionBar` inside is client)
 
 ---
@@ -194,6 +213,8 @@ Renders a vertical list of `PostCard` components with an empty-state fallback. E
 
 #### `PastEventsCarousel`
 Horizontally swipeable strip of past events, rendered below the Upcoming feed on the homepage and `/events`. Each slide is a **full-width `PostCard`** - identical to the cards in the vertical feeds - so the section reads like the normal feed except you swipe sideways between past events instead of scrolling down. Uses native CSS scroll-snap (no JS carousel), one card snapping into view at a time. The parent hides the whole section when the list is empty, so this component renders no empty state.
+
+**Do not shrink the `pb-6 pt-3` on the scroll container.** `overflow-x-auto` clips on **both** axes, so that vertical padding is what keeps each card's resting shadow, and the extra travel it gains on hover, from being sliced off at the scroll edge.
 
 **Props**
 | Prop | Type | Default | Description |
@@ -257,6 +278,8 @@ Grid of gallery album cards, each linking to the album detail.
 | `albums` | `Post[]` | required | Posts of type `gallery_album` |
 
 **Client component:** no
+
+**Visual system:** each tile is a **`.card-lift`** (see [Card elevation](#card-elevation)), so it rests on a shadow and rises on hover like every other card. The tile itself no longer scales - scaling a photo resamples it soft - but the **inner `<img>` still runs `group-hover:scale-110`**, which gives the zoom-inside-a-frame effect without blurring the tile edge. Keep the transform on the image, not the button: both setting `transform` would collide, and the un-layered `.card-lift` rule would win.
 
 ---
 

@@ -75,13 +75,13 @@ components:
 
 This system is built for members glancing at phones and laptops at home after work, or catching up on Sunday between services: warm cream fields, terracotta as the single confident accent for action, and sage only where a second voice is needed (events, admin hints). Darkness lives in the **hero band only** (`#1C1210`), like a quiet coffee shop interior, not a full-site dark theme. Typography does the identity work: **Playfair** carries headlines and card titles; **Geist** carries UI, body, and labels. Nothing should read as a generic nonprofit template, SaaS pricing page, or navy "church web" cliché.
 
-Depth is earned with **space and type**, not background color bands between sections. Cards are for **distinct post content** only; they lift on hover so the interface feels calm at rest and responsive to touch.
+Depth is earned with **space and type**, not background color bands between sections. Cards are for **distinct post content** only; they **rest on a soft shadow** and **rise a few pixels on hover**, so a card always reads as a discrete object sitting on the cream field and confirms itself when you point at it.
 
 **Key Characteristics:**
 
 - Warm cream (`#faf7f2`) page field; ink (`#1c1a18`) body copy; terracotta (`#c4663c`) for all primary interactive emphasis.
 - Hero is **type-only** (no photography): radial terracotta glow + thin terracotta-to-gold rule at the foot of the hero.
-- **Flat cards at rest**; one soft shadow recipe on card hover only.
+- **Cards float, everything else is flat**: cards carry a resting shadow and lift on hover; panels, alerts, and section blocks never cast one.
 - **System prefers-color-scheme: dark** uses warm charcoal surfaces, never blue-gray chrome.
 
 ## Colors
@@ -141,15 +141,35 @@ The palette is **committed terracotta on warm neutral**: one saturated accent ca
 
 ## Elevation
 
-The system is **flat at rest**. Cards (`PostCard`) and dashed empty states use **border + warm surface** only. **Hover** introduces a single diffuse shadow: `0 8px 28px rgba(28, 20, 16, 0.09)` on post cards. No drop shadow on static alerts or static panels. Page transitions use a short **opacity + translateY** fade (not layout-affecting properties).
+The system has exactly **two elevations: the card layer and the page**. Cards (`PostCard`, gallery album tiles, admin panels) always cast a shadow. Everything else - dashed empty states, alerts, `bg-surface/50` section blocks - stays **border + warm surface** only. Page transitions use a short **opacity + translateY** fade (not layout-affecting properties).
+
+Every level is **two shadows, not one**: a tight contact shadow that anchors the card to the page, plus a wide ambient shadow that gives it height. A single blur reads like a sticker. Both layers are tinted with the ink hue (`28, 20, 16`) rather than black, so shadows stay warm on the cream field.
 
 ### Shadow vocabulary
 
-- **Card hover lift** (`0 8px 28px rgba(28, 20, 16, 0.09)`): Post cards only, on `:hover`.
+Canonical values live in `frontend/app/globals.css` as `--elevation-card` / `--elevation-card-hover`. Never hardcode a shadow string on a card.
+
+| Token | Light | Dark | Used by |
+|---|---|---|---|
+| `--elevation-card` | `0 1px 3px rgba(28,20,16,.07), 0 6px 16px -3px rgba(28,20,16,.11)` | `0 1px 3px rgba(0,0,0,.38), 0 6px 18px -3px rgba(0,0,0,.52)` | Every card, at rest |
+| `--elevation-card-hover` | `0 2px 5px rgba(28,20,16,.08), 0 16px 36px -6px rgba(28,20,16,.17)` | `0 2px 6px rgba(0,0,0,.42), 0 18px 40px -6px rgba(0,0,0,.68)` | Interactive cards, on `:hover` |
+
+**The two levels must move together.** The effect is carried by the *gap* between rest and hover, not by either value alone. If you raise the resting shadow, raise the hover shadow by roughly the same ratio or the lift stops reading.
+
+Dark mode does **not** reuse the ink-tinted values: at 5-13% alpha they are invisible against a `#141210` field, so it switches to near-black at much higher alpha.
+
+### Card classes
+
+Two utilities in `globals.css`, deliberately un-layered so they outrank any stray Tailwind `shadow-*`:
+
+- **`.card-lift`** - interactive cards. Resting shadow, plus `translateY(-3px)` and the hover shadow on `:hover`. Gated behind `@media (hover: hover)` so a tap does not leave a card stuck raised on touch. Enter 200ms, settle 320ms, both on `cubic-bezier(0.22, 1, 0.36, 1)`. Under `prefers-reduced-motion` the shadow still changes but the travel and the tween are dropped.
+- **`.card-rest`** - static panels. Resting shadow only, no hover response.
 
 ### Named Rules
 
-**The Flat-Until-You-Lean Rule.** If an element is not receiving pointer hover as part of its affordance, it does not cast a shadow. Elevation is feedback, not decoration.
+**The Two-Layer Rule.** There are only two heights in this system: cards, and the page they sit on. Nothing nests a third. If a surface is not a card, it does not cast a shadow, and a card never contains another card.
+
+**The Lift Confirms Rule.** Hover elevation is reserved for surfaces that actually do something when you click them. A panel that rises under the cursor but does nothing is a lie about its affordance - static panels use `.card-rest`.
 
 ## Components
 
@@ -171,7 +191,7 @@ The system is **flat at rest**. Cards (`PostCard`) and dashed empty states use *
 - **Corner style:** `14px` radius (`rounded-[14px]`) on `PostCard`, post feed empty state, and home error alert.
 - **Background:** `surface` token.
 - **Border:** `1px` `border-border` (warm bisque).
-- **Shadow strategy:** None at rest; card hover shadow as in Elevation.
+- **Shadow strategy:** `.card-lift` (resting shadow + hover rise) on interactive cards, `.card-rest` (resting shadow only) on static panels. See Elevation.
 - **Internal padding:** Generous horizontal padding on card chrome (`px-5`); vertical rhythm between meta row, title, body, media, actions.
 
 ### Navigation

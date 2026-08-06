@@ -8,6 +8,8 @@ Tailwind CSS. No inline styles. No separate CSS files unless absolutely necessar
 
 **Design tokens and voice:** See repo-root **`DESIGN.md`** (human + machine-readable frontmatter) and **`DESIGN.json`** (sidecar: shadows, motion, component snippets). Canonical CSS variables live in **`frontend/app/globals.css`** (`:root` and dark `prefers-color-scheme` overrides).
 
+**Card elevation:** cards rest on a shadow and rise on hover. Apply the shared **`.card-lift`** (interactive cards) or **`.card-rest`** (static panels) class from `globals.css` - never a hardcoded `shadow-*` utility. Non-card surfaces (alerts, section blocks, empty states) stay flat. Full rules in `docs/components.md` → "Card elevation" and `DESIGN.md` → "Elevation".
+
 **Form inputs and iOS zoom:** iOS Safari force-zooms the page when a focused input/select/textarea/contenteditable computes < 16px font-size. A global guard in `globals.css` ("iOS input-zoom guard") floors all editable controls at 16px on touch/phone screens - new forms are covered automatically, no per-component fix needed. Do NOT remove that rule, move it inside an `@layer`, or "fix" zoom by adding `user-scalable=no` / `maximumScale` to the viewport (accessibility violation). `text-sm` on inputs is fine for desktop; the guard overrides it on mobile.
 
 ---
