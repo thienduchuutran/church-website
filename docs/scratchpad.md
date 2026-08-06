@@ -8,6 +8,174 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
+# AWAITING APPROVAL - Homepage revival
+
+## The problem
+
+The homepage fails PRODUCT.md's own anti-generic test: "Would a Vietnamese-American
+evangelical community of 100 people who share life together recognize themselves in
+this design, or could it belong to any organization on the internet?" Today it could
+belong to anyone:
+
+1. Hero says "Welcome to Our Church" - does not name the church, no Vietnamese, no
+   service time, no address. Copy is template filler.
+2. Three body sections share one identical shape (same heading size, same "View all",
+   same card). Heading-to-card-title scale ratio is ~1.1x - visually flat, nothing
+   dominates.
+3. Zero photos of members despite a full gallery feature. `RecentMoments.tsx` exists
+   as an empty file - this plan finally builds it.
+4. PRODUCT.md's "date numerals on event cards: 22px Playfair 700" spec was never
+   implemented - events show an emoji and small text.
+5. Homepage strings are hardcoded English (no `getTranslations`) - the `/vi` homepage
+   shows English chrome, undercutting the bilingual identity.
+6. One 1.15s page fade is the only motion - no rhythm as you scroll.
+
+## Decisions taken (user-confirmed 2026-08-05)
+
+Structure/UX forks:
+- Bilingual headings as visible texture on both locales (e.g. "Latest Announcements - Thong bao")
+- Photo strip of recent gallery moments (build `RecentMoments`)
+- Hero goes left-aligned asymmetric
+
+UI identity forks (second round, same day):
+- Arch as the site's one non-rectangle shape - RecentMoments photo frames only
+- Closing dark band before the footer - the hearth bookend (amends "darkness lives
+  in the hero band only" and the section-background hard-avoid; see Phase 7 doc edits)
+- Paper grain on the cream field (~2.5% opacity; user chose this against my
+  recommendation to skip - keep it a whisper, light mode only)
+
+UI moves included without a fork (low-risk deployments of existing tokens):
+- Ember rule (terracotta-to-gold gradient line) becomes a repeating motif: short
+  version under section headers, full version on the closing band
+- Section color voices: announcements = terracotta, events = sage, gallery = gold,
+  as non-interactive tick/rule accents only; links stay terracotta everywhere so
+  the One Ember Rule survives
+- EventRow date block sits on a primary/10 wash - terracotta at structural scale
+- Emoji icons (the 📅) removed from homepage surfaces
+
+## What does NOT change
+
+- Palette, fonts, tokens - the system is good; the page just doesn't use its range
+- Backend, database, API - zero server changes; photo strip reuses `listPosts({type:'gallery_album'})`
+- PostCard itself (just landed the card-lift work; announcements keep it)
+- Other pages - homepage only
+
+## Phase 1 - i18n foundation + real words
+
+Everything else flows through this: no copy can be written twice.
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/messages/en.json` | New `home` namespace: hero eyebrow, display line, description, service line, CTA labels, section headings (en + vi pair per heading), photo-strip heading, empty states | Single source for all homepage copy; kills the hardcoded strings |
+| `frontend/messages/vi.json` | Same keys, Southern Vietnamese register | `/vi` homepage finally renders Vietnamese |
+| `frontend/app/[locale]/page.tsx` | `getTranslations('home')`, replace every literal string | The `/vi` bug fix; enables every later phase |
+
+**Copy draft (needs owner review, especially Vietnamese):**
+- Eyebrow: `VGOMNE - Saugus, MA` (also fixes the missing space in "Ministry· Saugus")
+- Display: `Mot gia dinh, one family in Christ.` - the Vietnamese phrase carries the
+  one italic terracotta moment (PRODUCT: one italic phrase per page)
+- Description: names who we actually are - Vietnamese-American church family,
+  two languages, one congregation
+- Service line: `Sundays [TIME] - [ADDRESS], Saugus, MA` - **placeholders: real
+  service time and street address must come from the owner. Do not invent.**
+
+## Phase 2 - Hero: asymmetric, identified, useful
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/app/[locale]/page.tsx` | Hero content block: left-aligned in the content column (`text-center` and centered stack go); radial glow stays right so text and glow balance asymmetrically; add service-time line under description in `#f5f0eb/70` with a thin gold rule accent | PRODUCT demands "intentional asymmetry over centering everything"; the service line answers the 3-second "when/where" question |
+| same | Display line becomes the bilingual sentence; keep `clamp(2.25rem,5.5vw,4rem)` Playfair 700 | Identity does the work; hero stays type-only per PRODUCT unless admin uploads video |
+
+Video/glow/bottom-rule mechanics untouched - `HeroVideo` unchanged.
+
+## Phase 3 - Section rhythm: one shape per section
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/components/ui/SectionHeader.tsx` (new) | Shared header: Playfair `text-3xl sm:text-4xl` English + muted Vietnamese echo + optional "View all" link + short (~40px) ember rule beneath, tinted by an `accent` prop (`terracotta \| sage \| gold`) | Reusable-components-first; ~2x scale jump so sections dominate their cards; the hero's signature line becomes a repeating motif; each section gets a color voice without touching link colors |
+| `frontend/components/features/posts/EventRow.tsx` (new) | Compact row for homepage Upcoming: left date block (day numeral 22px+ Playfair 700 in terracotta on a `bg-primary/10` rounded block, month label above), title, location line; whole row links to the event; `card-lift`; no emoji | Implements the dead PRODUCT date-numeral spec; terracotta finally appears at structural scale instead of chip scale; Upcoming stops looking identical to Announcements |
+| `frontend/app/[locale]/page.tsx` | Use `SectionHeader` x3 (announcements=terracotta, events=sage, gallery=gold); Upcoming renders `EventRow` list instead of `PostFeed` | The rhythm change itself |
+
+Announcements keep full `PostCard` (content to read); events are appointments to
+scan - different jobs, now different shapes.
+
+## Phase 4 - RecentMoments photo strip
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/components/features/gallery/RecentMoments.tsx` (build the empty file) | Server component: takes gallery-album posts, flattens to newest 6-8 images, horizontal snap-scroll strip of **arch-topped frames** (`rounded-t-full` over the 14px base radius; varied widths for rhythm; `card-lift`), links to `/gallery`. Renders nothing when no albums | Real faces are the strongest "stay and browse" pull this site has; the arch is the site's single non-rectangle shape - church + Vietnamese doorway resonance, used only here so it stays special |
+| `frontend/app/[locale]/page.tsx` | Fetch `listPosts({type:'gallery_album', limit:3, locale})` in the existing `Promise.allSettled`; render strip between Upcoming and Past with `SectionHeader` | Failure-isolated like the other feeds; future-facing content stays above nostalgia |
+
+## Phase 5 - The hearth bookend + texture
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/app/[locale]/page.tsx` | Closing full-bleed band after Past Events: `#1C1210`, soft radial glow (mirrored left, so hero and bookend frame the page), bilingual line "Ghe tham chung toi - Come sit with us.", service time + address, one CTA to `/connect`, full-width ember rule at its top edge | The hearth appears twice - you leave the way you arrived. Dark - cream - dark gives the scroll a shape instead of trailing off |
+| `frontend/app/globals.css` | Paper grain: inline SVG `feTurbulence` data-URI on a `body::before` fixed overlay, ~2.5% opacity, `pointer-events-none`; **light mode only** (grain on `#141210` reads as dead pixels, so dark mode stays clean); no effect on text contrast at this opacity | "Warm Paper" becomes literal material instead of a hex code |
+
+## Phase 6 - Motion: staggered entrance
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/app/globals.css` | `.stagger-children` utility: children run the existing `page-fade-in` keyframe with `animation-delay` stepped ~70ms via nth-child (cap ~8); disabled under `prefers-reduced-motion` | Cards arrive as a sequence, not a wall; reuses existing keyframe and ease - no new motion vocabulary |
+| `frontend/app/[locale]/page.tsx` | Apply to feed containers | The "alive" feeling on first paint |
+
+## Phase 7 - Docs (same commit)
+
+| File | Change |
+|---|---|
+| `docs/components.md` | `SectionHeader`, `EventRow`, `RecentMoments` entries; homepage data-flow note |
+| `docs/agents/frontend.md` | Folder list + i18n note: homepage copy lives in `messages/*.json` `home` namespace |
+| `PRODUCT.md` | Amend two Hard Avoids with user approval: gradients line gains "the ember rule motif may repeat (section headers, closing band)"; section-background line gains an explicit carve-out for the two dark hearth moments (hero + closing band). Add grain as sanctioned texture so a future agent doesn't strip it |
+| `DESIGN.md` | "Darkness lives in the hero band only" becomes "hero and closing band - the hearth bookends"; section color voices rule; arch = the one non-rectangle shape, RecentMoments only; section-header scale; date-numeral spec marked implemented |
+| `docs/progress.md` | Entry for the redesign |
+
+Note: `DESIGN.json` intentionally NOT hand-edited this time - it goes stale until
+the owner decides between deleting it or regenerating via `/impeccable document`
+(open question from the sidecar discussion).
+
+## End-to-end flow
+
+```
+messages/en.json + vi.json (home namespace)
+        v
+page.tsx (getTranslations + Promise.allSettled: announcements, events, albums, hero video)
+        v
+Hero (asymmetric, bilingual display, service line)
+        v
+SectionHeader [terracotta] -> PostFeed (announcements, PostCards, staggered)
+SectionHeader [sage]       -> EventRow list (upcoming, date numerals)
+SectionHeader [gold]       -> RecentMoments (arch frames -> /gallery)
+SectionHeader [terracotta] -> PastEventsCarousel (unchanged)
+        v
+Hearth bookend (dark band: come sit with us -> /connect)
+```
+
+## Security callouts
+
+None. All reads are public endpoints already in use; no new API surface, no auth
+changes. Photo strip shows only images admins already published to the gallery.
+
+## Scope estimate
+
+| Phase | Size |
+|---|---|
+| 1 - i18n + copy | ~1h (Vietnamese copy review is the long pole) |
+| 2 - Hero | ~45min |
+| 3 - SectionHeader + EventRow (+ ember rule, color voices) | ~2h |
+| 4 - RecentMoments (arch frames) | ~1.25h |
+| 5 - Hearth bookend + grain | ~1h |
+| 6 - Stagger | ~30min |
+| 7 - Docs | ~45min |
+
+## Open items for the owner
+
+1. Real service time + street address (Phase 1 placeholder - will not invent)
+2. Vietnamese copy review - drafts will be Southern register per church identity
+3. Verify locale behavior in a PROD build (known dev-server locale quirk)
+
+---
+
 # SHIPPED - Calendar places: AI-named, address-keyed, deduped
 
 **Status:** implemented 2026-08-01 across six commits, one per phase. Migration `000014` applied and
