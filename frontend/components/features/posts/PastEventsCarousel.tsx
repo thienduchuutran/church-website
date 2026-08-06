@@ -10,7 +10,10 @@ import PostCard from './PostCard'
 // whole section when the list is empty, so this never renders its own empty state.
 export default function PastEventsCarousel({ posts }: { posts: Post[] }) {
   return (
-    <div className="snap-x snap-mandatory overflow-x-auto [scrollbar-width:thin] pb-3 pt-1">
+    // The vertical padding is not decorative: overflow-x-auto clips on BOTH
+    // axes, so without room above and below, each card's resting shadow (and
+    // the extra travel it gains on hover) gets sliced off at the scroll edge.
+    <div className="snap-x snap-mandatory overflow-x-auto [scrollbar-width:thin] pb-6 pt-3">
       <div className="flex gap-4">
         {posts.map((post) => (
           <div key={post.id} className="w-full shrink-0 snap-start">

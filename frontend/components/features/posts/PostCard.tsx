@@ -53,7 +53,7 @@ export default function PostCard({
   const heroImage = images[0]
 
   return (
-    <article className="overflow-hidden rounded-[14px] border border-border bg-surface transition-shadow duration-200 hover:shadow-[0_8px_28px_rgba(28,20,16,0.09)]">
+    <article className="card-lift overflow-hidden rounded-[14px] border border-border bg-surface">
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 pt-4 pb-2 sm:px-5 sm:pt-5">
         <span className={`rounded-full px-2.5 py-0.5 font-display text-xs font-semibold ${badge.className}`}>
           {badge.label}

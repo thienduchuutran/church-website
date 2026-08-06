@@ -14,6 +14,23 @@
   --surface: #fffefb;
   --muted: #6b6560;
   --border: #eae5de;
+
+  /* ─── Card elevation ───
+     Two layers per level, not one: a tight contact shadow that anchors the
+     card to the page, plus a wide ambient shadow that gives it height. A
+     single blur reads like a sticker; two read like an object resting on
+     paper. Both are tinted with the ink hue (28,20,16) rather than black,
+     so the shadow stays warm against the cream field.
+     Rising from rest to hover keeps the light source fixed: the offset and
+     blur grow together while per-pixel opacity stays low, which is what a
+     real object lifting off a surface does. */
+  --elevation-card: 0 1px 3px rgba(28, 20, 16, 0.07), 0 6px 16px -3px rgba(28, 20, 16, 0.11);
+  --elevation-card-hover: 0 2px 5px rgba(28, 20, 16, 0.08), 0 16px 36px -6px rgba(28, 20, 16, 0.17);
+  /* How far a card rises on hover. Deliberately small - the shadow does most
+     of the work, the movement only confirms it. */
+  --card-lift-distance: -3px;
+  /* Matches the page-transition curve so all site motion shares one ease. */
+  --ease-card: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 @theme inline {
@@ -26,6 +43,10 @@
   --color-surface: var(--surface);
   --color-muted: var(--muted);
   --color-border: var(--border);
+  /* Exposed to Tailwind so one-off surfaces can use `shadow-card` directly
+     instead of inventing another arbitrary shadow string. */
+  --shadow-card: var(--elevation-card);
+  --shadow-card-hover: var(--elevation-card-hover);
   --font-sans: var(--font-sans);
   --font-serif: var(--font-serif);
   --font-display: var(--font-display);
@@ -45,6 +66,13 @@
     --surface: #1f1c1a;
     --muted: #9c9490;
     --border: #3d3834;
+
+    /* Ink-tinted shadows at 5-13% alpha are literally invisible on a #141210
+       field - there is no darker value left to cast. Dark mode therefore
+       switches to near-black at much higher alpha, which is what actually
+       separates a #1f1c1a card from a #141210 page. */
+    --elevation-card: 0 1px 3px rgba(0, 0, 0, 0.38), 0 6px 18px -3px rgba(0, 0, 0, 0.52);
+    --elevation-card-hover: 0 2px 6px rgba(0, 0, 0, 0.42), 0 18px 40px -6px rgba(0, 0, 0, 0.68);
   }
 }
 
@@ -84,6 +112,44 @@ body {
   outline-offset: 2px;
 }
 
+/* ─── Card surfaces ───
+   Two classes, one shadow vocabulary:
+
+   .card-lift  interactive cards (post cards, album tiles). They rest with a
+               shadow and rise a few pixels on hover.
+   .card-rest  static panels (admin settings blocks). Same resting shadow, no
+               hover response, because nothing happens when you point at them
+               and promising otherwise is a lie.
+
+   Both live outside @layer on purpose: Tailwind utilities sit in
+   @layer utilities, so un-layered rules here win, and a stray `shadow-sm`
+   left on a card can never fight the token. */
+.card-rest {
+  box-shadow: var(--elevation-card);
+}
+
+.card-lift {
+  box-shadow: var(--elevation-card);
+  /* Only transform and box-shadow - neither triggers layout, so a grid of
+     cards can animate without reflowing the feed around them. */
+  transition:
+    box-shadow 320ms var(--ease-card),
+    transform 320ms var(--ease-card);
+}
+
+/* (hover: hover) keeps this off touch screens. Without it, a tap leaves the
+   card stuck in its raised state until you tap elsewhere, which reads as a
+   rendering bug rather than feedback. */
+@media (hover: hover) {
+  .card-lift:hover {
+    box-shadow: var(--elevation-card-hover);
+    transform: translateY(var(--card-lift-distance));
+    /* Faster on approach than on release: the rise should feel like a
+       reaction, the settle like the card relaxing back down. */
+    transition-duration: 200ms;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-page-fade-in,
   .apple-backdrop-in,
@@ -91,6 +157,15 @@ body {
   .apple-sheet-in,
   .apple-sheet-out {
     animation: none !important;
+  }
+
+  /* Keep the shadow change - it is depth, not motion - but drop the travel
+     and the tween, which are the parts that trigger vestibular discomfort. */
+  .card-lift {
+    transition: none;
+  }
+  .card-lift:hover {
+    transform: none;
   }
 }
 
