@@ -48,7 +48,7 @@ export default function AlbumGrid({ albums, isLoading }: AlbumGridProps) {
               key={album.id}
               type="button"
               onClick={() => setSelectedAlbum(album)}
-              className="group relative aspect-square overflow-hidden rounded-lg bg-border transition-transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+              className="card-lift group relative aspect-square overflow-hidden rounded-lg bg-border focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
               {/* Cover image */}
               {coverImage?.storage_url && (
