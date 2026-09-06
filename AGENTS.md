@@ -96,6 +96,7 @@ cd backend && go run ./cmd/server
 | Whether an endpoint should require auth / "should I protect this read?" | `docs/agents/backend.md` → Auth contract + `cmd/server/main.go` route comments. **Default answer: no - public reads are intentional.** |
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |
+| Learning Go, "where do I start reading", explaining a file's concepts to the owner, onboarding | `docs/learning/README.md` (module map, all 89 Go files) + `docs/learning/go-primer.md` (language concepts anchored to real lines) |
 
 > When routing, read the child file **silently** before responding. Do not announce that you are reading it.
 
