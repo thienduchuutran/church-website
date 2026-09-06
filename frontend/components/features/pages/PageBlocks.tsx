@@ -11,6 +11,11 @@ import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 // looks*, never *what the page says*. A page's wording, section count and
 // section order all live in the database, so changing them is an admin action
 // rather than a deploy.
+//
+// Prose pages are flat: sections sit directly on the field, separated by
+// space and a magenta heading with the brand rule under it. Cards are for
+// posts; wrapping every paragraph in a box made About read as a stack of
+// widgets instead of a page.
 
 // BlockContext carries page-level state a single block may need to render.
 // Today that is only the translation notice, which belongs visually inside the
@@ -21,11 +26,9 @@ interface BlockContext {
 
 function HeroBlock({ block, ctx }: { block: PageBlock; ctx: BlockContext }) {
   return (
-    <header className="mb-12 text-center">
-      <h1 className="mb-3 font-serif text-4xl font-bold tracking-tight text-foreground">
-        {block.title}
-      </h1>
-      {block.content && <p className="font-sans text-lg text-muted">{block.content}</p>}
+    <header className="mb-14">
+      <h1 className="t-title">{block.title}</h1>
+      {block.content && <p className="t-body mt-4 max-w-[60ch] text-lg text-muted">{block.content}</p>}
       {/* Sits under the subtitle so it reads as part of the header context,
           not as a floating mid-page warning. Only renders on a non-English
           request where at least one field is unapproved AI output. */}
@@ -40,15 +43,16 @@ function HeroBlock({ block, ctx }: { block: PageBlock; ctx: BlockContext }) {
 
 function RichTextBlock({ block }: { block: PageBlock }) {
   return (
-    <section className="mb-10 rounded-xl border border-border bg-surface/50 p-8">
+    <section className="mb-14">
       {/* Both fields are optional: a section can be a heading with no body
           (a divider) or a body with no heading (continued prose). */}
       {block.title && (
-        <h2 className="mb-3 font-serif text-2xl font-semibold text-foreground">{block.title}</h2>
+        <>
+          <h2 className="t-section">{block.title}</h2>
+          <div aria-hidden className="brand-rule mb-5 mt-3" />
+        </>
       )}
-      {block.content && (
-        <RichContent html={block.content} className="font-sans leading-relaxed text-muted" />
-      )}
+      {block.content && <RichContent html={block.content} className="t-body" />}
     </section>
   )
 }
@@ -56,13 +60,15 @@ function RichTextBlock({ block }: { block: PageBlock }) {
 function QuoteBlock({ block }: { block: PageBlock }) {
   const attribution = typeof block.props?.attribution === 'string' ? block.props.attribution : ''
   return (
-    <figure className="mb-10 border-l-4 border-primary/40 py-2 pl-6">
+    // A lavender panel, not a side stripe: the quote is a moment on the page,
+    // and the display face at reading size carries the voice.
+    <figure className="mb-14 rounded-[14px] bg-panel px-6 py-6 sm:px-8">
       <RichContent
         html={block.content}
-        className="font-serif text-xl italic leading-relaxed text-foreground"
+        className="font-heading text-[1.4rem] font-medium leading-snug text-foreground"
       />
       {attribution && (
-        <figcaption className="mt-3 font-sans text-sm text-muted">- {attribution}</figcaption>
+        <figcaption className="t-meta mt-4">{attribution}</figcaption>
       )}
     </figure>
   )

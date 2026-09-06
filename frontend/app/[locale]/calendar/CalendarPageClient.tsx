@@ -63,7 +63,7 @@ export default function CalendarPageClient({ initialYear, initialMonth }: Calend
         only at export time by ExportButton, so the snapshot always renders
         at the same canvas size regardless of the viewer's viewport.
       */}
-      <div ref={calendarRef} className="@container bg-white p-3 w-full max-w-[1100px]">
+      <div ref={calendarRef} className="@container bg-surface p-3 w-full max-w-[1100px]">
         <CalendarShell
           year={year}
           month={month}

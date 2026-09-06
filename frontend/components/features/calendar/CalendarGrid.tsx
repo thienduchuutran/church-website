@@ -211,7 +211,7 @@ export default function CalendarGrid({
           device - always renders this editorial layout. Each week is its own
           relative row so multi-day banners can be absolutely positioned across
           its columns. */}
-      <div className="hidden @3xl:block border-2 border-gray-900 overflow-hidden">
+      <div className="hidden @3xl:block border-2 border-foreground overflow-hidden">
         {/* Day-of-week headers */}
         <div className="grid grid-cols-7">
           {DAY_HEADERS.map((d, i) => (
@@ -219,7 +219,7 @@ export default function CalendarGrid({
               key={d}
               className={[
                 'py-2.5 text-center font-display text-sm font-bold',
-                i < 6 ? 'border-r border-gray-900' : '',
+                i < 6 ? 'border-r border-foreground' : '',
               ].join(' ')}
               style={{ backgroundColor: theme.header, color: theme.headerText }}
             >
@@ -237,8 +237,8 @@ export default function CalendarGrid({
                   <div
                     key={`empty-${wi}-${di}`}
                     className={[
-                      'border-t border-gray-900 min-h-[115px] bg-white',
-                      di < 6 ? 'border-r border-gray-900' : '',
+                      'border-t border-foreground min-h-[115px] bg-surface',
+                      di < 6 ? 'border-r border-foreground' : '',
                     ].join(' ')}
                   />
                 )
@@ -256,9 +256,9 @@ export default function CalendarGrid({
                   onClick={() => isClickable && onDayClick?.(dateStr)}
                   style={{ paddingTop: BANNER_TOP + week.laneCount * LANE_HEIGHT }}
                   className={[
-                    'group relative border-t border-gray-900 bg-white min-h-[115px] px-1.5 pb-1.5 flex flex-col gap-1',
-                    di < 6 ? 'border-r border-gray-900' : '',
-                    isClickable ? 'cursor-pointer hover:bg-gray-50 transition-colors' : '',
+                    'group relative border-t border-foreground bg-surface min-h-[115px] px-1.5 pb-1.5 flex flex-col gap-1',
+                    di < 6 ? 'border-r border-foreground' : '',
+                    isClickable ? 'cursor-pointer hover:bg-panel transition-colors' : '',
                   ].join(' ')}
                 >
                   {/* Date number - absolute top-right so it sits clear of the
@@ -269,7 +269,7 @@ export default function CalendarGrid({
                       'absolute top-1.5 right-1.5 z-10 font-sans text-xs font-semibold leading-none',
                       isToday
                         ? 'rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-white'
-                        : 'text-gray-600',
+                        : 'text-muted',
                     ].join(' ')}
                     style={isToday ? { backgroundColor: theme.header } : {}}
                   >
@@ -299,7 +299,7 @@ export default function CalendarGrid({
                   {hiddenChips.length > 0 && (
                     <span
                       data-export-hide
-                      className="mt-0.5 font-sans text-[10px] font-semibold leading-none text-gray-500 group-hover:text-gray-800 transition-colors"
+                      className="mt-0.5 font-sans text-[10px] font-semibold leading-none text-muted group-hover:text-foreground transition-colors"
                     >
                       +{hiddenChips.length} more
                     </span>
@@ -326,7 +326,7 @@ export default function CalendarGrid({
                   )}
 
                   {isAdmin && chips.length === 0 && (
-                    <span data-export-hide className="font-sans text-[9px] text-gray-300 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">+</span>
+                    <span data-export-hide className="font-sans text-[9px] text-muted/50 mt-auto opacity-0 group-hover:opacity-100 transition-opacity">+</span>
                   )}
                 </div>
               )
@@ -369,7 +369,7 @@ export default function CalendarGrid({
           Edge-to-edge: -mx-3 breaks the grid out of the export wrapper's p-3
           so cells use the full available width on mobile. */}
       <div className="block @3xl:hidden -mx-3">
-        <div className="grid grid-cols-7 mb-1 border-b border-gray-100">
+        <div className="grid grid-cols-7 mb-1 border-b border-border">
           {DAY_LETTERS.map((letter, i) => (
             <div
               key={i}
@@ -402,8 +402,8 @@ export default function CalendarGrid({
                 disabled={!isClickable}
                 aria-label={`${day} - ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
                 className={[
-                  'min-h-[92px] py-1.5 flex flex-col items-stretch gap-1.5 bg-white text-left',
-                  isClickable ? 'active:bg-gray-50 transition-colors' : 'cursor-default',
+                  'min-h-[92px] py-1.5 flex flex-col items-stretch gap-1.5 bg-surface text-left',
+                  isClickable ? 'active:bg-panel transition-colors' : 'cursor-default',
                 ].join(' ')}
               >
                 <div className="flex justify-center">
@@ -415,7 +415,7 @@ export default function CalendarGrid({
                       {day}
                     </span>
                   ) : (
-                    <span className="font-sans text-[13px] font-medium text-gray-700 leading-none pt-1">
+                    <span className="font-sans text-[13px] font-medium text-foreground leading-none pt-1">
                       {day}
                     </span>
                   )}
@@ -429,7 +429,7 @@ export default function CalendarGrid({
                       <EventChip key={e.id} title={e.title} icon={e.icon} color={e.color} compact />
                     ))}
                     {overflow > 0 && (
-                      <span className="font-sans text-[9px] text-gray-500 leading-none mx-0.5 mt-0.5">
+                      <span className="font-sans text-[9px] text-muted leading-none mx-0.5 mt-0.5">
                         +{overflow} more
                       </span>
                     )}

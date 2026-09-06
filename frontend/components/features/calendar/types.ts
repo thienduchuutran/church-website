@@ -137,41 +137,41 @@ export interface CalendarMonthResponse {
   month_settings: CalendarMonthSettings | null
 }
 
-// Curated swatches the admin picker offers as one-click options. All five live
-// inside the site's design palette so an admin who clicks "Plum" or "Dusk"
-// still lands on a brand-coherent color. The native color input is offered
+// Curated swatches the admin picker offers as one-click options. All five
+// are the logo palette itself, so an admin who clicks "Rose" or "Lavender"
+// lands on a brand-coherent color. The native color input is offered
 // alongside for the rare case they want something off-palette.
 export const ACCENT_PRESETS: { label: string; hex: string }[] = [
-  { label: 'Terracotta', hex: '#C4663C' },
-  { label: 'Sage', hex: '#4A7A5C' },
-  { label: 'Gold', hex: '#C49A3C' },
-  { label: 'Plum', hex: '#7C3A6E' },
-  { label: 'Dusk', hex: '#3A5C7C' },
+  { label: 'Magenta', hex: '#8E1D5F' },
+  { label: 'Mid magenta', hex: '#A6366D' },
+  { label: 'Rose', hex: '#DE718E' },
+  { label: 'Lavender', hex: '#BEB5FA' },
+  { label: 'Plum', hex: '#2C1323' },
 ]
 
-// Each month gets its own distinct identity color - the way the hand-made
-// paper calendars give May a purple, March a green, December a red. The set is
-// kept vivid-but-earthy so it still reads on-brand (no neon) and mirrors the
-// printout where the congregation already knows the color: Feb pink, Mar
-// green, Apr gold, May purple, Dec red. These are DEFAULTS only - the admin
-// accent picker (DB-backed month_settings) overrides any month it touches.
-// headerText is white except on the lighter gold/amber tones, which take the
-// dark base for contrast.
-const DARK_BASE = '#1C1210'
+// Each month gets its own identity color - the way the hand-made paper
+// calendars give May a purple, December a red - but every one of them is a
+// mix of two logo colors (magenta, rose, lavender, plum ink), so the calendar
+// stays inside the palette while still changing month to month. Every header
+// passes WCAG AA with the text color given: white on the deep values, ink on
+// the one light one (April, Easter, the logo lavender). These are DEFAULTS
+// only - the admin accent picker (DB-backed month_settings) overrides any
+// month it touches.
+const INK = '#2C1323'
 
 export const MONTH_THEMES: Record<number, { title: string; header: string; headerText: string }> = {
-  1: { title: '#3A5C7C', header: '#3A5C7C', headerText: '#ffffff' }, // Dusk blue - winter
-  2: { title: '#C24E7D', header: '#C24E7D', headerText: '#ffffff' }, // Rose - Valentine's
-  3: { title: '#4A7A5C', header: '#4A7A5C', headerText: '#ffffff' }, // Sage - spring
-  4: { title: '#C49A3C', header: '#C49A3C', headerText: DARK_BASE },  // Gold - Easter
-  5: { title: '#7C5AA6', header: '#7C5AA6', headerText: '#ffffff' }, // Plum - May
-  6: { title: '#C4663C', header: '#C4663C', headerText: '#ffffff' }, // Terracotta - early summer
-  7: { title: '#C2503C', header: '#C2503C', headerText: '#ffffff' }, // Coral red - summer
-  8: { title: '#3C8C82', header: '#3C8C82', headerText: '#ffffff' }, // Teal - late summer
-  9: { title: '#B8742C', header: '#B8742C', headerText: '#ffffff' }, // Amber rust - fall
-  10: { title: '#B85C2E', header: '#B85C2E', headerText: '#ffffff' }, // Pumpkin - October
-  11: { title: '#97463C', header: '#97463C', headerText: '#ffffff' }, // Brick - November
-  12: { title: '#B83C3C', header: '#B83C3C', headerText: '#ffffff' }, // Christmas red - December
+  1: { title: '#6E5C84', header: '#6E5C84', headerText: '#ffffff' }, // Violet: lavender into ink - winter
+  2: { title: '#B64777', header: '#B64777', headerText: '#ffffff' }, // Rose-magenta - Valentine's
+  3: { title: '#9C4B8E', header: '#9C4B8E', headerText: '#ffffff' }, // Orchid: magenta into lavender - spring
+  4: { title: '#BEB5FA', header: '#BEB5FA', headerText: INK },       // Lavender - Easter, the one light month
+  5: { title: '#711A4D', header: '#711A4D', headerText: '#ffffff' }, // Plum - May
+  6: { title: '#8E1D5F', header: '#8E1D5F', headerText: '#ffffff' }, // Deep magenta - early summer
+  7: { title: '#974B63', header: '#974B63', headerText: '#ffffff' }, // Dusty rose: rose into ink - summer
+  8: { title: '#5F4C6E', header: '#5F4C6E', headerText: '#ffffff' }, // Deep violet - late summer
+  9: { title: '#A6366D', header: '#A6366D', headerText: '#ffffff' }, // Mid magenta - fall
+  10: { title: '#B25A73', header: '#B25A73', headerText: '#ffffff' }, // Warm rose - October
+  11: { title: '#5D1841', header: '#5D1841', headerText: '#ffffff' }, // Deepest plum - November
+  12: { title: '#850050', header: '#850050', headerText: '#ffffff' }, // Dark magenta - December
 }
 
 // Maps color keys to CSS hex values - used with inline styles to avoid

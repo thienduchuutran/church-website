@@ -1,5 +1,6 @@
 'use client'
 
+import { useTranslations } from 'next-intl'
 import { useEffect, useRef, useState } from 'react'
 import { apiGet, apiPostAnon, apiDeleteAnon } from '@/lib/api'
 
@@ -39,6 +40,7 @@ export default function ReactionBar({
   postId: string
   showReactions?: boolean
 }) {
+  const t = useTranslations('Post')
   const [counts, setCounts] = useState<Record<string, number>>({})
   const [myReaction, setMyReaction] = useState<string | null>(null)
   // pickerOpen controls picker visibility for both hover (desktop) and long-press (touch) paths.
@@ -420,7 +422,7 @@ export default function ReactionBar({
       )}
 
       {activeEmojis.length === 0 && (
-        <p className="mt-1 font-sans text-xs text-muted">Be the first to react</p>
+        <p className="mt-1 font-sans text-xs text-muted">{t('firstToReact')}</p>
       )}
     </div>
   )

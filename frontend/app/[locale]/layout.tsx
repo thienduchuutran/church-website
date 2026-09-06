@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next'
-import { Inter, Lora, Be_Vietnam_Pro, Geist_Mono, Baloo_2 } from 'next/font/google'
+import { Nunito, Geist_Mono, Baloo_2 } from 'next/font/google'
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { setRequestLocale } from 'next-intl/server'
 import { notFound } from 'next/navigation'
@@ -9,40 +9,36 @@ import { EditModalProvider } from '@/lib/edit-modal'
 import { UnsavedChangesProvider } from '@/lib/unsaved-changes'
 import { ConfirmProvider } from '@/lib/confirm'
 import Navbar from '@/components/ui/Navbar'
+import SiteFooter from '@/components/ui/SiteFooter'
 import PageTransition from '@/components/ui/PageTransition'
 import NavigationProgress from '@/components/ui/NavigationProgress'
-import SocialIconBar from '@/components/ui/SocialIconBar'
 import { routing } from '@/i18n/routing'
 // Temporarily disabled: AI assistant is not working yet. Uncomment this import
 // and the <ChatBox /> mount below to re-enable.
 // import ChatBox from '@/components/features/assistant/ChatBox'
 
-// 'latin' alone excludes the precomposed Vietnamese range (U+1EA0-1EF9,
-// e.g. the vowels in "Chúa", "Thánh", "được") - browsers silently
-// substitute a fallback font for those glyphs, which is what made every
-// diacritic look mismatched against its surrounding word. routing.locales
-// is only en/vi, so 'vietnamese' is the one extra subset every font needs.
-const inter = Inter({
+// Two families, both with soft rounded curves, plus a mono for hex codes. Every family MUST include the 'vietnamese' subset: 'latin'
+// alone excludes the precomposed Vietnamese range (U+1EA0-1EF9, e.g. the
+// vowels in "Chúa", "Thánh", "được") and the browser silently substitutes a
+// fallback font for those glyphs, which makes every tone mark look mismatched
+// against its surrounding word. routing.locales is only en/vi, so
+// 'vietnamese' is the one extra subset every font needs.
+//
+// The owner asked for soft curves, and the site already owned the two
+// roundest well-hinted Vietnamese faces on Google Fonts: Baloo 2 (the
+// calendar's month headline, chosen to bounce like the hand-made paper
+// calendars) and Nunito (suggested in PRODUCT.md). Baloo 2 now carries every
+// heading, so the calendar masthead and the rest of the site are one voice;
+// Nunito carries prose and UI. Earlier pairings (Lora + Inter, Bricolage
+// Grotesque + Be Vietnam Pro, Josefin Sans + Gentium Plus) were rejected by
+// the owner as either the look every AI-built app has, or too sharp.
+
+// Nunito: prose, nav, buttons, badges, labels, forms (--font-sans, aliased
+// to --font-body in globals.css). Variable weight, real italic.
+const nunito = Nunito({
   variable: '--font-sans',
   subsets: ['latin', 'vietnamese'],
-})
-
-const lora = Lora({
-  variable: '--font-serif',
-  subsets: ['latin', 'vietnamese'],
-  weight: ['400', '600', '700'],
   style: ['normal', 'italic'],
-})
-
-// Be Vietnam Pro replaces DM Sans: DM Sans has no Vietnamese subset on
-// Google Fonts at any weight, so no config could fix it - it had to be
-// swapped. Be Vietnam Pro was commissioned for Vietnamese text specifically
-// (correct tone-mark stacking, not coverage bolted on after the fact) and
-// ships the same 400/500/600 weights DM Sans used here.
-const beVietnamPro = Be_Vietnam_Pro({
-  variable: '--font-display',
-  subsets: ['latin', 'vietnamese'],
-  weight: ['400', '500', '600'],
 })
 
 // Geist Mono only backs hex color codes and DB table names (never
@@ -54,18 +50,17 @@ const geistMono = Geist_Mono({
   subsets: ['latin'],
 })
 
-// Baloo 2 is the calendar's "marker" display face - rounded and friendly so
-// the month headline bounces like the hand-made paper calendars, while still
-// reading as legitimate next to Lora/Inter. Scoped to the calendar masthead;
-// the rest of the site keeps its editorial serif. Self-hosted by next/font so
-// it embeds cleanly in the PNG export. Replaces Fredoka, which - like DM
-// Sans - has no Vietnamese subset on Google Fonts at all; Baloo 2 is built
-// for multi-script use, so it's well-hinted for stacked Vietnamese
-// diacritics rather than just glyph-complete.
+// Baloo 2: every heading, the hero display line, date numerals, and the
+// calendar masthead (--font-heading; --font-marker is an alias in
+// globals.css). Rounded and friendly so headlines bounce like the hand-made
+// paper calendars. Self-hosted by next/font so it embeds cleanly in the
+// calendar PNG export. Built for multi-script use, so it is well-hinted for
+// stacked Vietnamese diacritics rather than just glyph-complete. No italic;
+// emphasis on a heading is color or weight, never a slanted glyph.
 const baloo2 = Baloo_2({
-  variable: '--font-marker',
+  variable: '--font-heading',
   subsets: ['latin', 'vietnamese'],
-  weight: ['500', '600', '700'],
+  weight: ['500', '600', '700', '800'],
 })
 
 export const metadata: Metadata = {
@@ -115,12 +110,12 @@ export default async function LocaleLayout({
   return (
     <html
       lang={locale}
-      className={`${inter.variable} ${lora.variable} ${beVietnamPro.variable} ${geistMono.variable} ${baloo2.variable} h-full antialiased`}
+      className={`${nunito.variable} ${geistMono.variable} ${baloo2.variable} h-full antialiased`}
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <a
           href="#main-content"
-          className="sr-only z-[200] rounded-md bg-primary px-4 py-3 text-sm font-medium text-surface outline-none ring-2 ring-primary ring-offset-2 ring-offset-background focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+          className="sr-only z-[200] rounded-md bg-primary px-4 py-3 text-sm font-medium text-white outline-none ring-2 ring-primary ring-offset-2 ring-offset-background focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
         >
           Skip to main content
         </a>
@@ -143,14 +138,10 @@ export default async function LocaleLayout({
               <main id="main-content" tabIndex={-1} className="flex-1 scroll-mt-20">
                 <PageTransition>{children}</PageTransition>
               </main>
-              <footer className="border-t border-border py-8">
-                <div className="mx-auto flex max-w-6xl flex-col items-center gap-4 px-4 sm:px-6 lg:px-8">
-                  <SocialIconBar variant="footer" />
-                  <p className="text-center text-sm text-muted">
-                    © {new Date().getFullYear()} VGOMNE. All rights reserved.
-                  </p>
-                </div>
-              </footer>
+              {/* The magenta closing band: the page ends on the brand instead
+                  of trailing off into gray. Server component - it reads the
+                  service line from the Connect page content. */}
+              <SiteFooter />
               {/* <ChatBox /> */}
             </EditModalProvider>
             </UnsavedChangesProvider>

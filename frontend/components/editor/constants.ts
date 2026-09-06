@@ -1,10 +1,14 @@
 import type { Editor } from '@tiptap/react'
 
 export const CALLOUT_VARIANTS = {
-  announcement: { icon: '📣', label: 'Announcement',   color: '#c4663c', bg: '#f5ede8' },
-  prayer:        { icon: '🙏', label: 'Prayer Request', color: '#4a7a5c', bg: '#eef3eb' },
-  scripture:     { icon: '📖', label: 'Scripture',      color: '#c49a3c', bg: '#faf3e6' },
-  callout:       { icon: '✨', label: 'Callout',        color: '#8b75d4', bg: '#f0eeff' },
+  // CSS values, not literal hexes: they resolve against the palette tokens in
+  // globals.css, so a rebrand is a token edit and these never drift. `color`
+  // doubles as the label text, so it is always one of the AA-safe magentas;
+  // rose and lavender only show up as the tinted background.
+  announcement: { icon: '📣', label: 'Announcement',   color: 'var(--primary)',       bg: 'color-mix(in srgb, var(--primary) 10%, var(--surface))' },
+  prayer:        { icon: '🙏', label: 'Prayer Request', color: 'var(--accent)',        bg: 'color-mix(in srgb, var(--accent) 10%, var(--surface))' },
+  scripture:     { icon: '📖', label: 'Scripture',      color: 'var(--primary-light)', bg: 'color-mix(in srgb, var(--secondary) 14%, var(--surface))' },
+  callout:       { icon: '✨', label: 'Callout',        color: 'var(--primary-light)', bg: 'color-mix(in srgb, var(--panel) 30%, var(--surface))' },
 } as const
 
 export type CalloutVariant = keyof typeof CALLOUT_VARIANTS

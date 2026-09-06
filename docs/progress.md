@@ -3,6 +3,63 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-09-05 - "Sunday Bloom": logo palette, two fonts, committed color, homepage revival
+
+**Why.** The site had been retokened to the VGOMNE logo palette (deep magenta #8E1D5F, dark
+magenta #850050, rose #DE718E, mid magenta #A6366D, lavender #BEB5FA) but on a structure designed
+for cream and terracotta: pure white page, white cards, brown-tinted text, cards around every
+paragraph, magenta only at chip scale. Full-page screenshots of the production build confirmed it
+read as lifeless. The design direction was published first (artifact "Sunday Bloom") and then
+built in six phases, all frontend, no backend or schema changes.
+
+**What shipped.**
+- **Tokens** (`globals.css`): field = lavender 10% (`#f9f8ff`), ink = magenta 20% into
+  near-black (`#2c1323`), muted = mauve (`#6c4160`), border = lavender 60%, new `--panel`
+  (35%) and `--panel-strong` (100%), magenta-tinted card shadows, hero band = plum ink. Dark
+  mode restructured on a plum-charcoal field. Every text pairing passes WCAG AA (table in
+  DESIGN.md).
+- **Type** (`layout.tsx`): Baloo 2 (every heading and the calendar masthead,
+  `--font-heading`) + Nunito (prose and UI, `--font-sans`). Inter and Lora removed. Two
+  intermediate pairings were built and rejected the same day: Bricolage Grotesque + Be Vietnam
+  Pro ("the font every Claude-built app has") and Josefin Sans + Gentium Plus (the owner
+  prefers soft curves). Foreground is deep plum
+  `#451532`, card bodies mauve; section headings sit on a lavender ribbon. Six type-role
+  utilities (`.t-display .t-title .t-section .t-card .t-body .t-meta`) defined once;
+  body copy is ink, muted is metadata only. `font-serif` / `font-display` kept as aliases so
+  no class sweep was needed.
+- **Surfaces**: `SectionHeader` (magenta heading + brand rule),
+  `EmptyState` (panel, not dashed), `SiteFooter` (magenta closing band), nav on the lavender
+  panel (three zones, rounded pills, desktop from lg, social icons from xl, nothing wraps) with
+  the emblem as brand mark, PostCard with a lavender header strip and magenta title,
+  About/Connect de-carded into flat sections, quote block on a panel instead of a side stripe.
+- **Homepage** (the staged revival plan, rebased): `Home`, `Footer`, `Nav`, `Pages` and
+  `Post` message namespaces (en + vi) so every public string is in the page's language -
+  the owner rejected the plan's bilingual echo headings and mixed hero line the same day
+  ("either all viet or all eng"), left-aligned hero with a service line read from
+  the Connect page (`lib/connect-summary.ts`, TODO placeholders count as unset), `EventRow`
+  list for Upcoming, `RecentMoments` arch-frame photo strip, `.stagger-children` entrance.
+- **Calendar**: 82 Tailwind gray/white class tokens moved onto the palette tokens; the twelve
+  month themes and the five accent presets are now palette mixes, each AA with white or ink.
+- **Docs**: PRODUCT.md and DESIGN.md rewritten for the palette and fonts; components.md and
+  frontend.md updated; the revival plan in scratchpad.md marked shipped with deviations.
+
+**Verification.** `tsc --noEmit` clean, `next build` succeeds, headless screenshots of
+home (en + vi, desktop + phone), events, announcements, connect, about and calendar reviewed.
+Note for future screenshots: headless Edge clamps the window to ~496px wide, so a 390px
+"phone" capture is a cropped tablet layout, not evidence of overflow.
+
+**Language switch no longer reflows the bar.** A switch is a full reload, so the auth provider
+restarted in `loading` and the navbar hid the account controls until Supabase and `/auth/me`
+answered - the centered links slid twice for an admin. Fixed two ways: the account slot is a
+fixed-width box (Sign in / one Account disclosure / invisible placeholder), and `AuthProvider`
+persists a display-only `{ signedIn, isAdmin }` hint in `sessionStorage` that the bar uses
+while loading. The hint grants nothing; it only picks which control to draw.
+
+**Open for the owner.** Real service time and address go into the Connect page admin editor -
+the hero and footer pick them up automatically. Vietnamese copy in `messages/vi.json` `Home`
+and `Footer` needs a native review (Southern register was attempted). The three semantic
+colors (error red, success green, warning amber) are still Tailwind defaults.
+
 ## 2026-08-01 - Removed: creating an event no longer writes a line into the month note
 
 Creating a calendar event appended `• May 22: Youth Camp` to that month's sidebar note

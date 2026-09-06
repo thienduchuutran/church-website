@@ -12,14 +12,14 @@ Two utility classes in `frontend/app/globals.css`. **Never hardcode a `shadow-*`
 
 | Class | Behaviour | Use on |
 |---|---|---|
-| `.card-lift` | Resting shadow, plus `translateY(-3px)` and a larger shadow on `:hover` | Cards you can click or that hold a distinct piece of content: `PostCard`, `AlbumGrid` tiles |
+| `.card-lift` | Resting shadow, plus `translateY(-3px)` and a larger shadow on `:hover` | Cards you can click or that hold a distinct piece of content: `PostCard`, `EventRow`, `AlbumGrid` tiles, `RecentMoments` frames |
 | `.card-rest` | Resting shadow only, no hover response | Static panels: `DiscordLinkCard`, `HeroVideoUpload`, `TranslationReviewRecord` |
 
 Why the split: a panel that rises under the cursor but does nothing when clicked is a lie about its affordance. Hover elevation is reserved for surfaces that respond.
 
 Both classes are declared **outside `@layer`** on purpose. Tailwind utilities live in `@layer utilities`, so an un-layered rule outranks them, and a stray `shadow-sm` left on a card can never fight the token.
 
-**Things that must stay flat:** alerts, dashed empty states, and `bg-surface/50` section blocks. There are only two heights in this system - the card layer and the page - and a card never contains another card. See the Elevation section of repo-root `DESIGN.md` for the token values and the dark-mode variants.
+**Things that must stay flat:** alerts, `EmptyState` panels, quote panels, and prose sections on the field. There are only two heights in this system - the card layer and the page - and a card never contains another card. See the Elevation section of repo-root `DESIGN.md` for the token values and the dark-mode variants.
 
 **If you wrap cards in a scrolling container,** give it vertical padding. `overflow-x-auto` clips on both axes and will slice the resting shadow off (this is why `PastEventsCarousel` carries `pb-6 pt-3`).
 
@@ -34,9 +34,31 @@ Site-wide navigation bar. Includes mobile hamburger menu.
 **Props:** none (reads session state internally for login/logout button)  
 **Client component:** yes (session state, mobile menu toggle)
 
-**Nav structure:** Home → News (desktop disclosure: click to open/close, `aria-expanded` / `aria-controls`, Escape and outside click close) → Calendar → Gallery → Resources → About. A separate **Connect** CTA sits to the right (next to Sign in).  
+**Nav structure:** brand (the home link) → News (desktop disclosure: click to open/close, `aria-expanded` / `aria-controls`, Escape and outside click close) → Calendar → Gallery → Resources → About, centered. Right cluster: language switcher, social icons (`xl`+ only), the solid **Connect** CTA, then a **fixed-width account slot** (`w-[7.5rem]`): "Sign in" when signed out, one "Account" disclosure (Admin dashboard when allowed, Sign out) when signed in, and an invisible same-size placeholder while auth is unknown. The slot never changes width, so the centered links never move. Desktop layout starts at `lg`; the mobile bar is brand + switcher + hamburger, and the panel adds Home, Connect, the account controls and a "Follow us" row with the social icons. Every label is a `Nav` message key, so the bar is entirely in the active language.  
 The `navItems` array is type-discriminated (`kind: 'link' | 'dropdown'`). Mobile menu is a single `<ul>` with `id="primary-mobile-nav"`, `hidden` when closed, `aria-expanded` / `aria-controls` on the menu button, and **min 44px** tap targets on primary controls. Desktop and mobile lists live inside one `<nav aria-label="Primary">` landmark. Route changes close open menus (`startTransition` to satisfy lint rules).  
-**Chrome:** Sticky header uses **`bg-background/95`** (no backdrop blur) so the bar matches PRODUCT’s warm cream field instead of a glass effect.
+**Chrome:** Sticky 64px header on the lavender panel, **`bg-panel/95`** (no backdrop blur), `max-w-7xl`. Links are fully rounded pills, ink at rest, magenta wash on hover, solid magenta when active; nothing wraps at any width. The Connect CTA is always the solid magenta button.
+**No reflow after a language switch:** a switch is a full reload, and the auth provider starts over. Two things keep the bar still: the account slot has a fixed width whatever auth turns out to be, and `AuthProvider` exposes a display-only `hint` (`{ signedIn, isAdmin }`, persisted in `sessionStorage` under `vgomne_auth_hint`, read in a layout effect before first paint) that the bar uses while `loading`. The hint grants nothing - API calls and admin gates still wait for the real `session` / `isAdmin`. The brand mark is the emblem (`/public/logo.jpg`, decorative, empty alt) plus the wordmark in `font-heading`.
+
+---
+
+### `SectionHeader`
+The one dominant element every section gets: a magenta `.t-section` heading on the `.section-ribbon` lavender band (bleeds to the container's left edge, rounds on the right), plus an optional "View all →" pill link. `level: 'page'` renders a plain `h1` in `.t-title` with no ribbon. The heading is in the active language only - pages never mix languages.
+**Props:** `id` (heading id for `aria-labelledby`), `title`, `href?` + `linkLabel?`, `level?: 'section' | 'page'` (page renders an `h1` in `.t-title`), `className?`
+**Client component:** no
+Used on the homepage and the list pages. Prose pages (About, Connect) inline the same shape.
+
+---
+
+### `EmptyState`
+The shared "nothing here yet" surface: a `bg-panel` block with a `.t-card` line and an optional muted hint. Deliberately not a dashed box (reads as broken) and not a card (reads as content).
+**Props:** `title`, `hint?`, `className?`
+**Client component:** no
+
+---
+
+### `SiteFooter`
+The magenta closing band mounted once in `layout.tsx`: `bg-primary`, rose-to-lavender rule at its top edge, the invitation from `messages/*.json` → `Footer`, the service line, a white "Plan a visit" button to `/connect`, and `SocialIconBar` forced white via descendant selectors.
+**Server component:** yes. Reads the service line through `lib/connect-summary.ts` so it can never disagree with the hero or the Connect page; a dead backend simply omits the line.
 
 ---
 
@@ -88,13 +110,14 @@ Switches between English and Vietnamese without page reload. Lives in the Navbar
 - Wraps the navigation in `useTransition`; the inactive button dims (`opacity-60`) while the route is committing.
 
 **Responsive form:**
-- **Desktop (`md+`):** both `EN` and `VI` pills visible. The active one carries `bg-primary/10 text-primary`; the inactive shows `text-muted`. Standard A/B toggle pattern.
+- **Labels:** each language is named in itself - `English` / `Tiếng Việt` - from a `NATIVE_NAME` constant in the component, never translated and never a flag. A flag names a country, not a language, and for a Southern Vietnamese diaspora congregation either Vietnamese flag is a political statement; endonyms are also the W3C recommendation, since a reader who cannot read the page must still recognise their own language. Each button carries `lang={code}` so screen readers pronounce the name correctly.
+- **Desktop (`md+`):** a soft pill track (`bg-surface/80`, rounded-full) with a decorative globe glyph, then both names. The active one is a solid magenta pill with white text; the inactive is ink with a magenta wash on hover.
 - **Mobile (below `md`):** only the **inactive** pill is visible - it acts as a single "switch to X" button. Reasoning: the navbar right cluster already carries logo, social icons, and hamburger (~240px). Adding two 44px pills would overflow on iPhone-SE-class widths (343px content). Hiding the active pill keeps the WCAG-compliant 44x44 tap target while saving 46px.
 
 **Accessibility:**
 - Each button has `aria-pressed` set to the active state.
 - `aria-label="Switch to <full language name>"` from the `Language.switchTo` message key.
-- `title` tooltip with the localized language name.
+- `lang` attribute on each button so the endonym is read in its own language.
 - The outer `<div role="group" aria-label="Language">` (`Language.label` message key) groups the toggle for screen readers.
 
 **Message keys (in `messages/{en,vi}.json`):**
@@ -157,7 +180,7 @@ Small italic "Bản dịch tự động" notice that flags content served from a
 | `className` | `string` | `''` | Extra classes appended to the `<span>` for layout (e.g. `mt-2` when stacking under other content) |
 
 **Design tokens (from Phase 4 spec):**
-- Color: terracotta `#C4663C` via inline style (so the badge keeps its brand color even if a parent surface uses a different palette).
+- Color: `var(--primary)` via inline style (brand magenta; a CSS variable rather than a Tailwind class because Tailwind 4 purges classes it cannot see).
 - Font size: `10px` (`text-[10px]`) - deliberately quiet.
 - `italic` - softens the visual weight further.
 - Text: read from `Common.machineTranslated` in the active locale's messages JSON.
@@ -191,21 +214,22 @@ Facebook-style card rendered for every post.
 | `post` | `Post` | required | Full post object including images and reaction counts |
 | `showReactions` | `boolean` | `true` | Pass `false` in admin views to hide the reaction bar |
 
-**Anatomy** (top to bottom): date badge → title → body text → optional image(s) → optional external link button → `ReactionBar`  
-Event date line uses a decorative calendar emoji with `aria-hidden` so screen readers read the formatted date only. Event cards with no `event_date` show a muted "📅 Date TBD" chip in place of a date; admins also see an `EventArchiveButton` in the header to move the event between the Upcoming and Past sections.  
-**Visual system (PRODUCT):** **`rounded-[14px]`** and warm **`border-border`**; elevation comes from the shared **`.card-lift`** class (see [Card elevation](#card-elevation) below) - never a hardcoded `shadow-*` utility. **Event** badges use **sage** (`accent`); **announcement** badges use **terracotta** (`primary`). Card titles use **`font-serif font-semibold`**.  
+**Anatomy** (top to bottom): lavender header strip (`bg-panel`) with the type badge + dates (`.t-meta`) → title (`.t-card text-primary`, magenta) → body (`.t-body text-muted`, Gentium Plus in mauve - a card body is never dark-on-white) → optional image(s) → optional external link button → `ReactionBar`. Badge labels, "Date TBD" and "Open link" are `Post` message keys; dates format in the active locale.  
+Event cards show the event date in mid magenta in the meta row; with no `event_date` they show "Date TBD". No emoji. Admins also see an `EventArchiveButton` in the header to move the event between the Upcoming and Past sections. The `<article>` carries `id="post-{id}"` so `EventRow` on the homepage can deep-link to it.  
+**Visual system (PRODUCT):** **`rounded-[14px]`** and **`border-border/60`**; elevation comes from the shared **`.card-lift`** class (see [Card elevation](#card-elevation) below) - never a hardcoded `shadow-*` utility. **Announcement** badge is solid magenta, **event** badge solid mid magenta, both white uppercase; every other type sits on `bg-panel` in ink. Card titles use the `.t-card` role.  
 **Client component:** no (server component; `ReactionBar` inside is client)
 
 ---
 
 #### `PostFeed`
-Renders a vertical list of `PostCard` components with an empty-state fallback. Empty state uses **`rounded-[14px]`** dashed border to match card radius.
+Renders a vertical list of `PostCard` components (in a `.stagger-children` grid, so they enter in sequence) with an `EmptyState` fallback.
 
 **Props**
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `posts` | `Post[]` | required | Array of posts to render |
-| `showReactions` | `boolean` | `true` | Forwarded to each `PostCard` |
+| `emptyMessage` | `string` | `'No posts yet.'` | `EmptyState` title |
+| `emptyHint` | `string` | - | Optional muted hint under it |
 
 **Client component:** no
 
@@ -220,6 +244,20 @@ Horizontally swipeable strip of past events, rendered below the Upcoming feed on
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
 | `posts` | `Post[]` | required | Past events to render as slides (already sorted by the parent via `partitionEvents`) |
+
+**Client component:** no
+
+---
+
+#### `EventRow`
+The compact shape for "what's next" on the homepage: a 4rem `bg-panel` date block (day numeral in `font-heading` 800, month in `.t-meta`, or the `tbdLabel` for dateless events), the title in `.t-card`, and one muted line stripped from the body HTML. The whole row is one `.card-lift` link to `/events#post-{id}`, which lands on the full `PostCard` there. Events are appointments to scan, so they stop looking identical to announcement cards.
+
+**Props**
+| Prop | Type | Default | Description |
+|------|------|---------|-------------|
+| `post` | `Post` | required | An event post (dated or not) |
+| `locale` | `string` | required | For the day / month formatting |
+| `tbdLabel` | `string` | required | Text for the block when there is no date (from `Home.dateTbd`) |
 
 **Client component:** no
 
@@ -284,12 +322,13 @@ Grid of gallery album cards, each linking to the album detail.
 ---
 
 #### `RecentMoments`
-Flat photo grid showing the most recent images across all albums.
+The homepage photo strip: the newest images across the given gallery albums (newest album first, each album's images in display order, capped at `max`) in **arch-topped frames** (`rounded-t-full rounded-b-[14px]`, 3:4, three cycling widths for rhythm) that snap-scroll sideways and all link to `/gallery`. The arch is the site's single non-rectangle shape; it appears nowhere else. Renders `null` with no images, so the parent owns the heading and the `EmptyState`.
 
 **Props**
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `images` | `PostImage[]` | required | Flat array of images |
+| `albums` | `Post[]` | required | `gallery_album` posts with their `images` |
+| `max` | `number` | `8` | Maximum frames |
 
 **Client component:** no
 
@@ -308,7 +347,7 @@ Card for the `/admin/translations` review panel, one per (`table_name`, `record_
 | `onDismiss` | `(id) => Promise<void>` | Per-field dismiss handler - deletes the row WITHOUT re-enqueueing. Only shown while the field is unapproved; confirmed via `useConfirm()`. Use when the source no longer needs this suggestion (e.g. a cleared calendar month note - see `docs/agents/known-quirks.md`). |
 
 **Design tokens:**
-- Approve all: `bg-primary` (terracotta `#C4663C`) normally, sage `#4A7A5C` when any field has unsaved edits ("Save edits & approve all")
+- Approve all: `bg-primary` (deep magenta) normally, `var(--accent)` (mid magenta) when any field has unsaved edits ("Save edits & approve all")
 - Re-translate: ghost (transparent, `text-muted`, hover bg) - per-field secondary action
 - Dismiss: ghost, hover shifts to red (`hover:bg-red-50 hover:text-red-600`) to read as the more destructive of the two per-field actions
 
@@ -318,7 +357,7 @@ Card for the `/admin/translations` review panel, one per (`table_name`, `record_
 - `busy` - `null | 'approve' | 'retranslate:<fieldId>' | 'dismiss:<fieldId>'` so only the in-flight button shows its "…ing" label
 
 **Table label badges** (color-coded per `table_name`):
-- `posts` → "Post" (terracotta tint)
+- `posts` → "Post" (primary tint)
 - `page_content` → "Page" (amber tint)
 - `calendar_events` → "Event" (accent tint)
 - `calendar_month_notes` → "Month note" (emerald tint)
@@ -518,8 +557,8 @@ The render half of the block registry. Turns an ordered `PageBlock[]` into the p
 | `block_type` | Renders as |
 |---|---|
 | `hero` | `<header>` with `<h1>` title, subtitle paragraph, and the translation badge underneath |
-| `rich_text` | Card (`rounded-xl border bg-surface/50 p-8`) with optional `<h2>` + sanitized body. Both fields optional - a heading with no body, or a body with no heading, are both valid |
-| `quote` | `<figure>` with a left rule, serif italic body, and optional `props.attribution` in the `<figcaption>` |
+| `rich_text` | Flat section on the field: optional magenta `.t-section` `<h2>` with the `.brand-rule` beneath, then the sanitized body in `.t-body`. No card wrapper. Both fields optional - a heading with no body, or a body with no heading, are both valid |
+| `quote` | `<figure>` on a `bg-panel` block (no side stripe), body in `font-heading` at 1.4rem, optional `props.attribution` as a `.t-meta` `<figcaption>` |
 
 **Three halves of one registry.** Adding a block type means one entry in each, and nothing else:
 

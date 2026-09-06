@@ -21,9 +21,10 @@ const TABLE_LABELS: Record<string, { label: string; className: string }> = {
 // Human label per field name. Anything unlisted shows the raw field_name.
 const FIELD_LABELS: Record<string, string> = { title: 'Title', body: 'Body' }
 
-// Sage is the spec's "approved" color - matches the calendar accent. Inline
-// because Tailwind 4 purges class names it can't see at build time.
-const SAGE = '#4A7A5C'
+// The accent token is the spec's "approved" color - matches the calendar
+// accent. Inline because Tailwind 4 purges class names it can't see at build
+// time; a CSS variable keeps it on the central palette anyway.
+const SAGE = 'var(--accent)'
 
 // Labels for one translation direction, derived from the TARGET locale.
 //

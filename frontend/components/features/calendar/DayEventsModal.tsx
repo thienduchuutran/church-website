@@ -129,7 +129,7 @@ export default function DayEventsModal({
               >
                 <div
                   className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center"
-                  style={{ backgroundColor: '#ffffff' }}
+                  style={{ backgroundColor: 'var(--surface)' }}
                 >
                   <CalendarIcon iconKey={e.icon} size={16} color={colors.dot} />
                 </div>
@@ -161,7 +161,7 @@ export default function DayEventsModal({
                 {isAdmin && (
                   <button
                     onClick={() => onEdit(e)}
-                    className="shrink-0 p-1.5 rounded-md text-muted hover:text-foreground hover:bg-white/60 transition-colors"
+                    className="shrink-0 p-1.5 rounded-md text-muted hover:text-foreground hover:bg-surface/60 transition-colors"
                     title="Edit"
                   >
                     <PencilSimple size={14} weight="bold" />

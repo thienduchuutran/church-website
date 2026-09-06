@@ -24,7 +24,7 @@ export async function exportCalendarToPng(
     style: el.getAttribute('style') ?? '',
   }))
   todayCircles.forEach(el => {
-    el.className = 'absolute top-1.5 right-1.5 z-10 font-sans text-xs font-semibold leading-none text-gray-600'
+    el.className = 'absolute top-1.5 right-1.5 z-10 font-sans text-xs font-semibold leading-none text-muted'
     el.removeAttribute('style')
   })
 

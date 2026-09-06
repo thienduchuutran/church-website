@@ -1,13 +1,28 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { supabase } from './supabase'
+
+// A display-only memory of the last resolved auth state, kept in
+// sessionStorage so it survives the full-document reload a language switch
+// performs. It carries no token and grants nothing: the navbar reads it to
+// draw the right account control on the first client paint instead of
+// waiting for Supabase and /auth/me to answer, which is what made the bar
+// reflow after every switch. Anything that needs the real session (API
+// calls, admin gates) still waits for `session` / `isAdmin` / `loading`.
+export interface AuthHint {
+  signedIn: boolean
+  isAdmin: boolean
+}
 
 interface AuthState {
   session: Session | null
   isAdmin: boolean
   loading: boolean
+  // null until the first client paint, then whatever the last resolved
+  // state was in this tab (or null if there never was one).
+  hint: AuthHint | null
   signIn: () => Promise<void>
   signOut: () => Promise<void>
 }
@@ -16,11 +31,34 @@ const AuthContext = createContext<AuthState>({
   session: null,
   isAdmin: false,
   loading: true,
+  hint: null,
   signIn: async () => { },
   signOut: async () => { },
 })
 
 export const useAuth = () => useContext(AuthContext)
+
+const HINT_KEY = 'vgomne_auth_hint'
+
+function readHint(): AuthHint | null {
+  try {
+    const raw = sessionStorage.getItem(HINT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<AuthHint>
+    return { signedIn: Boolean(parsed.signedIn), isAdmin: Boolean(parsed.isAdmin) }
+  } catch {
+    return null
+  }
+}
+
+function writeHint(hint: AuthHint) {
+  try {
+    sessionStorage.setItem(HINT_KEY, JSON.stringify(hint))
+  } catch {
+    // Private mode or storage disabled: the bar simply falls back to the
+    // reserved-width placeholder until auth resolves.
+  }
+}
 
 // Module-scoped snapshot of the last resolved auth state. It survives client-
 // side remounts - including the full [locale] subtree remount on a language
@@ -39,6 +77,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // If we already have a snapshot we're not "loading" - the effect still
   // re-validates in the background, but the UI never flashes.
   const [loading, setLoading] = useState(authSnapshot === null)
+  // MUST start null so the first client render matches the server HTML (the
+  // server has no sessionStorage). The layout effect below fills it in before
+  // the browser paints, so the reflow-free first frame is still achieved.
+  const [hint, setHint] = useState<AuthHint | null>(null)
+
+  useLayoutEffect(() => {
+    setHint(readHint())
+  }, [])
 
   // Calls the backend instead of querying Supabase directly - required now
   // that the admins table lives on RDS, not in Supabase Postgres.
@@ -88,11 +134,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Keep the module snapshot current once auth has resolved, so the next
-  // remount (e.g. a language switch) seeds instantly from it. Client-only:
-  // effects never run during SSR, so the server snapshot stays null.
+  // Keep the module snapshot and the sessionStorage hint current once auth
+  // has resolved, so the next remount (a language switch) seeds instantly from
+  // them. Client-only: effects never run during SSR, so the server snapshot
+  // stays null.
   useEffect(() => {
-    if (!loading) authSnapshot = { session, isAdmin }
+    if (!loading) {
+      authSnapshot = { session, isAdmin }
+      const next = { signedIn: session !== null, isAdmin }
+      writeHint(next)
+      setHint(next)
+    }
   }, [session, isAdmin, loading])
 
   const value = useMemo(
@@ -100,6 +152,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       session,
       isAdmin,
       loading,
+      hint,
       signIn: async () => {
         await supabase.auth.signInWithOAuth({
           provider: 'google',
@@ -110,11 +163,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         })
       },
       signOut: async () => {
+        // Clear the hint first so a reload mid-sign-out cannot resurrect a
+        // signed-in bar.
+        const out = { signedIn: false, isAdmin: false }
+        writeHint(out)
+        setHint(out)
         await supabase.auth.signOut()
         setIsAdmin(false)
       },
     }),
-    [session, isAdmin, loading],
+    [session, isAdmin, loading, hint],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

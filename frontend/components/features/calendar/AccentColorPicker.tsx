@@ -86,13 +86,13 @@ export default function AccentColorPicker({
       aria-label={`Accent color for ${monthLabel}`}
       className={
         centered
-          ? 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[280px] max-w-[calc(100vw-2rem)] bg-white border border-gray-300 rounded-lg p-3'
-          : 'absolute top-full left-0 mt-1.5 z-30 w-[220px] max-w-[calc(100vw-2rem)] bg-white border border-gray-300 rounded-md p-2.5'
+          ? 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-[280px] max-w-[calc(100vw-2rem)] bg-surface border border-border rounded-lg p-3'
+          : 'absolute top-full left-0 mt-1.5 z-30 w-[220px] max-w-[calc(100vw-2rem)] bg-surface border border-border rounded-md p-2.5'
       }
       style={{ boxShadow: centered ? '0 20px 50px rgba(0,0,0,0.25)' : '0 4px 16px rgba(0,0,0,0.10)' }}
       onMouseDown={(e) => e.stopPropagation()}
     >
-      <p className="font-display text-[11px] font-medium text-gray-500 mb-2">
+      <p className="font-display text-[11px] font-medium text-muted mb-2">
         Accent for {monthLabel}
       </p>
 
@@ -111,7 +111,7 @@ export default function AccentColorPicker({
               className="w-[18px] h-[18px] rounded-full transition-transform hover:scale-110"
               style={{
                 backgroundColor: p.hex,
-                boxShadow: active ? '0 0 0 2px #1C1210' : '0 0 0 1px rgba(0,0,0,0.08)',
+                boxShadow: active ? '0 0 0 2px var(--foreground)' : '0 0 0 1px rgba(0,0,0,0.08)',
               }}
             />
           )
@@ -119,28 +119,28 @@ export default function AccentColorPicker({
       </div>
 
       {/* Custom color input */}
-      <label className="flex items-center gap-2 mb-2 font-display text-[11px] text-gray-600 cursor-pointer">
+      <label className="flex items-center gap-2 mb-2 font-display text-[11px] text-muted cursor-pointer">
         <input
           type="color"
           value={picked}
           onChange={(e) => applyPick(e.target.value)}
-          className="w-6 h-6 rounded border border-gray-200 font-sans cursor-pointer"
+          className="w-6 h-6 rounded border border-border font-sans cursor-pointer"
           aria-label="Custom accent color"
         />
         <span>Custom</span>
-        <span className="ml-auto font-mono text-[10px] text-gray-400 uppercase">{picked}</span>
+        <span className="ml-auto font-mono text-[10px] text-muted/80 uppercase">{picked}</span>
       </label>
 
       {error && (
         <p role="alert" className="font-sans text-[10px] text-red-600 mb-2">{error}</p>
       )}
 
-      <div className="flex items-center gap-2 pt-1.5 border-t border-gray-100">
+      <div className="flex items-center gap-2 pt-1.5 border-t border-border">
         <button
           type="button"
           onClick={cancelAndClose}
           disabled={saving}
-          className="flex-1 font-display text-[11px] font-medium text-gray-500 py-1 rounded hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          className="flex-1 font-display text-[11px] font-medium text-muted py-1 rounded hover:bg-panel disabled:opacity-50 transition-colors"
         >
           Cancel
         </button>

@@ -4,7 +4,7 @@ import { useTranslations } from 'next-intl'
 // content that was served from an unapproved AI translation. Design tokens
 // come straight from the Phase 4 spec:
 //
-//   - terracotta (#C4663C) text       ← brand primary, matches "Auto-translated" warmth
+//   - brand primary text (--primary)  ← matches every other brand accent
 //   - 10px font size, italic           ← low visual weight: informative, not alarming
 //   - bottom-of-card position          ← caller decides exact placement
 //
@@ -21,7 +21,7 @@ export default function MachineTranslatedBadge({ className = '' }: { className?:
   return (
     <span
       className={`text-[10px] italic ${className}`}
-      style={{ color: '#C4663C' }}
+      style={{ color: 'var(--primary)' }}
       role="note"
       aria-label={t('machineTranslated')}
     >

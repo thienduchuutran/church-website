@@ -1,36 +1,70 @@
 @import "tailwindcss";
 
 :root {
-  --background: #faf7f2;
-  --foreground: #1c1a18;
-  /* Terracotta: interactive emphasis, CTAs (PRODUCT) */
-  --primary: #c4663c;
-  --primary-light: #d67a52;
-  /* Sage: secondary emphasis (PRODUCT) */
-  --accent: #4a7a5c;
-  --accent-light: #5f9174;
-  /* Warm gold: decorative only elsewhere; available for rules/dots */
-  --gold: #c49a3c;
-  --surface: #fffefb;
-  --muted: #6b6560;
-  --border: #eae5de;
+  /* ─── VGOMNE logo palette ───
+     Five brand values: deep magenta, its darker hover, rose, mid magenta,
+     lavender. Everything else on the site is one of those mixed with white
+     or with near-black, so ink, gray, dividers and shadows all belong to the
+     same family. The mix ratios are noted so a value can be re-derived. */
+
+  /* Page field: lavender 10% over white. The logo's watercolor wash, faint.
+     White is now a card color, not the page. */
+  --background: #f9f8ff;
+  /* Deep plum: magenta 40% into near-black. Page titles and prose on the
+     field. Deliberately not a near-black - nothing on the site is black.
+     14:1 on the field. (The hero band keeps the darker #2c1323 below.) */
+  --foreground: #451532;
+  /* Deep magenta: primary buttons, links, section headings, active nav,
+     focus rings, badges. 8.4:1 with white text. */
+  --primary: #8e1d5f;
+  /* Darker magenta: hover state for solid primary fills (9.9:1 with white).
+     The name is historical - every hover:bg-primary-light in the tree means
+     "primary hover". */
+  --primary-light: #850050;
+  /* Rose (top of the logo gradient): gradient stops, the hero glow, the one
+     rose phrase on the dark hero (5.7:1 on plum), hover on panels. Only
+     3.06:1 against white, so it never carries small white text. */
+  --secondary: #de718e;
+  /* Mid magenta: event badges, event dates, tags, admin nav accent.
+      6.2:1 on white in both directions. */
+  --accent: #a6366d;
+  --accent-light: #de718e;
+  /* Lavender 35% over white: nav bar, empty states, event date blocks,
+     quote panels. Ink reads 13.9:1 on it, muted 6.7:1. */
+  --panel: #e8e5fd;
+  /* The logo lavender itself. Feature blocks and rules. Ink text only:
+     muted is 4.4:1 and magenta 4.5:1 on it. */
+  --panel-strong: #beb5fa;
+  /* Cards only. */
+  --surface: #ffffff;
+  /* Mauve: magenta 35% into a mid gray. Metadata, captions, dates, and card bodies. 7.8:1 on
+     the field, 8.2:1 on a white card. Prose on the field is --foreground. */
+  --muted: #6c4160;
+  /* Lavender 60% over white: hairline borders and dividers. */
+  --border: #d6d1fc;
+  /* Hero band: the plum ink, so the darkness is the same family as the text.
+     Magenta is 2.1:1 on it, which is why hero brand text is --secondary. */
+  --hero-bg: #2c1323;
+  --hero-text: #ffffff;
 
   /* ─── Card elevation ───
      Two layers per level, not one: a tight contact shadow that anchors the
      card to the page, plus a wide ambient shadow that gives it height. A
      single blur reads like a sticker; two read like an object resting on
-     paper. Both are tinted with the ink hue (28,20,16) rather than black,
-     so the shadow stays warm against the cream field.
+     paper. Both are tinted with the magenta hue (142,29,95) rather than
+     black, so the shadow stays in the palette against the lavender field.
      Rising from rest to hover keeps the light source fixed: the offset and
      blur grow together while per-pixel opacity stays low, which is what a
      real object lifting off a surface does. */
-  --elevation-card: 0 1px 3px rgba(28, 20, 16, 0.07), 0 6px 16px -3px rgba(28, 20, 16, 0.11);
-  --elevation-card-hover: 0 2px 5px rgba(28, 20, 16, 0.08), 0 16px 36px -6px rgba(28, 20, 16, 0.17);
+  --elevation-card: 0 1px 2px rgba(142, 29, 95, 0.06), 0 8px 24px -8px rgba(142, 29, 95, 0.16);
+  --elevation-card-hover: 0 2px 4px rgba(142, 29, 95, 0.08), 0 18px 40px -10px rgba(142, 29, 95, 0.24);
   /* How far a card rises on hover. Deliberately small - the shadow does most
      of the work, the movement only confirms it. */
   --card-lift-distance: -3px;
   /* Matches the page-transition curve so all site motion shares one ease. */
   --ease-card: cubic-bezier(0.22, 1, 0.36, 1);
+  /* The logo's gradient, rose into magenta, as a horizontal rule. */
+  --brand-gradient: linear-gradient(90deg, var(--secondary), var(--primary));
 }
 
 @theme inline {
@@ -40,37 +74,61 @@
   --color-primary-light: var(--primary-light);
   --color-accent: var(--accent);
   --color-accent-light: var(--accent-light);
+  --color-secondary: var(--secondary);
+  --color-panel: var(--panel);
+  --color-panel-strong: var(--panel-strong);
   --color-surface: var(--surface);
   --color-muted: var(--muted);
   --color-border: var(--border);
+  --color-hero-bg: var(--hero-bg);
+  --color-hero-text: var(--hero-text);
   /* Exposed to Tailwind so one-off surfaces can use `shadow-card` directly
      instead of inventing another arbitrary shadow string. */
   --shadow-card: var(--elevation-card);
   --shadow-card-hover: var(--elevation-card-hover);
+  /* Two soft-curved families, both with a Vietnamese subset (layout.tsx):
+       --font-heading  Baloo 2   headings, display line, date numerals, the
+                                 calendar masthead
+       --font-sans     Nunito    prose and UI: card bodies, page copy, nav,
+                                 buttons, badges, labels, forms
+     Role aliases so components can say what they mean:
+       font-body   -> Nunito   (prose)        font-marker -> Baloo 2 (calendar)
+     Legacy aliases kept so the hundreds of existing class uses keep working:
+       font-display -> Nunito                 font-serif  -> Baloo 2 */
   --font-sans: var(--font-sans);
-  --font-serif: var(--font-serif);
-  --font-display: var(--font-display);
-  --font-marker: var(--font-marker);
+  --font-body: var(--font-sans);
+  --font-display: var(--font-sans);
+  --font-heading: var(--font-heading);
+  --font-serif: var(--font-heading);
+  --font-marker: var(--font-heading);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #141210;
-    --foreground: #f5f0eb;
-    --primary: #c4663c;
-    --primary-light: #e07d55;
-    --accent: #6b9e82;
-    --accent-light: #87b399;
-    --gold: #c49a3c;
-    --surface: #1f1c1a;
-    --muted: #9c9490;
-    --border: #3d3834;
+    /* Same structure on a plum-charcoal field. The logo palette has no
+       dark-field variant, so rose stands in wherever magenta must be read
+       as text: deep magenta is 2.2:1 on this field, rose is 6.1:1. Solid
+       fills therefore become rose and darken to mid magenta on hover. */
+    --background: #17101a;
+    --foreground: #f6eef4;
+    --primary: #de718e;
+    --primary-light: #a6366d;
+    --secondary: #de718e;
+    --accent: #de718e;
+    --accent-light: #de718e;
+    --panel: #2d1f33;
+    --panel-strong: #4a3f7a;
+    --surface: #221722;
+    --muted: #c9a9bf;
+    --border: #3d2d43;
+    --hero-bg: #17101a;
+    --hero-text: #ffffff;
 
-    /* Ink-tinted shadows at 5-13% alpha are literally invisible on a #141210
+    /* Magenta-tinted shadows at 6-16% alpha are invisible on a #17101a
        field - there is no darker value left to cast. Dark mode therefore
        switches to near-black at much higher alpha, which is what actually
-       separates a #1f1c1a card from a #141210 page. */
+       separates a #221722 card from a #17101a page. */
     --elevation-card: 0 1px 3px rgba(0, 0, 0, 0.38), 0 6px 18px -3px rgba(0, 0, 0, 0.52);
     --elevation-card-hover: 0 2px 6px rgba(0, 0, 0, 0.42), 0 18px 40px -6px rgba(0, 0, 0, 0.68);
   }
@@ -81,6 +139,123 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans, Arial, Helvetica, sans-serif);
 }
+
+/* ─── Type scale ───
+   Six roles, each at least 1.25x the one below it, so a page always has a
+   dominant element. Pages compose these instead of re-typing clamp() strings.
+
+     t-display   home hero line            Baloo 2 800, fluid to 68px
+     t-title     page h1                   Baloo 2 800, fluid to 44px
+     t-section   section h2, in magenta    Baloo 2 700, fluid to 33px
+     t-card      card and row titles       Baloo 2 700, 20px
+     t-body      prose, in deep plum       Nunito 400, 17px / 1.7
+     t-meta      dates, labels, captions   Nunito 800, 12px caps, wide
+
+   They live in Tailwind's `components` layer ON PURPOSE: a role carries a
+   default color (t-section is magenta, t-meta is muted) and a plain utility
+   must still be able to override it - `t-section text-white` on the closing
+   band, `t-meta text-secondary` on the hero, `t-meta text-white` inside a
+   solid badge, `t-body text-muted` on a card. Un-layered rules would beat
+   those utilities and paint magenta on magenta.
+
+   Baloo 2 is wide with a big x-height, so headings sit a step smaller than a
+   grotesque would and tighten slightly; it has no italic, so heading emphasis
+   is color or weight, never a slanted glyph. Nunito at 17px reads as
+   generously as a book serif at 16px. */
+@layer components {
+  .t-display,
+  .t-title,
+  .t-section,
+  .t-card {
+    font-family: var(--font-heading, system-ui, sans-serif);
+    text-wrap: balance;
+  }
+  .t-display {
+    font-size: clamp(2.375rem, 6vw, 4.25rem);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.01em;
+  }
+  .t-title {
+    font-size: clamp(2rem, 4vw, 2.75rem);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+  .t-section {
+    font-size: clamp(1.5rem, 2.6vw, 2.0625rem);
+    font-weight: 700;
+    line-height: 1.15;
+    letter-spacing: -0.005em;
+    color: var(--primary);
+  }
+  .t-card {
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .t-body {
+    font-family: var(--font-body, system-ui, sans-serif);
+    font-size: 1.0625rem;
+    font-weight: 400;
+    line-height: 1.7;
+    color: var(--foreground);
+  }
+  .t-meta {
+    font-family: var(--font-sans, system-ui, sans-serif);
+    font-size: 0.75rem;
+    font-weight: 800;
+    line-height: 1.3;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  /* Section ribbon: the heading sits on a lavender band that starts at the
+     column's left edge and rounds off on the right, the way a hand-made
+     bulletin bands its section titles. Replaces the heading-plus-thin-rule
+     shape every dashboard uses. */
+  .section-ribbon {
+    /* The bleed tracks the page gutter (px-4 / sm:px-6 / lg:px-8) so the
+       band always starts at the container's edge. */
+    --ribbon-bleed: 1rem;
+    display: inline-block;
+    margin-left: calc(-1 * var(--ribbon-bleed));
+    padding: 0.55rem 1.5rem 0.45rem var(--ribbon-bleed);
+    border-radius: 0 999px 999px 0;
+    background: var(--panel);
+  }
+  @media (min-width: 640px) {
+    .section-ribbon { --ribbon-bleed: 1.5rem; }
+  }
+  @media (min-width: 1024px) {
+    .section-ribbon { --ribbon-bleed: 2rem; }
+  }
+
+  /* The logo gradient as a short rule under section headings, and full-width
+     at the edge of the hero and the closing band. */
+  .brand-rule {
+    height: 3px;
+    width: 44px;
+    border-radius: 2px;
+    background: var(--brand-gradient);
+  }
+}
+
+/* ─── Staggered entrance ───
+   Children of a feed arrive as a sequence, not a wall. Reuses the page
+   fade-in keyframe and ease so there is no second motion vocabulary. Capped
+   at eight steps; anything later arrives with the eighth. */
+.stagger-children > * {
+  animation: page-fade-in 700ms var(--ease-card) both;
+}
+.stagger-children > :nth-child(1) { animation-delay: 0ms; }
+.stagger-children > :nth-child(2) { animation-delay: 70ms; }
+.stagger-children > :nth-child(3) { animation-delay: 140ms; }
+.stagger-children > :nth-child(4) { animation-delay: 210ms; }
+.stagger-children > :nth-child(5) { animation-delay: 280ms; }
+.stagger-children > :nth-child(6) { animation-delay: 350ms; }
+.stagger-children > :nth-child(7) { animation-delay: 420ms; }
+.stagger-children > :nth-child(n + 8) { animation-delay: 490ms; }
 
 /* ─── iOS input-zoom guard ───
    iOS Safari force-zooms the page when any focused text control computes a
@@ -106,7 +281,7 @@ body {
   }
 }
 
-/* Keyboard focus: terracotta ring matches PRODUCT interactive color */
+/* Keyboard focus: magenta ring matches the interactive color */
 :where(a, button, input, textarea, select, summary):focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
@@ -155,7 +330,8 @@ body {
   .apple-backdrop-in,
   .apple-backdrop-out,
   .apple-sheet-in,
-  .apple-sheet-out {
+  .apple-sheet-out,
+  .stagger-children > * {
     animation: none !important;
   }
 
@@ -263,9 +439,9 @@ body {
    like .../viewform URLs) wrap inside their container instead of spilling out
    of the card. `anywhere` (not break-word) also shrinks the min-content width,
    so it stops the string from forcing a grid/flex column wider. */
-.rich-content { font-size: 15px; line-height: 1.75; overflow-wrap: anywhere; }
-.rich-content h1 { font-family: var(--font-serif); font-size: 24px; font-weight: 700; margin: 14px 0 6px; line-height: 1.3; }
-.rich-content h2 { font-family: var(--font-serif); font-size: 18px; font-weight: 600; margin: 10px 0 4px; line-height: 1.3; }
+.rich-content { font-family: var(--font-body, system-ui, sans-serif); font-size: 1.0625rem; line-height: 1.7; overflow-wrap: anywhere; }
+.rich-content h1 { font-family: var(--font-heading); font-size: 24px; font-weight: 700; margin: 14px 0 6px; line-height: 1.3; }
+.rich-content h2 { font-family: var(--font-heading); font-size: 18px; font-weight: 600; margin: 10px 0 4px; line-height: 1.3; }
 .rich-content h3 { font-size: 15px; font-weight: 600; margin: 8px 0 3px; }
 /* h4 is offered by the lite (page-block) editor, where in-body headings start
    at h3 because the block title already renders as an h2. Without a rule it
@@ -283,8 +459,8 @@ body {
   color: var(--muted);
   margin: 8px 0;
 }
-.rich-content pre { background: #1a1408; color: #e8d8c0; padding: 12px 14px; border-radius: 8px; font-size: 12px; overflow-x: auto; margin: 8px 0; }
-.rich-content code { background: #f2ede8; padding: 1px 4px; border-radius: 3px; font-size: 12px; }
+.rich-content pre { background: var(--hero-bg); color: var(--hero-text); padding: 12px 14px; border-radius: 8px; font-size: 12px; overflow-x: auto; margin: 8px 0; }
+.rich-content code { background: var(--panel); padding: 1px 4px; border-radius: 3px; font-size: 12px; }
 .rich-content pre code { background: transparent; padding: 0; }
 .rich-content hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
 /* Inline body images: never overflow the column, keep aspect ratio. */
@@ -294,7 +470,8 @@ body {
    so normal prose still wraps on word boundaries. */
 .rich-content a { color: var(--primary); text-decoration: underline; overflow-wrap: anywhere; word-break: break-all; }
 .rich-content mark { padding: 1px 2px; border-radius: 3px; }
-/* Callout blocks in read view */
+/* Callout blocks in read view. Tints are the same color-mix the editor uses
+   (components/editor/constants.ts), so authored and rendered match. */
 .rich-content [data-callout] {
   display: flex;
   gap: 10px;
@@ -304,10 +481,10 @@ body {
   font-size: 14px;
   line-height: 1.6;
 }
-.rich-content [data-callout-variant="announcement"] { background: #f5ede8; border-left: 3px solid #c4663c; }
-.rich-content [data-callout-variant="prayer"]       { background: #eef3eb; border-left: 3px solid #4a7a5c; }
-.rich-content [data-callout-variant="scripture"]    { background: #faf3e6; border-left: 3px solid #c49a3c; }
-.rich-content [data-callout-variant="callout"]      { background: #f0eeff; border-left: 3px solid #8b75d4; }
+.rich-content [data-callout-variant="announcement"] { background: color-mix(in srgb, var(--primary) 10%, var(--surface)); border-left: 3px solid var(--primary); }
+.rich-content [data-callout-variant="prayer"]       { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); border-left: 3px solid var(--accent); }
+.rich-content [data-callout-variant="scripture"]    { background: color-mix(in srgb, var(--secondary) 14%, var(--surface)); border-left: 3px solid var(--secondary); }
+.rich-content [data-callout-variant="callout"]      { background: color-mix(in srgb, var(--panel-strong) 30%, var(--surface)); border-left: 3px solid var(--panel-strong); }
 
 @keyframes chatbox-slide-up {
   from {

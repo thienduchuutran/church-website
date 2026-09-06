@@ -8,7 +8,32 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
-# AWAITING APPROVAL - Homepage revival
+# SHIPPED 2026-09-05 - Homepage revival (rebased onto the logo palette)
+
+**Status:** implemented as Phase 4 of the "Sunday Bloom" redesign, alongside the site-wide
+token, typography and surface changes (Phases 1-3, 5, 6). The write-up is in `docs/progress.md`
+(2026-09-05). Deviations from the plan below, all because the palette changed from terracotta to
+the VGOMNE logo magenta/lavender between staging and build:
+
+- **Section color voices dropped.** One voice: every section heading is magenta with a
+  rose-to-magenta rule. The bilingual "echo" headings from the plan were built and then
+  removed the same day on owner feedback: pages are one language, never mixed. Variation comes from shape (cards,
+  rows, arches), not hue.
+- **EventRow date block sits on `bg-panel` (lavender 35%)**, not a primary/10 wash, with the
+  numeral in ink. Location line became a one-line body excerpt: events have no location field.
+- **The dark hearth bookend became the magenta closing band** (`SiteFooter`), mounted in the
+  layout for every page rather than only the homepage.
+- **Paper grain dropped.** The lavender field already gives the page material.
+- **Service line** is read from the Connect page sections (`lib/connect-summary.ts`) and hidden
+  while they are still "TODO" placeholders, so nothing was invented.
+- **Fonts changed** (Phase 2): Bricolage Grotesque + Be Vietnam Pro replace Lora + Inter.
+- **DESIGN.json** was updated this time (color roles only, no tonal ramps).
+
+Original plan follows as the design record.
+
+---
+
+# (superseded) Homepage revival
 
 ## The problem
 

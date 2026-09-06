@@ -322,7 +322,7 @@ export default function CalendarShell({
             disabled={isOnCurrentMonth}
             aria-label="Jump to current month"
             data-export-hide
-            className="[grid-area:today] justify-self-start shrink-0 inline-flex items-center min-h-[44px] px-4 @xl:px-5 py-2 rounded-full border-2 border-gray-900 font-display text-[10px] @xl:text-[11px] font-bold uppercase tracking-[0.18em] text-gray-900 bg-white hover:bg-gray-900 hover:text-white transition-all duration-200 disabled:opacity-25 disabled:hover:bg-white disabled:hover:text-gray-900 disabled:cursor-default"
+            className="[grid-area:today] justify-self-start shrink-0 inline-flex items-center min-h-[44px] px-4 @xl:px-5 py-2 rounded-full border-2 border-foreground font-display text-[10px] @xl:text-[11px] font-bold uppercase tracking-[0.18em] text-foreground bg-surface hover:bg-foreground hover:text-background transition-all duration-200 disabled:opacity-25 disabled:hover:bg-surface disabled:hover:text-foreground disabled:cursor-default"
           >
             Today
           </button>
@@ -364,7 +364,7 @@ export default function CalendarShell({
                   })}
                 </span>
                 <span
-                  className="font-light text-gray-300 group-hover:text-gray-400 transition-colors text-lg @xl:text-2xl @3xl:text-[2rem]"
+                  className="font-light text-muted/50 group-hover:text-muted/80 transition-colors text-lg @xl:text-2xl @3xl:text-[2rem]"
                   style={{ letterSpacing: '0.01em' }}
                 >
                   {year}
@@ -436,7 +436,7 @@ export default function CalendarShell({
                 {accentSaved && (
                   <span
                     className="font-display text-[10px] transition-opacity"
-                    style={{ color: '#4A7A5C' }}
+                    style={{ color: 'var(--accent)' }}
                   >
                     Saved
                   </span>
@@ -456,7 +456,7 @@ export default function CalendarShell({
               onClick={prevMonth}
               aria-label={`Previous month - ${prevMonthName}`}
               title={prevMonthName}
-              className="w-12 h-12 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
+              className="w-12 h-12 flex items-center justify-center rounded-full border-2 border-foreground bg-surface text-foreground hover:bg-foreground hover:text-background active:scale-95 transition-all duration-200"
             >
               <CaretLeft size={20} weight="bold" />
             </button>
@@ -464,7 +464,7 @@ export default function CalendarShell({
               onClick={nextMonth}
               aria-label={`Next month - ${nextMonthName}`}
               title={nextMonthName}
-              className="w-12 h-12 flex items-center justify-center rounded-full border-2 border-gray-900 bg-white text-gray-900 hover:bg-gray-900 hover:text-white active:scale-95 transition-all duration-200"
+              className="w-12 h-12 flex items-center justify-center rounded-full border-2 border-foreground bg-surface text-foreground hover:bg-foreground hover:text-background active:scale-95 transition-all duration-200"
             >
               <CaretRight size={20} weight="bold" />
             </button>
@@ -515,14 +515,14 @@ export default function CalendarShell({
                         }}
                         className="flex items-center gap-2 justify-end"
                       >
-                        <span className="bg-gray-900 text-white font-display text-[11px] font-medium px-3 py-1.5 rounded-full whitespace-nowrap shadow-md">
+                        <span className="bg-foreground text-background font-display text-[11px] font-medium px-3 py-1.5 rounded-full whitespace-nowrap shadow-md">
                           Accent color
                         </span>
                         <button
                           type="button"
                           onClick={handleFABAccent}
                           aria-label="Change accent color"
-                          className="w-12 h-12 rounded-full bg-white shadow-[0_4px_12px_-2px_rgba(0,0,0,0.25)] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+                          className="w-12 h-12 rounded-full bg-surface shadow-[0_4px_12px_-2px_rgba(0,0,0,0.25)] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
                           style={{ color: activeAccent }}
                         >
                           <Palette size={22} weight="bold" />
@@ -535,7 +535,7 @@ export default function CalendarShell({
                         }}
                         className="flex items-center gap-2 justify-end"
                       >
-                        <span className="bg-gray-900 text-white font-display text-[11px] font-medium px-3 py-1.5 rounded-full whitespace-nowrap shadow-md">
+                        <span className="bg-foreground text-background font-display text-[11px] font-medium px-3 py-1.5 rounded-full whitespace-nowrap shadow-md">
                           {exporting ? 'Exporting…' : 'Export to Discord'}
                         </span>
                         <button
@@ -543,7 +543,7 @@ export default function CalendarShell({
                           onClick={handleFABExport}
                           disabled={exporting}
                           aria-label="Export calendar to Discord"
-                          className="w-12 h-12 rounded-full bg-white shadow-[0_4px_12px_-2px_rgba(0,0,0,0.25)] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform disabled:opacity-50"
+                          className="w-12 h-12 rounded-full bg-surface shadow-[0_4px_12px_-2px_rgba(0,0,0,0.25)] flex items-center justify-center hover:scale-105 active:scale-95 transition-transform disabled:opacity-50"
                           style={{ color: activeAccent }}
                         >
                           <DownloadSimple size={22} weight="bold" />
@@ -561,14 +561,14 @@ export default function CalendarShell({
         {error && (
           <div
             role="alert"
-            className="mb-2 px-3 py-2 border-2 border-gray-900 flex items-center justify-between gap-3"
-            style={{ backgroundColor: '#FAF7F2' }}
+            className="mb-2 px-3 py-2 border-2 border-foreground flex items-center justify-between gap-3"
+            style={{ backgroundColor: 'var(--background)' }}
           >
-            <p className="font-sans text-xs text-gray-800">{error}</p>
+            <p className="font-sans text-xs text-foreground">{error}</p>
             <button
               onClick={() => fetchMonth(year, month)}
               className="font-display text-xs font-semibold underline underline-offset-2 hover:opacity-70 transition-opacity"
-              style={{ color: '#C4663C' }}
+              style={{ color: 'var(--primary)' }}
             >
               Retry
             </button>
@@ -602,8 +602,8 @@ export default function CalendarShell({
         {/* Info strip below grid - compact 3 columns */}
         {(birthdays.length > 0 || bibleStudyDays.length > 0 || monthNote?.content || isAdmin || placeGroups.length > 0) && (
           <div
-            className="grid grid-cols-1 @xl:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-2 border-gray-900 mt-4 @3xl:mt-0 @3xl:border-t-0"
-            style={{ backgroundColor: '#fafafa' }}
+            className="grid grid-cols-1 @xl:grid-cols-3 gap-x-4 gap-y-2 px-3 py-2 border-2 border-foreground mt-4 @3xl:mt-0 @3xl:border-t-0"
+            style={{ backgroundColor: 'var(--background)' }}
           >
             {/* Birthdays */}
             <div className="min-w-0">
@@ -619,17 +619,17 @@ export default function CalendarShell({
                       <div
                         key={e.id}
                         onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
-                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-panel' : ''}`}
                       >
                         <CakeMarker size={14} />
                         <span className="font-display font-semibold" style={{ color: colors.text }}>{e.title}</span>
-                        <span className="font-sans text-gray-400">{day}</span>
+                        <span className="font-sans text-muted/80">{day}</span>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <p className="font-sans text-[11px] text-gray-400 italic">None this month.</p>
+                <p className="font-sans text-[11px] text-muted/80 italic">None this month.</p>
               )}
             </div>
 
@@ -647,17 +647,17 @@ export default function CalendarShell({
                       <div
                         key={e.id}
                         onClick={isAdmin ? () => handleEditFromStrip(e) : undefined}
-                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-panel' : ''}`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
-                        <span className="font-display font-semibold text-gray-700">{e.title}</span>
-                        <span className="font-sans text-gray-400">{day}</span>
+                        <span className="font-display font-semibold text-foreground">{e.title}</span>
+                        <span className="font-sans text-muted/80">{day}</span>
                       </div>
                     )
                   })}
                 </div>
               ) : (
-                <p className="font-sans text-[11px] text-gray-400 italic">None this month.</p>
+                <p className="font-sans text-[11px] text-muted/80 italic">None this month.</p>
               )}
             </div>
 
@@ -671,7 +671,7 @@ export default function CalendarShell({
                   <button
                     data-export-hide
                     onClick={() => { setEditingNote(true); setModalOpen(true) }}
-                    className="font-display text-[9px] text-gray-400 hover:text-gray-700 underline underline-offset-2 transition-colors"
+                    className="font-display text-[9px] text-muted/80 hover:text-foreground underline underline-offset-2 transition-colors"
                   >
                     {monthNote ? 'Edit' : 'Add note'}
                   </button>
@@ -679,7 +679,7 @@ export default function CalendarShell({
               </div>
               {monthNote?.content ? (
                 <>
-                  <p className="font-sans text-[11px] text-gray-600 leading-snug whitespace-pre-wrap">{monthNote.content}</p>
+                  <p className="font-sans text-[11px] text-muted leading-snug whitespace-pre-wrap">{monthNote.content}</p>
                   {monthNote.machine_translated && (
                     <div className="mt-1">
                       <MachineTranslatedBadge />
@@ -687,7 +687,7 @@ export default function CalendarShell({
                   )}
                 </>
               ) : (
-                <p className="font-sans text-[11px] text-gray-400 italic">No note this month.</p>
+                <p className="font-sans text-[11px] text-muted/80 italic">No note this month.</p>
               )}
             </div>
 
@@ -698,7 +698,7 @@ export default function CalendarShell({
                 purpose: both are already in the grid above, and repeating them
                 is what made the church appear eleven times. */}
             {placeGroups.length > 0 && (
-              <div className="@xl:col-span-3 min-w-0 border-t border-gray-200 pt-2">
+              <div className="@xl:col-span-3 min-w-0 border-t border-border pt-2">
                 <p className="font-display text-[9px] font-bold tracking-widest uppercase mb-1" style={{ color: activeAccent }}>
                   Locations
                 </p>
@@ -716,7 +716,7 @@ export default function CalendarShell({
                       <div
                         key={g.key}
                         onClick={clickable ? () => handleEditFromStrip(singleEvent) : undefined}
-                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${clickable ? 'cursor-pointer hover:bg-gray-100' : ''}`}
+                        className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${clickable ? 'cursor-pointer hover:bg-panel' : ''}`}
                       >
                         <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: colors.dot }} />
                         {/* A place saved before migration 000014 has no name
@@ -724,8 +724,8 @@ export default function CalendarShell({
                             printing an empty label. */}
                         {g.name && (
                           <>
-                            <span className="font-display font-semibold text-gray-700">{g.name}</span>
-                            <span className="font-sans text-gray-400">-</span>
+                            <span className="font-display font-semibold text-foreground">{g.name}</span>
+                            <span className="font-sans text-muted/80">-</span>
                           </>
                         )}
                         <span className="font-sans text-sky-700">{g.address}</span>
@@ -733,7 +733,7 @@ export default function CalendarShell({
                             address is hidden from the public site (it still
                             prints in the export). */}
                         {isAdmin && g.hiddenFromPublic && (
-                          <span className="font-sans text-[9px] uppercase tracking-wide text-gray-400 italic" data-export-hide>hidden</span>
+                          <span className="font-sans text-[9px] uppercase tracking-wide text-muted/80 italic" data-export-hide>hidden</span>
                         )}
                       </div>
                     )
@@ -761,7 +761,7 @@ export default function CalendarShell({
             return (
               <div key={color} className="flex items-center gap-1">
                 <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ backgroundColor: c.dot }} />
-                <span className="font-display text-[9px] text-gray-500 uppercase tracking-wide font-medium">{label}</span>
+                <span className="font-display text-[9px] text-muted uppercase tracking-wide font-medium">{label}</span>
               </div>
             )
           })}

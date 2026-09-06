@@ -6,7 +6,7 @@ Next.js with the App Router (`/app` directory). React Server Components where po
 ## Styling
 Tailwind CSS. No inline styles. No separate CSS files unless absolutely necessary.
 
-**Design tokens and voice:** See repo-root **`DESIGN.md`** (human + machine-readable frontmatter) and **`DESIGN.json`** (sidecar: shadows, motion, component snippets). Canonical CSS variables live in **`frontend/app/globals.css`** (`:root` and dark `prefers-color-scheme` overrides).
+**Design tokens and voice:** See repo-root **`DESIGN.md`** (human + machine-readable frontmatter) and **`DESIGN.json`** (sidecar: shadows, motion, component snippets). Canonical CSS variables live in **`frontend/app/globals.css`** (`:root` and dark `prefers-color-scheme` overrides). The palette is the VGOMNE logo verbatim (`--primary` deep magenta, `--primary-light` its darker hover, `--secondary` rose, `--accent` mid magenta, `--panel` lavender 35%, `--panel-strong` the logo lavender, `--background` lavender 10%, `--foreground` plum ink, `--muted` mauve); never add a hex literal in a component - reach for a token or `var(--token)` in an inline style, and derive tints with `color-mix()`. **Type roles** are the un-layered utilities in `globals.css` (`.t-display .t-title .t-section .t-card .t-body .t-meta`): compose those instead of hand-typing sizes, and set prose in `.t-body` (deep plum on the field, add `text-muted` on a white card - nothing on the site is black). Fonts: `font-heading` (Baloo 2) for headings, numerals and the calendar masthead, `font-sans` (Nunito) for prose and UI; `font-body`, `font-marker`, `font-serif` and `font-display` are aliases onto those two. Every font must have a Vietnamese subset and soft rounded curves - the owner reads grotesques and crisp geometrics as the AI-default look, and rejected a sharp pairing as well.
 
 **Card elevation:** cards rest on a shadow and rise on hover. Apply the shared **`.card-lift`** (interactive cards) or **`.card-rest`** (static panels) class from `globals.css` - never a hardcoded `shadow-*` utility. Non-card surfaces (alerts, section blocks, empty states) stay flat. Full rules in `docs/components.md` → "Card elevation" and `DESIGN.md` → "Elevation".
 
@@ -21,7 +21,7 @@ frontend/
 │   ├── globals.css                     ← Tailwind CSS entry point (lives at the root, imported by [locale]/layout.tsx)
 │   ├── favicon.ico
 │   └── [locale]/                       ← Every page lives here. Locale is "en" | "vi", resolved by next-intl middleware.
-│       ├── layout.tsx                  ← The de-facto root layout: <html>, <body>, fonts, NextIntlClientProvider, Navbar, footer.
+│       ├── layout.tsx                  ← The de-facto root layout: <html>, <body>, fonts (Baloo 2 headings + calendar masthead, Nunito prose + UI - both with the vietnamese subset), NextIntlClientProvider, Navbar, SiteFooter.
 │       ├── page.tsx                    ← Homepage
 │       ├── events/page.tsx
 │       ├── announcements/page.tsx
@@ -40,13 +40,16 @@ frontend/
 │   └── request.ts                      ← getRequestConfig - resolves locale + lazy-imports messages JSON
 ├── messages/
 │   ├── en.json                         ← English UI strings (source of truth)
-│   └── vi.json                         ← Vietnamese UI strings
+│   └── vi.json                         ← Vietnamese UI strings. Namespaces: Common, Language, Nav, Home, Pages, Post, Footer. Every public string goes through one of these - pages never mix languages
 ├── proxy.ts                       ← next-intl middleware: detects locale, rewrites/redirects, sets NEXT_LOCALE cookie
 ├── components/
 │   ├── ui/                             ← Reusable primitives, no business logic
 │   │   ├── Button.tsx
 │   │   ├── Input.tsx
 │   │   ├── ConfirmDialog.tsx           ← Destructive-action confirmation, on ModalShell. Summoned via useConfirm()
+│   │   ├── EmptyState.tsx              ← "Nothing here yet" panel (bg-panel + .t-card line + hint). Never a dashed box
+│   │   ├── SectionHeader.tsx           ← Magenta .t-section heading on the lavender .section-ribbon + optional link
+│   │   ├── SiteFooter.tsx              ← Magenta closing band (server component; reads the service line via lib/connect-summary)
 │   │   ├── Modal.tsx
 │   │   ├── ModalShell.tsx              ← Animated sheet: portal, backdrop blur, Escape/click-out, size 'md' | 'sm'
 │   │   ├── Navbar.tsx
@@ -55,14 +58,15 @@ frontend/
 │   └── features/                       ← Feature-specific, may contain business logic
 │       ├── posts/
 │       │   ├── PostCard.tsx            ← The "Facebook-style" post card
-│       │   ├── PostFeed.tsx            ← List of PostCards
+│       │   ├── PostFeed.tsx            ← List of PostCards (stagger-children) with EmptyState fallback
+│       │   ├── EventRow.tsx            ← Compact homepage event row: panel date block + title + one body line, links to /events#post-{id}
 │       │   ├── PastEventsCarousel.tsx  ← Swipeable strip of past events (homepage + /events)
 │       │   └── ReactionBar.tsx         ← 👍 ❤️ 🙏 😂 row on each card
 │       ├── pages/
 │       │   └── PageBlocks.tsx          ← Block registry renderer for prose pages; skips unknown block types
 │       ├── gallery/
 │       │   ├── AlbumGrid.tsx           ← Grid of albums
-│       │   └── RecentMoments.tsx       ← Flat photo grid
+│       │   └── RecentMoments.tsx       ← Homepage photo strip: arch-topped frames of the newest album images, snap-scroll, links to /gallery
 │       ├── admin/
 │           ├── AdminControls.tsx        ← Per-post pencil/trash buttons
 │           ├── AdminFeedActions.tsx
@@ -91,8 +95,10 @@ frontend/
 │       └── toolbar/                     ← PersistentToolbar (variant-aware), BubbleToolbar (full only)
 ├── lib/
 │   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
+│   ├── auth.tsx                        ← AuthProvider/useAuth: session, isAdmin, loading, plus a display-only `hint` from sessionStorage so the navbar draws the right account control on the first paint after a language-switch reload
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
 │   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale; event-type + palette CRUD)
+│   ├── connect-summary.ts              ← getConnectSummary(locale): service line + address from the Connect page sections; "TODO..." placeholders count as unset. Feeds the hero and SiteFooter
 │   ├── color.ts                        ← Custom-color math: deriveRamp/contrastRatio/normalizeHexInput. Expands one admin hex into the 4-value ramp the calendar paints with, guaranteeing WCAG AA on BOTH contrast pairs (see below)
 │   ├── discord.ts                      ← Discord link API (getDiscordStatus / getDiscordLinkUrl)
 │   ├── events.ts                       ← partitionEvents/isUpcoming/canUnarchive (Upcoming vs Past sectioning)
@@ -269,7 +275,7 @@ When a resource grows beyond two or three call sites, extract a `lib/<resource>.
 
 | Page | Route | Data source |
 |------|-------|-------------|
-| Homepage | `/` | Go backend - `apiGetCached('/api/v1/posts?type=announcement&limit=3', 60)` + `apiGetCached('/api/v1/posts?type=event&limit=20', 60)`; events filtered/sorted client-side to the next 2 upcoming. **PRODUCT** hero (`#1C1210`, radial glow, bottom gradient rule, dual CTAs); Playfair + terracotta eyebrow/italic phrase; section `h2` Playfair 600. |
+| Homepage | `/` | Go backend - `apiGetCached('/api/v1/posts?type=announcement&limit=3', 60)` + `apiGetCached('/api/v1/posts?type=event&limit=20', 60)`; events filtered/sorted client-side to the next 2 upcoming. **PRODUCT** hero (`bg-hero-bg`, radial rose glow, rose-to-magenta bottom rule, dual CTAs); Playfair + rose (`text-secondary`) eyebrow/italic phrase; section `h2` Playfair 600. |
 | Events | `/events` | Go backend - `apiGetCached('/api/v1/posts?type=event', 60)` |
 | Announcements | `/announcements` | Go backend - `apiGetCached('/api/v1/posts?type=announcement', 60)` |
 | Gallery | `/gallery` | Go backend - `GET /api/v1/posts?type=gallery_album` (response includes presigned `images[*].storage_url`) |

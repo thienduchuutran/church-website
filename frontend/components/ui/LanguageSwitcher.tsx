@@ -19,17 +19,28 @@ function stripLocalePrefix(path: string): string {
   return path
 }
 
-// LanguageSwitcher renders the EN / VI toggle in the navbar. It is a "true"
-// client component because it owns interaction state and reads the current
-// locale at render time to highlight the active option.
+// Each language is labelled in ITSELF, not translated and not a flag. A
+// reader who cannot read the current page must still recognise their own
+// language, and a flag names a country, not a language - for a Southern
+// Vietnamese diaspora congregation either Vietnamese flag is a political
+// statement the church has not made. Endonyms are the W3C's recommendation
+// for exactly this reason, so they are a constant here rather than a
+// message key.
+const NATIVE_NAME: Record<Locale, string> = {
+  en: 'English',
+  vi: 'Tiếng Việt',
+}
+
+// LanguageSwitcher renders the English / Tiếng Việt toggle in the navbar. It
+// is a "true" client component because it owns interaction state and reads
+// the current locale at render time to highlight the active option.
 //
 // Why a visible toggle rather than a hamburger-only switcher:
 // per `feedback_legitimacy_over_thumbzone`, the pre-launch site prioritizes
 // "be seen everywhere" over thumb-zone purity for identity-class elements.
 // Language is identity for a Vietnamese-American congregation - a visitor
 // must spot the switcher within ~3 seconds of landing, without opening any
-// menu. So both options are shown on the chrome at every breakpoint, even
-// at the cost of mobile horizontal real estate.
+// menu. So it sits on the chrome at every breakpoint.
 //
 // Why a hard navigation (window.location) instead of next-intl's soft
 // router.replace: with `localePrefix: 'as-needed'` the default locale (en) is
@@ -90,38 +101,54 @@ export default function LanguageSwitcher({ className = '' }: { className?: strin
       <div
         role="group"
         aria-label={t('label')}
-        // border + flex layout matches the existing pattern next to SocialIconBar.
-        // overflow-hidden so the active background tint stays clipped to the pill.
-        className={`inline-flex items-center overflow-hidden rounded-lg border border-border ${className}`}
+        // A soft pill track on the surface color, so the two options read as
+        // one control and the active one as the filled half.
+        className={`inline-flex items-center gap-0.5 rounded-full border border-border bg-surface/80 p-0.5 ${className}`}
       >
+        {/* Globe: a neutral "language" glyph, decorative. Hidden on phones
+            where the single inactive name already says what this is. */}
+        <svg
+          aria-hidden
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="ml-2 mr-0.5 hidden h-4 w-4 shrink-0 text-muted md:block"
+        >
+          <circle cx="12" cy="12" r="9" />
+          <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+        </svg>
         {routing.locales.map((code) => {
-        const isActive = code === active
-        const fullName = t(code)
-        // Mobile width budget: navbar logo + social icons + hamburger already
-        // eat ~240px of a 343px iPhone-SE content area. Showing both pills
-        // (~90px) overflows. Below md, hide the active pill so only the
-        // INACTIVE locale shows - it acts as a single "switch to X" button.
-        // At md+ both pills render so users see current state at a glance.
-        const responsiveVisibility = isActive ? 'hidden md:inline-flex' : 'inline-flex'
-        return (
-          <button
-            key={code}
-            type="button"
-            onClick={() => switchTo(code as Locale)}
-            aria-pressed={isActive}
-            aria-label={t('switchTo', { language: fullName })}
-            title={fullName}
-            disabled={isSwitching}
-            className={`${responsiveVisibility} h-11 min-w-11 items-center justify-center px-2.5 font-display text-xs font-semibold uppercase tracking-wider transition-colors ${
-              isActive
-                ? 'cursor-default bg-primary/10 text-primary'
-                : 'text-muted hover:bg-primary/5 hover:text-primary'
-            } ${isSwitching && !isActive ? 'opacity-60' : ''}`}
-          >
-            {code}
-          </button>
-        )
-      })}
+          const locale = code as Locale
+          const isActive = locale === active
+          const fullName = t(locale)
+          // Mobile width budget: the bar holds the brand, this control and the
+          // hamburger. Below md, hide the active pill so only the INACTIVE
+          // language shows - it acts as a single "switch to X" button, in that
+          // language. At md+ both pills render so users see current state at a
+          // glance.
+          const responsiveVisibility = isActive ? 'hidden md:inline-flex' : 'inline-flex'
+          return (
+            <button
+              key={locale}
+              type="button"
+              onClick={() => switchTo(locale)}
+              aria-pressed={isActive}
+              aria-label={t('switchTo', { language: fullName })}
+              lang={locale}
+              disabled={isSwitching}
+              className={`${responsiveVisibility} h-9 items-center justify-center whitespace-nowrap rounded-full px-3.5 font-sans text-sm font-bold transition-colors ${
+                isActive
+                  ? 'cursor-default bg-primary text-white'
+                  : 'text-foreground hover:bg-primary/10 hover:text-primary'
+              } ${isSwitching && !isActive ? 'opacity-60' : ''}`}
+            >
+              {NATIVE_NAME[locale]}
+            </button>
+          )
+        })}
       </div>
     </>
   )

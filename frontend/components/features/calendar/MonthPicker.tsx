@@ -55,24 +55,24 @@ export default function MonthPicker({
       ref={ref}
       role="dialog"
       aria-label="Jump to month"
-      className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 z-30 w-[280px] max-w-[calc(100vw-2rem)] bg-white border-2 border-gray-900 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.35)] origin-top transition-all duration-150 ${
+      className={`absolute top-full left-1/2 -translate-x-1/2 mt-3 z-30 w-[280px] max-w-[calc(100vw-2rem)] bg-surface border-2 border-foreground shadow-[0_20px_50px_-15px_rgba(0,0,0,0.35)] origin-top transition-all duration-150 ${
         shown ? 'opacity-100 scale-100' : 'opacity-0 scale-95'
       }`}
     >
       {/* Year nav */}
       <div
-        className="flex items-center justify-between px-2 py-2 border-b-2 border-gray-900"
-        style={{ backgroundColor: '#FAF7F2' }}
+        className="flex items-center justify-between px-2 py-2 border-b-2 border-foreground"
+        style={{ backgroundColor: 'var(--background)' }}
       >
         <button
           onClick={() => setBrowseYear((y) => y - 1)}
           aria-label="Previous year"
-          className="px-3 py-1 font-display text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+          className="px-3 py-1 font-display text-sm font-bold text-muted hover:text-foreground transition-colors"
         >
           ←
         </button>
         <span
-          className="text-base font-bold tracking-wide text-gray-900"
+          className="text-base font-bold tracking-wide text-foreground"
           style={{ fontFamily: 'var(--font-serif)' }}
         >
           {browseYear}
@@ -80,7 +80,7 @@ export default function MonthPicker({
         <button
           onClick={() => setBrowseYear((y) => y + 1)}
           aria-label="Next year"
-          className="px-3 py-1 font-display text-sm font-bold text-gray-500 hover:text-gray-900 transition-colors"
+          className="px-3 py-1 font-display text-sm font-bold text-muted hover:text-foreground transition-colors"
         >
           →
         </button>
@@ -100,7 +100,7 @@ export default function MonthPicker({
               className={`relative px-3 py-3 font-display text-[11px] font-bold uppercase tracking-[0.1em] transition-all rounded-sm ${
                 isSelected
                   ? 'text-white'
-                  : 'text-gray-800 hover:bg-gray-100'
+                  : 'text-foreground hover:bg-panel'
               }`}
               style={isSelected ? { backgroundColor: themeColor } : {}}
             >

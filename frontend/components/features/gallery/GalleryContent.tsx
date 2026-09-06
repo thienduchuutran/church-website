@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { useLocale } from 'next-intl'
+import { useLocale, useTranslations } from 'next-intl'
 import { listPosts } from '@/lib/posts'
 import type { Post } from '@/lib/types'
 import TagFilterChips from './TagFilterChips'
@@ -9,6 +9,7 @@ import AlbumGrid from './AlbumGrid'
 
 export default function GalleryContent() {
   const locale = useLocale()
+  const t = useTranslations('Pages')
   const [albums, setAlbums] = useState<Post[]>([])
   const [selectedTagId, setSelectedTagId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -40,12 +41,8 @@ export default function GalleryContent() {
     <>
       {/* Header */}
       <div className="mb-10">
-        <h1 className="font-serif text-4xl font-bold text-foreground mb-2">
-          Memories
-        </h1>
-        <p className="font-sans text-lg text-muted">
-          Moments from our church community
-        </p>
+        <h1 className="t-title">{t('galleryTitle')}</h1>
+        <p className="t-body mt-3 text-lg text-muted">{t('gallerySubtitle')}</p>
       </div>
 
       {/* Tag filter chips */}
