@@ -59,6 +59,7 @@ cd backend && go run ./cmd/server
 ```
 
 ## Global rules (apply everywhere)
+- Read this file and the relevant `docs/agents/*.md` child doc before scanning the codebase. The routing table below says which child doc. Searching the source to rediscover something already written down costs many times more than reading the doc, and the doc is the version that was kept current on purpose.
 - Never commit `.env`, `.env.local`, or any file containing secrets.
 - All secrets live in environment variables only - never hardcoded.
 - Write code in English only (comments, variable names, route paths).
@@ -97,10 +98,89 @@ cd backend && go run ./cmd/server
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |
 | Learning Go, "where do I start reading", explaining a file's concepts to the owner, onboarding | `docs/learning/README.md` (module map, all 89 Go files) + `docs/learning/go-primer.md` (language concepts anchored to real lines) |
+| A genuine architectural fork - caching strategy, service boundaries, schema shape for a new content type, model routing, anything that would earn a DECISIONS.md paragraph | `.claude/design-council.md` + `DECISIONS.md` (check what was already decided). **Ask before convening - councils cost real money.** |
 
 > When routing, read the child file **silently** before responding. Do not announce that you are reading it.
 
 ---
+
+## Design decisions go to a council, never the code
+
+This rule is in force every session. It changes how design forks get
+answered. It does not change who writes the code, you still type it
+yourself.
+
+What a subagent is. A subagent is a second Claude session started from
+inside the current one. It has its own context, the pile of text a model
+can see at one moment. A subagent's context starts empty except for the
+instructions it is given, so it cannot see the other subagents' reasoning
+and cannot drift toward it. It works, then returns one written report. Each
+can be given a different model (Opus, Sonnet, Haiku). Without the separate
+contexts, "here are three approaches" is one mind producing three
+variations of the same instinct, which is not a second opinion at all.
+
+When to convene it. Only at a genuine fork in the road, a decision that
+will still be shaping the site weeks later and is expensive to reverse.
+Whether the translation engine caches per record or re-translates on read.
+Whether translation work moves out of the Go process into its own worker
+service or stays in-process behind `internal/translation/`. The Postgres
+schema shape for a new bilingual content type, once a migration in
+`backend/migrations/` has shipped and a rollback means another migration.
+Model routing and failover if a second provider is ever added back
+alongside Gemini. Whether a new surface is a React Server Component tree or
+a client island, when that choice locks in how the data is fetched.
+Anything that would earn a DECISIONS.md paragraph.
+
+When not to. Never for writing code. Never for small reversible choices
+such as a field type in `internal/model/types.go`, a handler name, or a
+Tailwind token, answer those directly. Six agents each start cold and
+re-read `docs/agents/*.md` and the Go or Next.js source before they can say
+anything, so a council costs roughly six times the reading of a normal
+answer. That is worth spending on a decision that shapes the site for
+months and worthless on one that lives for eight minutes.
+
+Note on naming. This repo already has a file called verifier.md under
+.cursor/agents/, a different, unrelated agent that checks finished work
+against acceptance criteria. The design council's verifier lives under
+.claude/agents/ and does something else entirely, adversarial testing of
+proposals before any code is written. Same filename, different directory,
+different job, don't conflate them.
+
+The shape.
+1. Three proposers. Each gets the same problem statement and the same
+   forces, in its own context, and returns one approach with its
+   trade-offs. They are told to commit to a position rather than survey
+   options.
+2. Verifier A reads all three and checks each against the actual codebase,
+   does it hold up under real production load, does it contradict a
+   decision already in DECISIONS.md, does it assume a library or service
+   this project does not have.
+3. Verifier B audits Verifier A's report, not the proposals. Its job is to
+   catch the failure where a reviewer waves everything through, invents a
+   flaw that is not there, or quietly favors the most elaborate option.
+4. The chairman synthesizes. It may pick one proposal, or combine two, and
+   it must state plainly what was rejected and where that option breaks.
+
+The output is prose, not files. The chairman produces a DECISIONS.md
+paragraph, what was chosen, what was rejected, why, plus a plain-language
+explanation of the fork for you. It never produces application code or a
+diff. A finished feature handed over by six agents is code that appeared
+without understanding, which is already a failed turn.
+
+Ask before convening. Name the fork in one line, say a council would help,
+and wait for a yes. Councils cost real money and you decide when to spend
+it.
+
+Why this shape. The proposers exist because a single answer hides the fact
+that a choice was even made. Verifier A exists because a confident wrong
+answer reads exactly like a confident right one. Verifier B exists because
+a lone reviewer tends to agree with whatever it just read. The chairman
+exists because five reports is not a decision, and what goes in
+DECISIONS.md has to be one paragraph you can say out loud.
+
+Full step-by-step process lives in .claude/design-council.md. One copy of
+the process, kept in one file, so it cannot drift out of sync with this
+section the way it did in another project.
 
 ---
 
