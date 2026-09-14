@@ -233,10 +233,10 @@ func main() {
 
 		// Wire the admin lookup so a post's Discord message is sent under the
 		// writing admin's own linked Discord identity, and build the Discord
-		// account-linking handler. FRONTEND_ORIGIN is reused as the base the
-		// OAuth callback redirects back to.
+		// account-linking handler. The first FRONTEND_ORIGIN entry is reused as
+		// the base the OAuth callback redirects back to.
 		postSvc.SetAdminLookup(adminRepo)
-		discordOAuthHandler = handler.NewDiscordOAuthHandler(adminRepo, os.Getenv("FRONTEND_ORIGIN"))
+		discordOAuthHandler = handler.NewDiscordOAuthHandler(adminRepo, appMiddleware.PrimaryOrigin(os.Getenv("FRONTEND_ORIGIN")))
 
 		reactionRepo := repository.NewReactionRepository(dbPool)
 		reactionSvc := service.NewReactionService(reactionRepo)
