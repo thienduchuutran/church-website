@@ -186,7 +186,8 @@ The canonical URL is `vgomne.org` (added 2026-09); `church-website-neon.vercel.a
 2. **Vercel**: Project Settings → Domains → add `vgomne.org` and `www.vgomne.org`. Vercel verifies via DNS and issues a Let's Encrypt cert.
 3. **CORS**: add the new origin to Render's `FRONTEND_ORIGIN` env var (comma-separated list, see `backend/internal/middleware/cors.go`). Render redeploys on env change. Symptom when forgotten: client-fetched widgets like the calendar show "Couldn't load" on the new domain but work on vercel.app.
 4. **Supabase Auth URL Configuration**: add the new origin to Site URL + Redirect URLs.
-5. **Optional, slicker**: add `frontend/vercel.json` with a rewrite that proxies `/api/*` to Render. Then change Vercel's `NEXT_PUBLIC_API_URL` to the custom domain itself. Result: API calls look same-origin from the browser, no CORS needed.
+5. **Old-domain redirect**: `frontend/next.config.ts` has a `redirects()` rule that 308s the exact production alias `church-website-neon.vercel.app` to `https://vgomne.org`, path and query preserved. Preview deploys (other `*.vercel.app` hostnames) are deliberately not redirected. `www.vgomne.org` → apex is handled by Vercel's Domains settings, not code.
+6. **Optional, slicker**: add `frontend/vercel.json` with a rewrite that proxies `/api/*` to Render. Then change Vercel's `NEXT_PUBLIC_API_URL` to the custom domain itself. Result: API calls look same-origin from the browser, no CORS needed.
 
 ```json
 {
