@@ -58,7 +58,7 @@ AWS_REGION                    auto
 S3_ENDPOINT                   https://<r2-account-id>.r2.cloudflarestorage.com
 AWS_ACCESS_KEY_ID             <R2 access key>                  [Secret]
 AWS_SECRET_ACCESS_KEY         <R2 secret access key>           [Secret]
-FRONTEND_ORIGIN               https://church-website-neon.vercel.app
+FRONTEND_ORIGIN               https://vgomne.org,https://www.vgomne.org,https://church-website-neon.vercel.app   (comma-separated; first entry = Discord OAuth redirect base)
 DISCORD_WEBHOOK_EVENTS        https://discord.com/api/webhooks/...   [Secret]
 DISCORD_WEBHOOK_ANNOUNCEMENTS https://...                            [Secret]
 DISCORD_WEBHOOK_BIBLE_STUDIES https://...                            [Secret]
@@ -124,8 +124,8 @@ This file exists because some libraries (notably `@emoji-mart/react`) have not u
 
 ### Supabase Auth URL Configuration
 Authentication → URL Configuration must contain the frontend URL so OAuth redirects work:
-- **Site URL**: `https://church-website-neon.vercel.app`
-- **Redirect URLs**: same value (or include any custom domain too)
+- **Site URL**: `https://vgomne.org`
+- **Redirect URLs**: `https://vgomne.org/**`, `https://www.vgomne.org/**`, `https://church-website-neon.vercel.app/**`
 
 ---
 
@@ -178,13 +178,13 @@ You don't need to apply the schema by hand. When `go run ./cmd/server` starts, `
 
 ---
 
-## Custom domain (optional)
+## Custom domain
 
-Currently the canonical URL is `church-website-neon.vercel.app`. To use a custom domain like `vgomne.ddns.net`:
+The canonical URL is `vgomne.org` (added 2026-09); `church-website-neon.vercel.app` still works as a fallback. Steps that were needed, kept for the next domain change:
 
-1. **DNS** (in No-IP or whatever DDNS hosts the name): set the A record to Vercel's anycast IP `76.76.21.21`.
-2. **Vercel**: Project Settings → Domains → Add `vgomne.ddns.net`. Vercel verifies via DNS and issues a Let's Encrypt cert.
-3. **CORS**: update Render's `FRONTEND_ORIGIN` env var to the new origin.
+1. **DNS** (at the registrar): set the apex A record to Vercel's anycast IP `76.76.21.21` and `www` as a CNAME to `cname.vercel-dns.com`.
+2. **Vercel**: Project Settings → Domains → add `vgomne.org` and `www.vgomne.org`. Vercel verifies via DNS and issues a Let's Encrypt cert.
+3. **CORS**: add the new origin to Render's `FRONTEND_ORIGIN` env var (comma-separated list, see `backend/internal/middleware/cors.go`). Render redeploys on env change. Symptom when forgotten: client-fetched widgets like the calendar show "Couldn't load" on the new domain but work on vercel.app.
 4. **Supabase Auth URL Configuration**: add the new origin to Site URL + Redirect URLs.
 5. **Optional, slicker**: add `frontend/vercel.json` with a rewrite that proxies `/api/*` to Render. Then change Vercel's `NEXT_PUBLIC_API_URL` to the custom domain itself. Result: API calls look same-origin from the browser, no CORS needed.
 

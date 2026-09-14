@@ -7,7 +7,7 @@ Admins log in via Google (Supabase Auth) to create, edit, and delete posts.
 Each post auto-fires a Discord webhook to the matching channel.
 
 ## Tech stack
-- **Frontend**: Next.js (App Router) → Vercel (`church-website-neon.vercel.app`, auto-deploys from `master`)
+- **Frontend**: Next.js (App Router) → Vercel (`vgomne.org`, fallback `church-website-neon.vercel.app`, auto-deploys from `master`)
 - **Backend**: Go (`chi` router, handler/service/repository pattern) → Render (`church-website-ff5w.onrender.com`, auto-deploys from `master`, Docker build)
 - **Database**: Supabase Postgres (project `glcnqlffktqxaizdverk`, accessed via session pooler at `aws-1-us-east-1.pooler.supabase.com:5432`)
 - **Auth**: Supabase Auth - Google OAuth + JWKS-verified JWT (same project as the database)
