@@ -278,6 +278,14 @@ Supported: `FREQ` DAILY/WEEKLY/MONTHLY/YEARLY, `INTERVAL`, `BYDAY` (plain for
 weekly, ordinal like `1SU`/`-1SU` for monthly), `BYMONTHDAY`, `COUNT`. `UNTIL`
 is rejected in the rule - the "ends on" date is the `recurrence_until` column.
 
+**`recurrence_rule` on a read describes the SERIES, not the row.** The column is
+stored on the anchor only, but `GetEventsByMonth` self-joins
+`calendar_events a ON a.id = e.series_id` so every occurrence reports its
+series' rule. Reading `e.recurrence_rule` there instead would tell a generated
+occurrence it does not repeat - true of the row, false of the event. `series_id`
+still identifies the anchor (`series_id = id`), and `GetEventByID` deliberately
+keeps returning the row's OWN state, because that is what the PATCH diff needs.
+
 **Turning recurrence off requires `recurrence_cleanup`** (`keep` | `future`) -
 a missing value is a 400, not a guess. "Stop repeating" can mean keep the dates
 already created or also drop the ones still to come, and only the admin knows

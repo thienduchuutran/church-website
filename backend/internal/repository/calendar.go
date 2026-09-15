@@ -50,9 +50,17 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 			// starts in April and ends in May shows up in BOTH months. A
 			// single-day event (end_date NULL) collapses to date via COALESCE.
 			`SELECT e.id, e.date::text, e.end_date::text, e.title, e.event_type, e.icon, e.private_address, e.address_public, e.place_id, e.color, e.notes, e.admin_id, e.created_at, e.updated_at, e.source_locale,
-			        e.series_id, e.recurrence_rule, e.recurrence_until::text,
+			        -- The rule comes from the series ANCHOR, not from this row.
+			        -- Only the anchor stores one, so reading e.recurrence_rule
+			        -- here would tell a generated occurrence that it does not
+			        -- repeat - which is true of the row and false of the event
+			        -- the admin is looking at. series_id holds the anchor's id,
+			        -- so the join is a self-join that resolves to the row itself
+			        -- for an anchor and to its parent for every sibling.
+			        e.series_id, a.recurrence_rule, a.recurrence_until::text,
 			        p.address, p.name, p.name_source
 			 FROM calendar_events e
+			 LEFT JOIN calendar_events a ON a.id = e.series_id
 			 LEFT JOIN calendar_places p ON p.id = e.place_id
 			 WHERE e.date < (make_date($1, $2, 1) + interval '1 month')
 			   AND COALESCE(e.end_date, e.date) >= make_date($1, $2, 1)
@@ -134,7 +142,9 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 		        e.title AS title_source,
 		        e.notes AS notes_source,
 		        e.source_locale,
-		        e.series_id, e.recurrence_rule, e.recurrence_until::text,
+		        -- See the raw branch above: the rule belongs to the series, and
+		        -- only its anchor stores one.
+		        e.series_id, a.recurrence_rule, a.recurrence_until::text,
 		        -- The venue, joined rather than stored on the event, so renaming a
 		        -- place updates every event at it at once. Never translated: an
 		        -- address and a household's name are not prose, same rule that
@@ -155,6 +165,7 @@ func (r *CalendarRepository) GetEventsByMonth(ctx context.Context, year, month i
 		 LEFT JOIN translations s_notes
 		   ON e.series_id IS NOT NULL AND e.series_id <> e.id
 		  AND s_notes.record_id = e.series_id AND s_notes.field_name = 'notes' AND s_notes.locale = $3
+		 LEFT JOIN calendar_events a ON a.id = e.series_id
 		 LEFT JOIN calendar_places p ON p.id = e.place_id
 		 WHERE e.date < (make_date($1, $2, 1) + interval '1 month')
 		   AND COALESCE(e.end_date, e.date) >= make_date($1, $2, 1)

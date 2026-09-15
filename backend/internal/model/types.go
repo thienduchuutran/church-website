@@ -388,10 +388,13 @@ type CalendarEvent struct {
 	// on every one-off event, which is every event authored before migration
 	// 000015.
 	SeriesID *string `json:"series_id,omitempty"`
-	// RecurrenceRule and RecurrenceUntil are set on the anchor row only - the
-	// rule describes the series, so it is stored once rather than copied onto
-	// every generated sibling. The frontend uses their presence to decide
-	// whether an event needs the scope prompt on edit and delete.
+	// RecurrenceRule and RecurrenceUntil describe the SERIES this event belongs
+	// to. The database stores them on the anchor row only - the rule describes
+	// the series, so it is written once rather than copied onto every sibling -
+	// but the month read resolves them through series_id, so every member of a
+	// series carries them on the way out. Without that, an admin opening a
+	// generated occurrence would be told it does not repeat, which is true of
+	// the row and false of the event in front of them.
 	RecurrenceRule  *string   `json:"recurrence_rule,omitempty"`
 	RecurrenceUntil *string   `json:"recurrence_until,omitempty"`
 	Notes           *string   `json:"notes"`

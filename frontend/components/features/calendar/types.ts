@@ -118,9 +118,10 @@ export interface CalendarEvent {
   // every one-off event. Its presence is what makes an edit or delete ask for
   // a scope instead of acting immediately.
   series_id?: string | null
-  // Set on the anchor row only: 'weekly' | 'yearly', and the admin's "ends on"
-  // date. A sibling occurrence carries neither, so read the series through
-  // series_id rather than expecting every occurrence to describe itself.
+  // How the SERIES this event belongs to repeats, and when it ends. Present on
+  // every member, anchor and generated occurrence alike - the database stores
+  // the rule only on the anchor, and the month query resolves it through
+  // series_id so a client never has to. Absent only on a one-off event.
   recurrence_rule?: RecurrenceRule | null
   recurrence_until?: string | null
   admin_id: string | null
