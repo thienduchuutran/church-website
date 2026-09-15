@@ -9,6 +9,7 @@ import type { Post } from '@/lib/types'
 import PostCard from '@/components/features/posts/PostCard'
 import HeroVideoUpload from '@/components/features/admin/HeroVideoUpload'
 import DiscordLinkCard from '@/components/features/admin/DiscordLinkCard'
+import RepeatingEventsNotice from '@/components/features/admin/RepeatingEventsNotice'
 
 const POST_TYPES = [
   { type: 'event', label: 'Event' },
@@ -88,6 +89,12 @@ export default function AdminPage() {
           <DiscordLinkCard />
         </Suspense>
       </div>
+
+      {/* Renders nothing unless recurring events are close to running out, so
+          it is above Edit Pages rather than buried: it is the only thing on
+          this page that is time-sensitive, and it is absent the rest of the
+          time. */}
+      <RepeatingEventsNotice />
 
       <div className="mb-8 space-y-4">
         <h2 className="font-serif text-sm font-semibold uppercase tracking-wider text-muted">

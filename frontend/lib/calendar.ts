@@ -7,6 +7,7 @@ import type {
   CalendarMonthResponse,
   CalendarMonthSettings,
   CalendarPlace,
+  CalendarSeries,
   PaletteColor,
   RecurrenceRule,
   WriteScope,
@@ -104,6 +105,22 @@ export async function updateEvent(
 // it meant "this one".
 export async function deleteEvent(id: string, scope: WriteScope, token: string): Promise<void> {
   await apiDelete(`${BASE}/events/${id}?scope=${scope}`, token)
+}
+
+// --- Recurring series (the admin's view of what repeats) ---
+
+// Admin-only, like getPlaces: it describes the calendar's internals rather than
+// its contents, and lists every series whether or not its events are public.
+export async function getSeries(token: string): Promise<CalendarSeries[]> {
+  return apiGet(`${BASE}/series`, token) as Promise<CalendarSeries[]>
+}
+
+// Tops a series up by another horizon's worth of dates. Purely additive - it
+// only ever appends future occurrences, never moves or removes one - which is
+// why it takes no scope and needs no confirmation, unlike every other write on
+// the calendar.
+export async function extendSeries(id: string, token: string): Promise<{ added: number }> {
+  return apiPost(`${BASE}/series/${id}/extend`, {}, token) as Promise<{ added: number }>
 }
 
 // --- Places (the venue registry behind the Locations strip) ---

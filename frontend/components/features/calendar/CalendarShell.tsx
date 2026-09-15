@@ -766,6 +766,7 @@ export default function CalendarShell({
             )
           })}
         </div>
+
       </div>
 
       {/* FAB backdrop - dims the page so the dropped speed-dial items pop.

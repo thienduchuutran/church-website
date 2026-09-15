@@ -72,6 +72,26 @@ export type RecurrenceRule = string
 // 400 rather than guessing, so every call site has to have decided.
 export type WriteScope = 'occurrence' | 'following' | 'series'
 
+// One recurring series, summarised for the admin dashboard. Read-only: a
+// series has no row of its own beyond its anchor occurrence, so this is
+// assembled server-side by a GROUP BY rather than fetched from a table.
+export interface CalendarSeries {
+  // The anchor occurrence's id, which is also every member's series_id.
+  id: string
+  title: string
+  rule: RecurrenceRule
+  // The admin's "ends on" date, absent for an open-ended series.
+  until?: string | null
+  // The furthest occurrence currently written.
+  last_date: string
+  count: number
+  // True when this series will run out of dates soon AND more can still be
+  // generated. A series that stopped because the admin gave it an end date is
+  // finished, not running out, and never sets this - so an admin whose series
+  // all have end dates is never nagged.
+  needs_extension: boolean
+}
+
 export interface CalendarEvent {
   id: string
   date: string // YYYY-MM-DD
