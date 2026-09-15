@@ -98,6 +98,7 @@ cd backend && go run ./cmd/server
 | REST API endpoints, request/response shapes, models       | `docs/api.md`                          |
 | Frontend components, props, data flow                     | `docs/components.md`                   |
 | Learning Go, "where do I start reading", explaining a file's concepts to the owner, onboarding | `docs/learning/README.md` (module map, all 89 Go files) + `docs/learning/go-primer.md` (language concepts anchored to real lines) |
+| Recurring calendar events, `series_id`, the this-one/this-and-following/all scope prompt, why a birthday repeats as rows instead of a rule, February 29 | `DECISIONS.md` (2026-09-14) for the decision and what would reverse it + `docs/agents/database.md` → "Recurring events" + `docs/agents/backend.md` → "Recurring calendar events". **Never enqueue a translation per occurrence** - only the series anchor is enqueued |
 | A genuine architectural fork - caching strategy, service boundaries, schema shape for a new content type, model routing, anything that would earn a DECISIONS.md paragraph | `.claude/design-council.md` + `DECISIONS.md` (check what was already decided). **Ask before convening - councils cost real money.** |
 
 > When routing, read the child file **silently** before responding. Do not announce that you are reading it.

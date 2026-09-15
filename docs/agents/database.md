@@ -156,6 +156,71 @@ create table calendar_events (
 
 ---
 
+---
+
+### Recurring events (migration `000015`)
+
+`calendar_events` gained three columns. **Occurrences are stored as real rows**,
+not as a rule expanded on read - the reasoning, the rejected alternatives and
+the condition under which this decision expires are in `DECISIONS.md`
+(2026-09-14).
+
+```sql
+alter table calendar_events
+  add column series_id        uuid,   -- the ANCHOR occurrence's own id
+  add column recurrence_rule  text,   -- 'weekly' | 'yearly', anchor row only
+  add column recurrence_until date;   -- the admin's "Ends on", anchor row only
+
+alter table calendar_events
+  add constraint calendar_events_recurrence_shape check (
+       (recurrence_rule is null     and recurrence_until is null)
+    or (recurrence_rule in ('weekly', 'yearly') and series_id = id)
+  );
+```
+
+**`series_id` holds the anchor's own id, not a free-standing UUID.** That is
+load-bearing twice over. It makes `series_id = id` the test for "is this the
+anchor", so the rule is stored once instead of copied onto every sibling. And
+it keeps `translations.record_id` pointing at a real `calendar_events` row -
+without which the "Clean up orphans" sweep would treat every recurring event's
+translation as an orphan and delete it. See the `series_id` clause added to
+`orphanConditions` in `repository/translation.go`.
+
+**A translation belongs to the series, not the occurrence.** Only the anchor is
+enqueued. The month query resolves a sibling's text through
+`COALESCE(t_title.translated_text, s_title.translated_text, e.title)` - its own
+translation first, then its anchor's. That ordering is what lets a
+single-occurrence edit win in both languages while forty birthdays still cost
+forty review-queue entries instead of a hundred and twenty.
+
+**Not a foreign key, deliberately.** Deleting the anchor must not delete its
+siblings. They keep their `series_id` and keep resolving through the anchor's
+id, which the orphan sweep still recognizes as in use.
+
+**Rules are RFC 5545 RRULE text** since migration `000016` - `FREQ=MONTHLY;BYDAY=1SU`,
+`FREQ=WEEKLY;INTERVAL=2;BYDAY=MO,WE,FR`, `COUNT=8`. The storable set is exactly
+what `service.ParseRRule` can expand; the DB `CHECK` is a shape backstop, not a
+parser, the same split as `calendar_palette_colors`' hex check. The `UNTIL`
+("ends on") date lives in the `recurrence_until` column rather than inside the
+rule, so the admin panel can ask whether a series is finished without parsing
+every rule; `COUNT` lives in the rule. Widening the vocabulary did **not** touch
+the read path - rules are expanded once, on save.
+
+**v1 scope lines.** Single-day events only (repeating a multi-day span raises an
+unanswered question about what the second occurrence's end date means); no rule
+beyond weekly and yearly; recurrence is chosen at create time and not editable
+afterwards. A February 29 birthday is generated on February 28 in ordinary
+years - a deliberate pastoral choice against the calendar standard, implemented
+in `service/recurrence.go` with a test that guards against date drift.
+
+**Rollback is clean.** Dropping the three columns leaves every generated
+occurrence as an ordinary, correctly-dated event. Nothing disappears from the
+calendar and nothing reappears on it. Siblings fall back to showing their source
+language until next saved, which is the same missing-translation fallback the
+read path already has.
+
+---
+
 ### `calendar_places`
 The venue registry behind the calendar's Locations strip. Added in migration `000014`.
 ```sql
@@ -308,7 +373,7 @@ create index on translations (table_name, record_id, locale);  -- the read-path 
 create index on translations (source_hash, locale);            -- the cache lookup
 ```
 
-**Why no FK on `record_id`:** translations are referenced across multiple parent tables (`posts`, `page_content`, ...). A FK would couple this table to a single parent or require a polymorphic FK trick. Orphans are cleaned up out-of-band: the "Clean up orphans" button on `/admin/translations` (POST `/api/v1/admin/translations/cleanup-orphans`) sweeps rows whose parent is gone. Only the four known `table_name` values are swept - unknown names are left intact so a future content type can't be clobbered before the sweep list learns about it.
+**Why no FK on `record_id`:** translations are referenced across multiple parent tables (`posts`, `page_content`, ...). A FK would couple this table to a single parent or require a polymorphic FK trick. Orphans are cleaned up out-of-band: the "Clean up orphans" button on `/admin/translations` (POST `/api/v1/admin/translations/cleanup-orphans`) sweeps rows whose parent is gone. Only the four known `table_name` values are swept - unknown names are left intact so a future content type can't be clobbered before the sweep list learns about it. **Since migration `000015` the `calendar_events` clause also spares a translation whose `record_id` matches any row's `series_id`** - a recurring series files one translation under its anchor's id, and without that clause the sweep would delete every recurring event's Vietnamese.
 
 **Why no FK on `approved_by`:** same convention as `posts.admin_id` and `calendar_events.admin_id` - JWT `sub` claims stored as plain uuid, no FK to `auth.users`. Project sidesteps the Supabase auth schema in application migrations (see "Posting fails with `posts_admin_id_fkey`" in `docs/agents/known-quirks.md`).
 
@@ -457,6 +522,10 @@ backend/migrations/
 ├── 000013_source_locale.down.sql
 ├── 000014_calendar_places.up.sql       ← calendar_places + calendar_events.place_id (seeds place_name prompt)
 ├── 000014_calendar_places.down.sql
+├── 000015_calendar_recurrence.up.sql   ← calendar_events += series_id/recurrence_rule/recurrence_until (+ shape CHECK, 2 partial indexes)
+├── 000015_calendar_recurrence.down.sql
+├── 000016_calendar_rrule.up.sql        ← recurrence_rule widens from 'weekly'/'yearly' to RFC 5545 RRULE text (converts the two legacy values, re-shapes the CHECK)
+├── 000016_calendar_rrule.down.sql
 └── embed.go                            ← exposes the SQL files as embed.FS to main.go
 ```
 

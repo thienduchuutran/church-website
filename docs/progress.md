@@ -543,3 +543,49 @@ renders as a ribbon across the days it covers.
 - **Graduation category** (migration `000009`, enum `ADD VALUE`): new event type with a `graduation-cap` icon, default amber.
 - **Address public/private** (migration `000010`, `address_public bool` default false): an address is shown to the public site only when `address_public` is true; admins always see it; the PNG export always includes it (admin-driven). EventModal has a "Show on website" toggle + a reusable `InfoTip` ("?") explaining the export-always rule. Footer shows public addresses to everyone; admins see all with a `data-export-hide` "hidden" cue.
 - **Auto-seeded footer notes (C2, keep-edit):** `CalendarService.CreateEvent` appends a one-line summary of every newly created event to that month's note (`buildSeedLine` → "• May 22-25: Youth Camp"). **Keep-edit:** append-only, deduped, never rewrites - so admin edits are never clobbered. Best-effort (never fails the create). Only NEW events seed (no retroactive backfill). Reuses `calendar_month_notes` (no new storage); the footer's `line-clamp-3` was removed so the full list shows. Decision: **every** event seeds (not just spans).
+
+## 2026-09-14 - Recurring calendar events (migration `000015`)
+
+Shipped the recurrence feature decided by the design council the same day; the
+full reasoning, the two rejected proposals and the condition that would reverse
+the decision are in `DECISIONS.md`.
+
+**Shape.** Occurrences are stored as ordinary `calendar_events` rows sharing a
+`series_id` that holds the anchor occurrence's own id. Nothing expands a rule at
+read time, so `GetEventsByMonth` (both query branches), the PNG export,
+`repository/assistant.go` and every React `key={e.id}` were left untouched.
+
+**The one real cost, and how it was paid.** Naively, forty birthdays over three
+years would enqueue ~120 translation jobs and drop ~120 cards into the review
+queue - the feature meant to save typing would have created more approving.
+`Translator.TranslateField` writes a `translations` row **on a cache hit too**,
+with `approved_by = NULL`, so the cache saves money and not review time. Fixed
+by making translation identity a property of the series: only the anchor is
+enqueued, and the month query resolves a sibling through
+`COALESCE(own, anchor, source)`. Forty entries, once.
+
+**A bug the council missed, caught during implementation.**
+`repository/translation.go`'s orphan sweep deleted any `calendar_events`
+translation whose `record_id` matched no row's `id`. A series files its
+translation under the anchor id, and the first "Clean up orphans" click would
+have silently deleted every recurring event's Vietnamese, pending jobs included.
+The sweep now also spares a `record_id` matching any row's `series_id`.
+
+**Scope is never defaulted.** `PATCH` and `DELETE` on an event require
+`?scope=occurrence|following|series`; a missing scope is a 400, including for a
+non-recurring event. `ConfirmDialog` gained an optional `choices` list and
+`lib/confirm.tsx` a `useChoose()` hook, so the three-way prompt reuses the
+existing modal shell instead of adding a second one.
+
+**Deliberately not in v1.** Multi-day recurrence (the backend rejects it and the
+form does not offer it), editing an existing series' rule, automatic horizon
+top-up (manual extend plus a twelve-month warning instead - a write-on-boot on a
+system where migrations already auto-apply is a worse failure than a button),
+and any rule beyond weekly/yearly.
+
+**February 29 birthdays are generated on February 28** in ordinary years. This
+is against the calendar standard, which omits them entirely, and it is
+deliberate: a member should be greeted every year rather than every fourth.
+Occurrences are derived from the original start date rather than stepped from
+the previous one so a fallback never drifts; `service/recurrence.go` has a test
+for exactly that.

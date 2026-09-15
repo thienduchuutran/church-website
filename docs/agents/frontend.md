@@ -177,6 +177,43 @@ The calendar needs the second approach because it's one page doing both jobs - a
 
 **Never gate a request locale on `isAdmin`.** It reads `false` until `/auth/me` answers, so "not an admin" and "don't know yet" are indistinguishable, and a locale switch is a hard navigation that wipes the `authSnapshot` in `lib/auth.tsx` - meaning every switch starts from the wrong answer. A component that does this fetches one language, paints it, then refetches the other. See the flash entry in `known-quirks.md`. Derive the locale from the route, and let the token control which *fields* come back rather than which *language*.
 
+### Recurring events: the scope prompt is never skipped
+
+An event carrying `series_id` repeats. Editing or deleting one **must** ask
+which occurrences the change applies to - `EventModal.askScope` puts the
+question through `useChoose()`, the multi-answer sibling of `useConfirm()` added
+for this, which renders on the same `ConfirmDialog`/`ModalShell` as every other
+prompt rather than introducing a second dialog.
+
+Three rules that are easy to break:
+
+- **Dismissing the prompt cancels the write.** It does not fall back to "just
+  this one". The admin was mid-decision and choosing for them is the exact
+  failure the prompt exists to prevent - the backend agrees and answers a
+  missing `?scope=` with a 400.
+- **`scope` is a required argument** on `updateEvent` and `deleteEvent` in
+  `lib/calendar.ts`, not an option with a default. A one-off event passes
+  `'occurrence'` explicitly and shows no dialog.
+- **Recurrence is editable, but only series-wide.** `RecurrenceField` renders in
+  both create and edit mode (single-day events only). When the rule changes,
+  `EventModal` shows a plain danger confirmation instead of the three-way scope
+  prompt - the backend accepts a rule change only with `scope=series`, so
+  offering "this event" would be offering an answer that cannot work.
+- **`RecurrenceField` builds RRULE strings, never dates.** Which dates a rule
+  produces is decided once, server-side in `service/rrule.go`. The component may
+  submit a rule the server rejects; it can never write one that renders wrong
+  dates. Seed it from the SERIES ANCHOR's `recurrence_rule` - a generated
+  sibling carries none and would otherwise show "does not repeat" for an event
+  that plainly does.
+
+The grid, the birthdays strip, `laneOf` and the PNG export needed **no changes**
+at all: a generated occurrence is a real row with its own id and date, so
+`key={e.id}` stays correct. That was the point of storing rows instead of a rule
+(`DECISIONS.md`, 2026-09-14) - a design where occurrences were computed at read
+time would have forced a composite key through five separate render surfaces.
+
+---
+
 ### Calendar colors: `resolveColor` is the only entry point
 
 A calendar event's `color` is **either** a named palette key (`'rose'`) **or** an admin's custom hex (`'#2E7D9A'`). Every renderer must go through `resolveColor(color)` from `components/features/calendar/types.ts`, which hides that difference and always returns the same `{ dot, text, bg, highlight }` shape.

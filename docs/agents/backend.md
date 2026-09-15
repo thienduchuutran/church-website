@@ -134,9 +134,9 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | POST | `/api/v1/tags` | Create a new tag (label) for gallery albums |
 | POST | `/api/v1/posts/:id/tags` | Replace all tags on a gallery album |
 | DELETE | `/api/v1/posts/:id/tags/:tag_id` | Remove a single tag from a gallery album |
-| POST | `/api/v1/calendar/events` | Create a calendar event |
-| PATCH | `/api/v1/calendar/events/:id` | Edit a calendar event |
-| DELETE | `/api/v1/calendar/events/:id` | Delete a calendar event |
+| POST | `/api/v1/calendar/events` | Create a calendar event. `recurrence` (`weekly`/`yearly`) + optional `recurrence_until` turn it into a series - the server generates the occurrences, the client never sends dates |
+| PATCH | `/api/v1/calendar/events/:id` | Edit a calendar event. **`?scope=` is required** - `occurrence` / `following` / `series`. A missing scope is a 400, never a guess |
+| DELETE | `/api/v1/calendar/events/:id` | Delete a calendar event. **`?scope=` is required**, same three values |
 | POST | `/api/v1/calendar/event-types` | Create a reusable event type from a label (get-or-create; slug derived server-side) |
 | POST | `/api/v1/calendar/palette` | Save a custom hex as a shared swatch (idempotent) |
 | DELETE | `/api/v1/calendar/palette/:id` | Remove a saved swatch (does not affect events already using that hex) |
@@ -240,6 +240,65 @@ Return JSON errors in this shape:
 ```
 Use standard HTTP status codes: 400 bad input, 401 unauthenticated, 403 not admin, 404 not found, 500 server error.
 Never leak internal error messages or stack traces to the client. Log them server-side only.
+
+---
+
+## Recurring calendar events
+
+Occurrences are **stored as rows, not expanded from a rule** (`DECISIONS.md`,
+2026-09-14). A save writes the anchor and all its occurrences in one
+transaction (`CalendarRepository.InsertSeries`), which is why `GetEventsByMonth`,
+the PNG export, every React key and `repository/assistant.go` needed no changes:
+a generated birthday is indistinguishable from a hand-typed one.
+
+Three things to know before touching this:
+
+1. **Only the anchor is enqueued for translation.** `CreateEvent` enqueues once,
+   against the anchor's id, and the month query resolves a sibling's text
+   through its anchor. Enqueueing per occurrence would put ~200 cards in the
+   review queue for what is really forty names. The cache does **not** save you
+   here: `Translator.TranslateField` writes a `translations` row on a cache hit
+   too, with `approved_by = NULL`.
+2. **Scope is never defaulted.** `handler.requireScope` rejects a PATCH or
+   DELETE with no `?scope=`, including on a non-recurring event. The server
+   cannot know which kind of event it holds until it has looked, and by then a
+   guess has been made.
+3. **A series-wide text edit clears diverged occurrences' translations**
+   (`CalendarRepository.DeleteOccurrenceTranslations`). The read path prefers a
+   row's own translation over its anchor's, which is correct for a
+   single-occurrence edit and exactly wrong after the series text changed - the
+   occurrence would show stale Vietnamese under new English.
+
+Rules are **RFC 5545 RRULE text** (migration `000016`). `service/rrule.go` owns
+the vocabulary: `ParseRRule` is the single authority on which rules exist, and
+it rejects anything `ExpandRRule` cannot produce dates for - the storable set
+and the expandable set are the same set by construction. The frontend BUILDS
+rule strings but never expands them, so a stale client can only ever be told no.
+Supported: `FREQ` DAILY/WEEKLY/MONTHLY/YEARLY, `INTERVAL`, `BYDAY` (plain for
+weekly, ordinal like `1SU`/`-1SU` for monthly), `BYMONTHDAY`, `COUNT`. `UNTIL`
+is rejected in the rule - the "ends on" date is the `recurrence_until` column.
+
+**Turning recurrence off requires `recurrence_cleanup`** (`keep` | `future`) -
+a missing value is a 400, not a guess. "Stop repeating" can mean keep the dates
+already created or also drop the ones still to come, and only the admin knows
+which. Past occurrences are never deleted by either mode. Removing everything is
+Delete with `scope=series`, deliberately not a third cleanup mode.
+
+**Editing a rule applies to the whole series only** (`scope=series`); anything
+narrower would mean splitting the series, which is deferred. The anchor keeps
+its date and id, generated occurrences are rebuilt, and dates are generated
+BEFORE anything is deleted so a bad rule leaves the calendar untouched. Clearing
+the rule stops future generation and deliberately does **not** delete dates
+already on the calendar.
+
+Date arithmetic lives in `service/recurrence.go`, deliberately away from the
+repository, because "what does a February 29 birthday do in an ordinary year"
+is a decision (answer: February 28) rather than a calculation. Monthly
+day-of-month clamps to a short month's last day for the same reason; an
+nth-weekday rule skips months that genuinely lack one. Occurrences are
+derived from the original start date rather than stepped from the previous one,
+so one adjusted year never contaminates the next - there is a test for exactly
+that.
 
 ---
 
