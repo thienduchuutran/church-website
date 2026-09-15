@@ -113,6 +113,26 @@ Verified against a real schema: an English-source note with a human Vietnamese v
 *pending AI theme* serves the Vietnamese verse, serves the AI theme, and raises the card badge -
 driven by the theme, with the human verse contributing nothing to it.
 
+### Pared back on owner review, same day
+
+Two cuts after the first deploy, both toward less:
+
+**All explanatory prose removed from the month form.** It had grown three helper paragraphs -
+why the reference is stored separately, why the verse is not machine translated, what the note
+column is for. Every one of them was true and none of them belonged in a sheet an admin opens
+once a month: the placeholders (`Walking in Gratitude`, `1 Thessalonians 5:18`) already show the
+shape of each field, and reasoning that needs a paragraph belongs in these docs. The form is now
+three labels and four inputs.
+
+**The Vietnamese verse box is gone; the verse shows in English on both locales for now.** The
+backend still accepts `verse_text_alt` and still files it as a pre-approved human translation, so
+bringing the second box back is a UI-only change - but nothing sends it today.
+
+Known and accepted: on `/vi` the label reads `Câu gốc` above an English verse. That is mixed
+language on one page, which the site otherwise avoids. It is the owner's call while the feature
+finds its feet, and it is the reason the backend capability was left in place rather than ripped
+out.
+
 ### Partial i18n on the calendar, on purpose
 
 `messages/*.json` gained a `Calendar` namespace covering `MonthThemeCard`'s chrome. The rest of

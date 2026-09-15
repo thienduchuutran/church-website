@@ -187,12 +187,15 @@ export interface MonthNoteInput {
   verse_text: string
   verse_reference: string
   /**
-   * The same verse in the other language. Filed as a human-authored, already
-   * approved translation rather than queued for the model - see the Memory
-   * verse section of EventModal, and `monthNoteTranslatableFields` on the
-   * backend, which omits the verse from everything sent to the AI.
+   * The same verse in the other language, filed as a human-authored, already
+   * approved translation rather than queued for the model.
+   *
+   * The month modal does not currently collect it - the verse shows in the
+   * language it was written in on both locales. The backend still accepts it,
+   * so offering a second verse box again is a UI-only change. Omitting the key
+   * clears any wording previously stored for the other locale.
    */
-  verse_text_alt: string
+  verse_text_alt?: string
 }
 
 export async function upsertMonthNote(

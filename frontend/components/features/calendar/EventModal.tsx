@@ -142,9 +142,6 @@ export default function EventModal({
   const [noteTheme, setNoteTheme] = useState(monthNote?.theme_source ?? monthNote?.theme ?? '')
   const [noteVerse, setNoteVerse] = useState(monthNote?.verse_text_source ?? monthNote?.verse_text ?? '')
   const [noteRef, setNoteRef] = useState(monthNote?.verse_reference_source ?? monthNote?.verse_reference ?? '')
-  // The verse in the other language. Unlike the fields above it has no *_source
-  // twin, because it IS the translation - it comes straight off the row.
-  const [noteVerseAlt, setNoteVerseAlt] = useState(monthNote?.verse_text_alt ?? '')
   // Nothing here declares a language. The backend detects it from the text on
   // every save, so writing in either language files the record on the matching
   // side and queues the translation the other way.
@@ -469,7 +466,6 @@ export default function EventModal({
             theme: noteTheme,
             verse_text: noteVerse,
             verse_reference: noteRef,
-            verse_text_alt: noteVerseAlt,
           },
           accessToken,
         )
@@ -569,16 +565,6 @@ export default function EventModal({
     swatches.push({ key: color, hex: color })
   }
 
-  // Which language the second verse box is for: whichever the note is not
-  // written in. A brand-new note has no source_locale yet and the admin UI
-  // authors English, so English-source is the right default.
-  const noteIsVietnamese = monthNote?.source_locale === 'vi'
-  const sourceVerseLabel = noteIsVietnamese ? 'Memory verse (Tiếng Việt)' : 'Memory verse (English)'
-  const altVerseLabel = noteIsVietnamese ? 'Memory verse (English)' : 'Memory verse (Tiếng Việt)'
-  const altVersePlaceholder = noteIsVietnamese
-    ? 'Give thanks in all circumstances…'
-    : 'Hãy cảm tạ trong mọi hoàn cảnh…'
-
   const canSave = mode === 'note'
     ? true
     : title.trim().length > 0
@@ -645,7 +631,7 @@ export default function EventModal({
 
               <div className="flex flex-col gap-2">
                 <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
-                  {sourceVerseLabel}
+                  Memory verse
                 </label>
                 <textarea
                   value={noteVerse}
@@ -663,32 +649,6 @@ export default function EventModal({
                   placeholder="1 Thessalonians 5:18"
                   className="w-full rounded-lg border border-border bg-background px-3 py-2 font-sans text-[13px] text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
                 />
-                <p className="font-sans text-[11px] text-muted/80 leading-snug">
-                  The reference is stored separately so it can be translated on its
-                  own - Vietnamese book names differ (John becomes Giăng).
-                </p>
-
-                {/* The verse is the one field never sent to the AI: a model asked
-                    to translate scripture returns a fluent paraphrase, not the
-                    published wording a congregation memorises. So both wordings
-                    are typed here, and the second is filed as an already-approved
-                    human translation. */}
-                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted mt-1">
-                  {altVerseLabel}
-                </label>
-                <textarea
-                  value={noteVerseAlt}
-                  onChange={(e) => setNoteVerseAlt(e.target.value)}
-                  rows={3}
-                  maxLength={MAX_VERSE}
-                  placeholder={altVersePlaceholder}
-                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
-                />
-                <p className="font-sans text-[11px] text-muted/80 leading-snug">
-                  The verse is never machine translated - paste the wording from the
-                  translation the congregation reads. Leave empty to show the same
-                  verse on both languages.
-                </p>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -703,10 +663,6 @@ export default function EventModal({
                   placeholder="Bring guests on the 21st…"
                   className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
                 />
-                <p className="font-sans text-[11px] text-muted/80 leading-snug">
-                  Shown in the strip below the calendar, for logistics. The theme and
-                  verse above appear over the grid.
-                </p>
               </div>
             </>
           ) : (

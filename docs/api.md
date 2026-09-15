@@ -817,7 +817,9 @@ Each field is translated and approved **independently** in the review panel, whi
 
 `verse_text` is excluded from everything sent to the model (`monthNoteTranslatableFields` on the backend omits it). A Vietnamese C&MA congregation reads **Bản Truyền Thống 1926**; a model asked to translate scripture returns a fluent paraphrase that is close to the published wording without being it, and a memory verse is the one piece of text on the page people are meant to learn word for word. This is the same rule sermons already follow.
 
-Instead the admin types both wordings. `verse_text_alt` on the upsert request carries the verse in the **other** language, and the service files it via `UpsertHumanTranslation` as `is_ai_generated = false` with `approved_by` set. Consequences:
+**Currently the verse simply shows in the language it was written in, on both locales.** The month modal collects one verse, not two.
+
+The request still accepts `verse_text_alt` - the verse in the **other** language - and the service files it via `UpsertHumanTranslation` as `is_ai_generated = false` with `approved_by` set. Nothing sends it today, so offering a second verse box again is a UI-only change. Sending it, when something does:
 
 - The read path serves it exactly like an approved AI translation - no special case.
 - `card_machine_translated` stays **false** for it, because nothing machine-generated it.
