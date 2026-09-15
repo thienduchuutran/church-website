@@ -104,7 +104,7 @@ export default function CalendarGrid({
   isAdmin = false,
   theme,
 }: CalendarGridProps) {
-  const { cells, singleByDay, mobileByDay, weeks } = useMemo(() => {
+  const { singleByDay, mobileByDay, weeks } = useMemo(() => {
     const firstDay = new Date(year, month - 1, 1)
     const firstDayOfWeek = firstDay.getDay()
     const daysInMonth = new Date(year, month, 0).getDate()
@@ -193,7 +193,7 @@ export default function CalendarGrid({
       weeks.push({ cells: cells.slice(weekStartCell, weekStartCell + 7), banners, laneCount })
     }
 
-    return { cells, singleByDay, mobileByDay, weeks }
+    return { singleByDay, mobileByDay, weeks }
   }, [events, year, month])
 
   const today = new Date()
@@ -366,10 +366,19 @@ export default function CalendarGrid({
           for full title + notes. Container-gated so the export PNG never falls
           back to this view.
 
+          Structure carries the meaning here: one week is one bordered grid row,
+          and a day's number and its own chips live inside the SAME cell element,
+          stacked from the top. That is what makes a chip unambiguously belong to
+          the date above it. The earlier flat 7-col grid pushed chips to the
+          bottom of their cell (mt-auto), which left them nearer the NEXT week's
+          numbers than their own - proximity read backwards. Fixing that with
+          spacing alone would be a one-off tune; nesting + the week rule keeps
+          the relationship true no matter how the spacing is edited later.
+
           Edge-to-edge: -mx-3 breaks the grid out of the export wrapper's p-3
           so cells use the full available width on mobile. */}
-      <div className="block @3xl:hidden -mx-3">
-        <div className="grid grid-cols-7 mb-1 border-b border-border">
+      <div className="block @3xl:hidden -mx-3 border-b border-border">
+        <div className="grid grid-cols-7">
           {DAY_LETTERS.map((letter, i) => (
             <div
               key={i}
@@ -381,64 +390,70 @@ export default function CalendarGrid({
           ))}
         </div>
 
-        <div className="grid grid-cols-7">
-          {cells.map((day, idx) => {
-            if (day === null) {
-              return <div key={`empty-${idx}`} className="min-h-[92px]" />
-            }
+        {weeks.map((week, wi) => (
+          <div key={wi} className="grid grid-cols-7 border-t border-border">
+            {week.cells.map((day, di) => {
+              if (day === null) {
+                return <div key={`empty-${wi}-${di}`} className="min-h-[92px] bg-surface" />
+              }
 
-            const dayEvents = mobileByDay[day] ?? []
-            const isToday = day === todayDay
-            const dateStr = formatDate(day)
-            const isClickable = isAdmin || dayEvents.length > 0
-            const visibleEvents = dayEvents.slice(0, 3)
-            const overflow = dayEvents.length - visibleEvents.length
+              const dayEvents = mobileByDay[day] ?? []
+              const isToday = day === todayDay
+              const dateStr = formatDate(day)
+              const isClickable = isAdmin || dayEvents.length > 0
+              const visibleEvents = dayEvents.slice(0, 3)
+              const overflow = dayEvents.length - visibleEvents.length
 
-            return (
-              <button
-                key={day}
-                type="button"
-                onClick={() => isClickable && onDayClick?.(dateStr)}
-                disabled={!isClickable}
-                aria-label={`${day} - ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
-                className={[
-                  'min-h-[92px] py-1.5 flex flex-col items-stretch gap-1.5 bg-surface text-left',
-                  isClickable ? 'active:bg-panel transition-colors' : 'cursor-default',
-                ].join(' ')}
-              >
-                <div className="flex justify-center">
-                  {isToday ? (
-                    <span
-                      className="rounded-full w-7 h-7 flex items-center justify-center text-[13px] font-bold text-white leading-none"
-                      style={{ backgroundColor: theme.header }}
-                    >
-                      {day}
-                    </span>
-                  ) : (
-                    <span className="font-sans text-[13px] font-medium text-foreground leading-none pt-1">
-                      {day}
-                    </span>
-                  )}
-                </div>
-
-                {/* Compact EventChip variant: same highlighter tint as desktop
-                    but smaller and icon-less so it fits the ~50px columns. */}
-                {visibleEvents.length > 0 && (
-                  <div className="flex flex-col gap-[3px] mt-auto min-w-0">
-                    {visibleEvents.map((e) => (
-                      <EventChip key={e.id} title={e.title} icon={e.icon} color={e.color} compact />
-                    ))}
-                    {overflow > 0 && (
-                      <span className="font-sans text-[9px] text-muted leading-none mx-0.5 mt-0.5">
-                        +{overflow} more
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  onClick={() => isClickable && onDayClick?.(dateStr)}
+                  disabled={!isClickable}
+                  aria-label={`${day} - ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
+                  className={[
+                    'min-h-[92px] pt-1.5 pb-2 flex flex-col items-stretch gap-1 bg-surface text-left',
+                    isClickable ? 'active:bg-panel transition-colors' : 'cursor-default',
+                  ].join(' ')}
+                >
+                  {/* Fixed-height number band so the today circle does not push
+                      one cell's chips lower than its neighbours' in the row. */}
+                  <div className="h-7 flex items-center justify-center">
+                    {isToday ? (
+                      <span
+                        className="rounded-full w-7 h-7 flex items-center justify-center text-[13px] font-bold text-white leading-none"
+                        style={{ backgroundColor: theme.header }}
+                      >
+                        {day}
+                      </span>
+                    ) : (
+                      <span className="font-sans text-[13px] font-medium text-foreground leading-none">
+                        {day}
                       </span>
                     )}
                   </div>
-                )}
-              </button>
-            )
-          })}
-        </div>
+
+                  {/* Compact EventChip variant: same highlighter tint as desktop
+                      but smaller and icon-less so it fits the ~50px columns.
+                      Sits directly under its own date number - no mt-auto - so
+                      the tighter gap is always the one to the owning day. */}
+                  {visibleEvents.length > 0 && (
+                    <div className="flex flex-col gap-[3px] min-w-0">
+                      {visibleEvents.map((e) => (
+                        <EventChip key={e.id} title={e.title} icon={e.icon} color={e.color} compact />
+                      ))}
+                      {overflow > 0 && (
+                        <span className="font-sans text-[9px] text-muted leading-none mx-0.5 mt-0.5">
+                          +{overflow} more
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        ))}
       </div>
     </div>
   )
