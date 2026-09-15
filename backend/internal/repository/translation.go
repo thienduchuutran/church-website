@@ -266,7 +266,7 @@ func (r *TranslationRepository) DeleteUnapproved(ctx context.Context) ([]model.T
 const orphanConditions = `
      (%[1]s.table_name = 'posts'                AND NOT EXISTS (SELECT 1 FROM posts                p   WHERE p.id   = %[1]s.record_id))
   OR (%[1]s.table_name = 'page_content'         AND NOT EXISTS (SELECT 1 FROM page_content         pc  WHERE pc.id  = %[1]s.record_id))
-  OR (%[1]s.table_name = 'calendar_events'      AND NOT EXISTS (SELECT 1 FROM calendar_events      ce  WHERE ce.id  = %[1]s.record_id))
+  OR (%[1]s.table_name = 'calendar_events'      AND NOT EXISTS (SELECT 1 FROM calendar_events      ce  WHERE ce.id  = %[1]s.record_id OR ce.series_id = %[1]s.record_id))
   OR (%[1]s.table_name = 'calendar_month_notes' AND NOT EXISTS (SELECT 1 FROM calendar_month_notes cmn WHERE cmn.id = %[1]s.record_id))`
 
 // DeleteOrphanedTranslations removes translations whose parent record has
