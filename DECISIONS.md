@@ -439,8 +439,22 @@ exist in most months, and inventing one would move the event into a week nobody
 chose, so those months are skipped.
 
 **What is still not built.** Series splitting, `EXDATE`, `BYSETPOS`, sub-daily
-rules, and per-occurrence exception markers. The horizon warning still has no
-UI.
+rules, and per-occurrence exception markers.
+
+**The horizon warning shipped on the admin dashboard**, not on the calendar. It
+was built into the calendar's margin first, on the argument that a panel which
+is always visible is a panel that stays correct, and the owner removed it as
+unnecessary UI in a place people go to read the month rather than maintain it.
+He was right: the dashboard is where maintenance belongs, and there the panel
+earns its place by being ABSENT until it matters. `RepeatingEventsNotice`
+renders nothing while every series still has years to run.
+
+That leaves the rule itself untestable by eye until 2029, so `needsExtension`
+takes `now` as an argument and is covered by cases that hand it a date -
+including both sides of the twelve-month boundary and the two different ways a
+series can be finished rather than running out. A rule whose first real
+evaluation is three years away, in code that will be edited many times before
+then, rots unless something exercises it.
 
 **When this decision expires.**
 

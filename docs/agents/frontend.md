@@ -199,6 +199,15 @@ Three rules that are easy to break:
   `EventModal` shows a plain danger confirmation instead of the three-way scope
   prompt - the backend accepts a rule change only with `scope=series`, so
   offering "this event" would be offering an answer that cannot work.
+- **The "running out" warning lives on the admin dashboard, not the calendar.**
+  `RepeatingEventsNotice` renders nothing unless a series is within twelve
+  months of its last date, which is why it sits above Edit Pages rather than
+  buried: it is the only time-sensitive thing on that page and it is absent the
+  rest of the time. The extend button needs no confirmation because extending
+  only ever appends future dates - the one write in this feature that cannot
+  destroy anything. It uses amber rather than the brand magenta on purpose:
+  magenta means "press this" everywhere else on the site, and a magenta warning
+  would make "needs attention" and "here is the button" look identical.
 - **`RecurrenceField` builds RRULE strings, never dates.** Which dates a rule
   produces is decided once, server-side in `service/rrule.go`. The component may
   submit a rule the server rejects; it can never write one that renders wrong
