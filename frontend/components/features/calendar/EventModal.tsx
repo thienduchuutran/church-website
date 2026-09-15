@@ -28,10 +28,13 @@ import {
   ICON_NONE,
   PaletteColor,
   resolveColor,
+  WriteScope,
 } from './types'
 import CalendarIcon from './CalendarIcon'
 import CustomColorPopover from './CustomColorPopover'
 import InfoTip from '@/components/ui/InfoTip'
+import { useChoose, useConfirm } from '@/lib/confirm'
+import RecurrenceField, { NO_RECURRENCE, type RecurrenceValue } from './RecurrenceField'
 
 type ModalMode = 'create' | 'edit' | 'note'
 
@@ -109,6 +112,19 @@ export default function EventModal({
   const startDate = date ?? event?.date ?? ''
   const [endDate, setEndDate] = useState(event?.end_date ?? '')
   const [multiDay, setMultiDay] = useState(!!event?.end_date)
+  // The event's repeat rule, as RRULE text plus its optional end date. On edit
+  // it is seeded from the SERIES ANCHOR's rule, not the clicked occurrence -
+  // only the anchor carries one, so a sibling would otherwise show "does not
+  // repeat" for an event that plainly does.
+  const initialRecurrence: RecurrenceValue =
+    event?.recurrence_rule
+      ? { rule: event.recurrence_rule, until: event.recurrence_until ?? '' }
+      : NO_RECURRENCE
+  const [recurrence, setRecurrence] = useState<RecurrenceValue>(initialRecurrence)
+  // What the rule was when the form opened, so a save can tell whether the
+  // admin actually touched it. Sending an unchanged rule would regenerate the
+  // series for nothing and destroy any occurrence edited on its own.
+  const [originalRecurrence] = useState<RecurrenceValue>(initialRecurrence)
   const [noteContent, setNoteContent] = useState(monthNote?.content_source ?? monthNote?.content ?? '')
   // Nothing here declares a language. The backend detects it from the text on
   // every save, so writing in either language files the record on the matching
@@ -327,6 +343,95 @@ export default function EventModal({
     }
   }
 
+  const choose = useChoose()
+  const confirm = useConfirm()
+
+  const recurrenceChanged =
+    recurrence.rule !== originalRecurrence.rule || recurrence.until !== originalRecurrence.until
+
+  // Turning repeating OFF on something that was repeating. Distinct from an
+  // ordinary rule change because the question it raises is about dates that
+  // already exist, not about dates still to be generated.
+  const clearingRecurrence = recurrenceChanged && recurrence.rule === '' && originalRecurrence.rule !== ''
+
+  // askCleanup asks what should happen to the dates already on the calendar.
+  //
+  // There is no default and no "remove everything" option. Removing every date
+  // is what Delete with "All events" already does, and one operation with two
+  // ways to wipe a series is how the two quietly stop agreeing.
+  async function askCleanup(): Promise<'keep' | 'future' | null> {
+    const answer = await choose({
+      title: 'Stop repeating',
+      message: (
+        <>
+          <strong className="text-foreground">{event?.title}</strong> will stop creating new
+          dates. What should happen to the ones already on the calendar?
+        </>
+      ),
+      choices: [
+        {
+          id: 'keep',
+          label: 'Keep the dates already on the calendar',
+          description: 'Nothing is removed. No new dates are created from now on.',
+        },
+        {
+          id: 'future',
+          label: 'Also remove the dates that have not happened yet',
+          description: 'Past dates are kept as a record of what the church actually did.',
+        },
+      ],
+    })
+    return (answer as 'keep' | 'future' | null) ?? null
+  }
+
+  // An event repeats if it carries a rule (the anchor) or belongs to a series
+  // (a generated occurrence). Both need the scope question.
+  const isRecurring = !!(event?.series_id || event?.recurrence_rule)
+
+  // askScope puts the Google Calendar question to the admin: this one, this and
+  // following, or all. It is asked only for an event that actually belongs to a
+  // series - a one-off needs no question and gets 'occurrence' without a
+  // dialog.
+  //
+  // Returning null means dismissed, and every caller treats that as "do
+  // nothing". That is the point of the whole prompt: there is no default, on
+  // the client or on the server, because a silent default is how an admin
+  // deletes forty birthdays intending to delete one.
+  async function askScope(verb: 'edit' | 'delete'): Promise<WriteScope | null> {
+    if (!isRecurring || !event) return 'occurrence'
+    const destructive = verb === 'delete'
+    const answer = await choose({
+      title: destructive ? 'Delete repeating event' : 'Edit repeating event',
+      message: (
+        <>
+          <strong className="text-foreground">{event.title}</strong> repeats. Which ones should
+          this {verb} apply to?
+        </>
+      ),
+      tone: destructive ? 'danger' : 'default',
+      choices: [
+        {
+          id: 'occurrence',
+          label: 'This event',
+          description: `Only the one on ${event.date}.`,
+        },
+        {
+          id: 'following',
+          label: 'This and following events',
+          description: 'Leaves past dates alone as a record of what happened.',
+        },
+        {
+          id: 'series',
+          label: 'All events',
+          description: destructive
+            ? 'Removes every date in this series, past included.'
+            : 'Changes every date in this series. Any occurrence you edited on its own is overwritten.',
+        },
+      ],
+    })
+    return (answer as WriteScope | null) ?? null
+  }
+
   async function handleSave() {
     if (!accessToken) return
     setSaving(true)
@@ -339,9 +444,53 @@ export default function EventModal({
       if (mode === 'note') {
         await upsertMonthNote(year, month, noteContent, accessToken)
       } else if (mode === 'create' && date) {
-        await createEvent({ date, end_date: computedEndDate, title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, address_public: showAddress ? addressPublic : false, notes: notes || null }, accessToken)
+        // recurrence_until only travels when the admin actually picked a date.
+        // Sending an empty string would be a third state the backend has to
+        // interpret, and it already has two that mean something.
+        await createEvent({ date, end_date: computedEndDate, title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, address_public: showAddress ? addressPublic : false, notes: notes || null, recurrence: recurrence.rule || null, recurrence_until: recurrence.rule && recurrence.until ? recurrence.until : null }, accessToken)
       } else if (mode === 'edit' && event) {
-        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, address_public: showAddress ? addressPublic : false, notes: notes || null, end_date: computedEndDate }, accessToken)
+        // A rule change rebuilds the series' future, so it can only mean the
+        // whole series - the backend rejects any other scope for it. Asking the
+        // three-way question here would offer two answers that cannot work, so
+        // this is a plain confirmation that states the cost instead.
+        let scope: WriteScope | null
+        let cleanup: 'keep' | 'future' | null = null
+        if (clearingRecurrence) {
+          cleanup = await askCleanup()
+          if (!cleanup) {
+            setSaving(false)
+            return
+          }
+          scope = 'series'
+        } else if (recurrenceChanged) {
+          const ok = await confirm({
+            title: 'Change how this repeats',
+            message: (
+              <>
+                This applies to <strong className="text-foreground">all events</strong> in the
+                series. Future dates are rebuilt from the new rule, and any occurrence you had
+                edited on its own will be lost. Dates already on the calendar in the past are kept.
+              </>
+            ),
+            confirmLabel: 'Change the series',
+            tone: 'danger',
+          })
+          if (!ok) {
+            setSaving(false)
+            return
+          }
+          scope = 'series'
+        } else {
+          scope = await askScope('edit')
+        }
+        // Dismissing the scope prompt cancels the save outright rather than
+        // falling back to "just this one" - the admin was mid-decision, and
+        // picking for them is the failure this prompt exists to prevent.
+        if (!scope) {
+          setSaving(false)
+          return
+        }
+        await updateEvent(event.id, { title, event_type: eventType, icon, color, private_address: showAddress ? (privateAddress || null) : null, address_public: showAddress ? addressPublic : false, notes: notes || null, end_date: computedEndDate, recurrence: recurrenceChanged ? recurrence.rule : null, recurrence_until: recurrenceChanged && recurrence.until ? recurrence.until : null, recurrence_cleanup: cleanup }, scope, accessToken)
       }
       onSaved()
       handleClose()
@@ -353,9 +502,11 @@ export default function EventModal({
 
   async function handleDelete() {
     if (!accessToken || !event) return
+    const scope = await askScope('delete')
+    if (!scope) return
     setSaving(true)
     try {
-      await deleteEvent(event.id, accessToken)
+      await deleteEvent(event.id, scope, accessToken)
       onSaved()
       handleClose()
     } catch (e: unknown) {
@@ -585,6 +736,26 @@ export default function EventModal({
                       className="rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/40"
                     />
                   </div>
+                )}
+
+                {/*
+                  Repeats. Hidden for a multi-day span: repeating a span raises
+                  a question nobody has answered yet (does the second occurrence
+                  of a three-day retreat keep all three days?), so the backend
+                  rejects it and the form does not offer it rather than letting
+                  an admin compose a request that cannot succeed.
+
+                  Available on edit as well as create. Changing it rebuilds the
+                  series' future dates, which is why saving one asks for a
+                  confirmation that says so rather than the ordinary scope
+                  prompt.
+                */}
+                {!multiDay && (
+                  <RecurrenceField
+                    startDate={mode === 'edit' && event ? event.date : startDate || date || ''}
+                    value={recurrence}
+                    onChange={setRecurrence}
+                  />
                 )}
               </div>
 

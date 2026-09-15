@@ -8,6 +8,8 @@ import type {
   CalendarMonthSettings,
   CalendarPlace,
   PaletteColor,
+  RecurrenceRule,
+  WriteScope,
 } from '@/components/features/calendar/types'
 
 const BASE = '/api/v1/calendar'
@@ -51,6 +53,13 @@ export async function createEvent(
     private_address?: string | null
     address_public?: boolean
     notes: string | null
+    // Turns this create into a series. Omitted for a one-off. The occurrences
+    // are generated server-side - the client never computes dates and never
+    // sends more than this single event.
+    recurrence?: RecurrenceRule | null
+    // The admin's "Ends on" date. Omitted means open-ended, which is the only
+    // case that ever needs extending later.
+    recurrence_until?: string | null
   },
   token: string,
 ): Promise<CalendarEvent> {
@@ -70,14 +79,31 @@ export async function updateEvent(
     // Always sent on edit (a date string or null) because the backend writes
     // end_date directly - omitting it would clear an existing span.
     end_date?: string | null
+    // Changes how the series repeats. Send null to leave the rule untouched;
+    // an empty string means "stop repeating", which keeps the dates already on
+    // the calendar and only stops generating more. Accepted only with
+    // scope=series, because a new rule rebuilds the whole series' future.
+    recurrence?: RecurrenceRule | null
+    recurrence_until?: string | null
+    // Required when recurrence is set to '' (turning repeating off), rejected
+    // otherwise. 'keep' leaves every generated date alone; 'future' also
+    // removes the ones that have not happened yet. The backend refuses a
+    // missing value rather than choosing - "stop repeating" has two reasonable
+    // meanings and only the admin knows which one they meant.
+    recurrence_cleanup?: 'keep' | 'future' | null
   },
+  scope: WriteScope,
   token: string,
 ): Promise<CalendarEvent> {
-  return apiPatch(`${BASE}/events/${id}`, payload, token) as Promise<CalendarEvent>
+  return apiPatch(`${BASE}/events/${id}?scope=${scope}`, payload, token) as Promise<CalendarEvent>
 }
 
-export async function deleteEvent(id: string, token: string): Promise<void> {
-  await apiDelete(`${BASE}/events/${id}`, token)
+// scope is required, not optional, and is a query parameter on both the edit
+// and the delete. The backend rejects a request without one instead of picking
+// a default, so there is no call site that can quietly mean "all events" when
+// it meant "this one".
+export async function deleteEvent(id: string, scope: WriteScope, token: string): Promise<void> {
+  await apiDelete(`${BASE}/events/${id}?scope=${scope}`, token)
 }
 
 // --- Places (the venue registry behind the Locations strip) ---

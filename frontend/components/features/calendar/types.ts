@@ -57,6 +57,21 @@ export interface CalendarPlace {
   event_count?: number
 }
 
+// How a series repeats, as RFC 5545 RRULE text - 'FREQ=MONTHLY;BYDAY=1SU' and
+// the like (migration 000016; it was a two-word enum before that).
+//
+// Deliberately not a union of literals. The set of legal rules is whatever
+// service.ParseRRule in the Go backend can expand, and a TypeScript union would
+// be a second, silently drifting copy of that answer. The client builds a rule
+// string and the server accepts or rejects it - so the worst a stale frontend
+// can do is get told no, never write a rule that renders wrong dates.
+export type RecurrenceRule = string
+
+// Which part of a series a write applies to. Mirrors model.WriteScope in Go and
+// is never optional on the wire - the backend answers a missing scope with a
+// 400 rather than guessing, so every call site has to have decided.
+export type WriteScope = 'occurrence' | 'following' | 'series'
+
 export interface CalendarEvent {
   id: string
   date: string // YYYY-MM-DD
@@ -78,6 +93,16 @@ export interface CalendarEvent {
   place?: CalendarPlace | null
   place_id?: string | null
   notes: string | null
+  // Groups the occurrences one recurrence toggle created. Holds the ANCHOR
+  // occurrence's own id, so series_id === id identifies the anchor. Absent on
+  // every one-off event. Its presence is what makes an edit or delete ask for
+  // a scope instead of acting immediately.
+  series_id?: string | null
+  // Set on the anchor row only: 'weekly' | 'yearly', and the admin's "ends on"
+  // date. A sibling occurrence carries neither, so read the series through
+  // series_id rather than expecting every occurrence to describe itself.
+  recurrence_rule?: RecurrenceRule | null
+  recurrence_until?: string | null
   admin_id: string | null
   created_at: string
   updated_at: string
