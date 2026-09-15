@@ -190,7 +190,8 @@ Small italic "Bản dịch tự động" notice that flags content served from a
 **Where it appears:**
 - `PostCard` - bottom-right of the action row, below `ReactionBar`.
 - `DayEventsModal` - per-event, beneath each event's notes (when present).
-- `CalendarShell` - under the month note text.
+- `CalendarShell` - under the month note text in the info strip.
+- `MonthThemeCard` - under the theme/verse card, once for the whole note.
 - `app/[locale]/about/page.tsx`, `app/[locale]/connect/page.tsx` - centered under the hero subtitle, since the page itself is the unit (no per-section cards).
 
 **Client component:** no - reads translations via `useTranslations('Common')` from `next-intl`, which works in server components when the page tree includes `NextIntlClientProvider`. The badge is a pure presentational server component.
@@ -360,7 +361,7 @@ Card for the `/admin/translations` review panel, one per (`table_name`, `record_
 - `posts` → "Post" (primary tint)
 - `page_content` → "Page" (amber tint)
 - `calendar_events` → "Event" (accent tint)
-- `calendar_month_notes` → "Month note" (emerald tint)
+- `calendar_month_notes` → "Month note" (emerald tint). Its fields label as Note / Theme / Verse / Reference; a field missing from `FIELD_LABELS` renders as its raw `snake_case` name.
 - unknown → raw `table_name` (muted)
 
 **Client component:** yes (textarea state, async submit, window.confirm).
@@ -646,8 +647,54 @@ Public visitors never see a private venue: the handler strips `place` and `place
 
 ---
 
+## `MonthThemeCard`
+The month's theme and memory verse, rendered between the month navigation and the calendar grid.
+
+**File:** `components/features/calendar/MonthThemeCard.tsx`
+
+**Props**
+| Prop | Type | Description |
+|------|------|-------------|
+| `note` | `CalendarMonthNote \| null` | The month's row. Reads `theme`, `verse_text`, `verse_reference` and `machine_translated`; ignores `content`, which the info strip below the grid owns |
+| `accent` | `string` | The month's active accent hex - the same value the headline and grid header use |
+| `isAdmin` | `boolean` | Gates the Edit affordance and the empty-state prompt |
+| `onEdit` | `() => void` | Opens `EventModal` in `note` mode; `CalendarShell` owns that state |
+
+**Client component:** yes (`useTranslations`, and `matchMedia` for the dark-mode ink; see below)
+
+Its labels come from the `Calendar` namespace in `messages/*.json` (`themeLabel` → "Câu gốc" is the term Vietnamese congregations actually use for a memory verse, not a literal rendering). The theme and verse themselves arrive already in the right language from the API.
+
+### Why it sits above the grid
+The freeform note already renders in the info strip *below* the grid. That is the right rank for logistics ("bring guests", an address) and the wrong rank for the frame the rest of the month hangs on. The two split by **kind**, not by table - one `calendar_month_notes` row backs both.
+
+### Why one card, not two blocks
+Theme and verse are the same kind of content at different lengths. Two separate blocks read as two things each asking for attention; one block with two zones reads as "this month's focus", which is what it is. The split is 1:2 on `@xl` and up, matching their natural lengths, and stacks on mobile.
+
+### Layout rules worth knowing
+- **The divider only exists when both cells do.** Each field owns a cell and renders conditionally, so a theme with no verse spans the card rather than printing an empty half with a rule against it.
+- **Empty means absent, for visitors.** With `theme` and `verse_text` both empty the component returns `null` - no empty shell - mirroring how the info strip hides itself. Admins instead get a dashed prompt, reusing the page's existing dashed `+ Add` chip idiom.
+- **The badge reads `card_machine_translated`, not `machine_translated`.** The latter describes the freeform note in the strip below the grid, which this card does not display. One row-wide flag made each badge answer for the other's text - the note's badge lighting up because the theme was unapproved, and vice versa. A badge must describe the text beside it.
+- **`data-export-hide` on the admin affordances only.** The Discord PNG export should carry the theme and verse - they are the month's headline - but not an Edit button.
+
+### `useAccentInk` - the contrast rule
+All card text takes its colour from `deriveRamp(accent)` (`lib/color.ts`), never the raw accent. Three of the twelve `MONTH_THEMES` accents fail WCAG AA as 9px text on `--background`: April's `#BEB5FA` at 1.78:1, October's `#B25A73` at 4.32:1, and any light custom accent an admin picks.
+
+The wrinkle `deriveRamp` does not cover on its own: its `text` value is always **dark**, because it was written for event chips that supply their own light `highlight` fill. This card paints straight onto the page ground, which is `#17101a` under `prefers-color-scheme: dark`, where dark ink disappears. So dark mode takes `ramp.highlight` - the light end of the same ramp, same hue. Any future component painting accent-coloured text directly on the page background needs the same two-ended treatment.
+
+The 64px month headline deliberately keeps the raw accent: at that size it is a hero treatment, not body text.
+
+**Client component:** yes
+
+---
+
 ## `EventModal`
-The admin create/edit sheet for a calendar event, and the "Monthly Note" editor (same component, three modes: `create`, `edit`, `note`).
+The admin create/edit sheet for a calendar event, and the "This Month" editor (same component, three modes: `create`, `edit`, `note`).
+
+In `note` mode it edits the month-scoped text in one form and one save: **Theme**, the **Memory verse** in both languages + its **Reference**, and the freeform **Note**.
+
+**The verse appears twice, by design.** It is the one field never sent to the AI - a model asked to translate scripture returns a paraphrase, not the published wording a congregation memorises - so the admin types both. The boxes are labelled by language off the note's `source_locale` (English-source is the default, since the admin UI authors English), and the second is filed as a pre-approved human translation rather than queued. They travel together because they share a `(year, month)` row and are filled in at the start of a month; splitting them would mean two round trips and a fourth top-level admin choice on a page that already has three. Each input seeds from its `*_source` twin, so the modal edits the authored text even when the page behind it is displaying a Vietnamese translation.
+
+**Calendar admin deliberately does not live on the admin dashboard.** The FAB, the info-strip note link, the accent picker and this modal are all in-place on the calendar page; `app/[locale]/admin/page.tsx` has no calendar section at all. A dashboard form for the theme would scatter calendar editing across two surfaces.
 
 **File:** `components/features/calendar/EventModal.tsx`
 
@@ -657,7 +704,7 @@ The admin create/edit sheet for a calendar event, and the "Monthly Note" editor 
 | `mode` | `'create' \| 'edit' \| 'note'` | Which form to render |
 | `date` | `string \| null` | `YYYY-MM-DD` for `create` |
 | `event` | `CalendarEvent \| null` | The event being edited, for `edit` |
-| `monthNote` | `CalendarMonthNote \| null` | Existing note content, for `note` |
+| `monthNote` | `CalendarMonthNote \| null` | Existing note, theme and verse, for `note`. Each field seeds from its `*_source` twin where present |
 | `year` / `month` | `number` | Target month for `note` mode |
 | `accessToken` | `string \| null` | Bearer token for every write |
 | `onSaved` | `() => void` | Tells `CalendarShell` to refetch the month |

@@ -612,11 +612,14 @@ func (s *CalendarService) DeleteEvent(ctx context.Context, id string, scope mode
 	return nil
 }
 
-// UpsertMonthNote sets the sidebar note for a given year+month, then enqueues
-// translation for the new content. No diff here - the upsert returns the row
-// but not the prior state, and a single text field with an empty default is
-// cheap to "translate again" (the cache layer absorbs identical content).
+// UpsertMonthNote sets the month's note, theme and verse for a given
+// year+month, then enqueues translation for each non-empty field. No diff here
+// - the upsert returns the row but not the prior state, and re-enqueueing text
+// that has not changed is cheap (the cache layer absorbs identical content).
 func (s *CalendarService) UpsertMonthNote(ctx context.Context, year, month int, req model.UpsertMonthNoteRequest, adminID string) (*model.CalendarMonthNote, error) {
+	if err := req.Validate(); err != nil {
+		return nil, fmt.Errorf("validation: %w", err)
+	}
 	// The prior note is read raw ("" locale) purely for its source_locale, so a
 	// save that only reformats existing text keeps the language it already had.
 	// A missing note is not an error here - it just means there is no prior
@@ -630,9 +633,12 @@ func (s *CalendarService) UpsertMonthNote(ctx context.Context, year, month int, 
 		current = prior.SourceLocale
 	}
 
-	sourceLocale := resolveSourceLocale(textFields(req.Content, nil), current)
+	// Detected across all four fields together, not just the note text. A month
+	// whose note is empty but whose theme and verse are Vietnamese is a
+	// Vietnamese note, and reading only Content would have called it English.
+	sourceLocale := resolveSourceLocale(monthNoteFields(req), current)
 
-	n, err := s.repo.UpsertMonthNote(ctx, year, month, req.Content, &adminID, sourceLocale)
+	n, err := s.repo.UpsertMonthNote(ctx, year, month, req, &adminID, sourceLocale)
 	if err != nil {
 		return nil, fmt.Errorf("upsert month note: %w", err)
 	}
@@ -645,11 +651,101 @@ func (s *CalendarService) UpsertMonthNote(ctx context.Context, year, month int, 
 		}
 	}
 
-	if req.Content != "" {
-		s.enqueueOne("calendar_month_notes", n.ID, "content", req.Content, sourceLocale)
+	// One job per non-empty TRANSLATABLE field - which excludes the verse. See
+	// monthNoteTranslatableFields. enqueueOne already no-ops on an empty value,
+	// so a cleared field simply stops being queued - and its stale translation
+	// is the case the Dismiss action in the review panel exists for, since the
+	// parent row survives and the orphan sweep will never collect it. See
+	// docs/agents/known-quirks.md.
+	for field, value := range monthNoteTranslatableFields(req) {
+		s.enqueueOne("calendar_month_notes", n.ID, field, value, sourceLocale)
+	}
+
+	// The verse's other-language wording is human-authored, so it is filed
+	// directly as an approved translation instead of being queued. Failure here
+	// is logged rather than returned: the note itself is already saved, and
+	// losing the save because a secondary field would not file would be a worse
+	// outcome than a missing translation the admin can retype.
+	alt := strings.TrimSpace(req.VerseTextAlt)
+	target := otherLocale(sourceLocale)
+	if alt != "" && strings.TrimSpace(req.VerseText) != "" {
+		if err := s.repo.UpsertHumanTranslation(
+			ctx, "calendar_month_notes", n.ID, "verse_text", target,
+			req.VerseText, alt, adminID,
+		); err != nil {
+			log.Printf("calendar: file %s verse for month note %s: %v", target, n.ID, err)
+		}
+	} else {
+		// Cleared, or the source verse itself is gone. Either way the stored
+		// translation no longer describes anything and would otherwise be served
+		// to readers of the other locale forever - the parent row survives, so
+		// the orphan sweep would never collect it.
+		if err := s.repo.DeleteTranslationForField(ctx, n.ID, "verse_text", target); err != nil {
+			log.Printf("calendar: clear %s verse for month note %s: %v", target, n.ID, err)
+		}
 	}
 
 	return n, nil
+}
+
+// otherLocale is the locale an admin's alternate verse is filed under: the one
+// the note is not written in. Only two locales exist, so anything that is not
+// Vietnamese is treated as English - the same fallback PromptKeyFor uses.
+func otherLocale(sourceLocale string) string {
+	if sourceLocale == "vi" {
+		return "en"
+	}
+	return "vi"
+}
+
+// monthNoteFields collects a month note's four text fields under the names the
+// translation queue and the review panel use, dropping empty and
+// whitespace-only values.
+//
+// It replaces a call to textFields(content, nil), which labelled the note
+// "title" - harmless while there was one field, wrong now that each field is
+// enqueued and approved under its own name.
+func monthNoteFields(req model.UpsertMonthNoteRequest) map[string]string {
+	return nonEmpty(map[string]string{
+		"content":         req.Content,
+		"theme":           req.Theme,
+		"verse_text":      req.VerseText,
+		"verse_reference": req.VerseReference,
+	})
+}
+
+// monthNoteTranslatableFields is what actually reaches the AI: the same set
+// minus the memory verse.
+//
+// The verse is excluded deliberately, on the same grounds sermons are. A
+// Vietnamese C&MA congregation reads Bản Truyền Thống 1926; a model asked to
+// translate scripture returns a fluent paraphrase that is not that text, and a
+// memory verse is the one thing on the page people are meant to learn word for
+// word. The admin supplies the other wording themselves - see VerseTextAlt.
+//
+// Note this is deliberately NOT the same collection as monthNoteFields: the
+// verse is still the longest piece of authored text in the note, so it remains
+// the best evidence of which language the note is written in even though it is
+// never sent anywhere.
+func monthNoteTranslatableFields(req model.UpsertMonthNoteRequest) map[string]string {
+	return nonEmpty(map[string]string{
+		"content":         req.Content,
+		"theme":           req.Theme,
+		"verse_reference": req.VerseReference,
+	})
+}
+
+// nonEmpty drops empty and whitespace-only values, so a cleared field cannot
+// dilute the evidence a populated one gives DetectLocaleFields, nor enqueue a
+// job with nothing to translate.
+func nonEmpty(fields map[string]string) map[string]string {
+	out := map[string]string{}
+	for name, value := range fields {
+		if strings.TrimSpace(value) != "" {
+			out[name] = value
+		}
+	}
+	return out
 }
 
 // UpsertMonthSettings validates the incoming color and persists the per-month

@@ -19,7 +19,14 @@ const TABLE_LABELS: Record<string, { label: string; className: string }> = {
 }
 
 // Human label per field name. Anything unlisted shows the raw field_name.
-const FIELD_LABELS: Record<string, string> = { title: 'Title', body: 'Body' }
+const FIELD_LABELS: Record<string, string> = {
+  title: 'Title',
+  body: 'Body',
+  content: 'Note',
+  theme: 'Theme',
+  verse_text: 'Verse',
+  verse_reference: 'Reference',
+}
 
 // The accent token is the spec's "approved" color - matches the calendar
 // accent. Inline because Tailwind 4 purges class names it can't see at build

@@ -28,6 +28,13 @@
     "closeMenu": "Đóng menu điều hướng",
     "follow": "Theo dõi chúng tôi"
   },
+  "Calendar": {
+    "themeLabel": "Chủ đề tháng này",
+    "verseLabel": "Câu gốc",
+    "addThemeVerse": "Thêm chủ đề & câu gốc tháng này",
+    "editThemeVerse": "Sửa chủ đề và câu gốc tháng này",
+    "edit": "Sửa"
+  },
   "Home": {
     "eyebrow": "VGOMNE · Saugus, MA",
     "display": "Chào mừng về nhà, <em>một gia đình</em> trong Chúa.",

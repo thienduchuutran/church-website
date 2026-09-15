@@ -48,7 +48,7 @@ backend/
 │   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
 │   │   ├── reactions.go        ← UpsertReaction, DeleteReaction
 │   │   ├── gallery.go          ← CreateAlbum, attaches images
-│   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (with enqueue), List/CreateEventType (slugify + get-or-create), List/Create/DeletePaletteColor
+│   │   ├── calendar.go         ← GetMonth/CreateEvent/UpdateEvent (with diff-based enqueue), UpsertMonthNote (validates, detects source_locale across all four text fields via monthNoteFields, enqueues one job per non-empty field), List/CreateEventType (slugify + get-or-create), List/Create/DeletePaletteColor
 │   │   ├── pages.go            ← GetPageContent (locale-aware), UpdatePageContent (with diff-based enqueue), GetPageBlocks, ReplacePageBlocks (with diff-based enqueue of title+content)
 │   │   └── translation.go      ← List/Approve/Retranslate/CleanupOrphans for the admin review panel; Approve also fire-and-forgets a fine-tuning pair capture
 │   │   ├── pages.go            ← GetPageContent, UpdatePageContent
@@ -59,7 +59,7 @@ backend/
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
 │   │   ├── reactions.go        ← UpsertReaction, GetReactionCounts, DeleteReaction
 │   │   ├── gallery.go          ← InsertPostImage, GetImagesByPostID
-│   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings, event-type + palette queries
+│   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware; GetMonthNote LEFT JOINs translations once PER FIELD, since each is approved independently), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings, event-type + palette queries
 │   │   ├── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections, GetBlocks (locale-aware, ordered by position, two COALESCE joins), ReplaceBlocks (transactional upsert + delete with translation cleanup)
 │   │   ├── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete, orphan sweeps (DeleteOrphanedTranslations/PendingJobs)
 │   │   └── finetuning.go       ← CaptureFinetuningExample: idempotent INSERT of gold (en, vi) pairs into fine_tuning_examples
@@ -142,7 +142,7 @@ If you find yourself wanting to add auth to a public read path, it's almost cert
 | DELETE | `/api/v1/calendar/palette/:id` | Remove a saved swatch (does not affect events already using that hex) |
 | GET | `/api/v1/calendar/places` | The venue registry with usage counts, for the event form's address suggestions. **Admin-only unlike the two vocabulary reads above** - it returns street addresses regardless of `address_public` |
 | PATCH | `/api/v1/calendar/places/:id` | Rename a venue. Sets `name_source='admin'`, which permanently locks the naming worker out of that row. One rename relabels every event at the address |
-| PUT | `/api/v1/calendar/months/:year/:month/note` | Upsert the month's sidebar note |
+| PUT | `/api/v1/calendar/months/:year/:month/note` | Upsert the month's `content`, `theme`, `verse_text` and `verse_reference` in one write. All four are optional; sending all four empty is how an admin clears the card and the note. Validated by `model.UpsertMonthNoteRequest.Validate` (rune-counted length caps; `theme` and `verse_reference` must be single-line). One translation job is enqueued per non-empty field **except `verse_text`**, which is never machine translated; its other-language wording arrives as `verse_text_alt` and is filed as a pre-approved human translation. |
 | PUT | `/api/v1/calendar/months/:year/:month/settings` | Upsert the month's per-month styling (accent color) |
 | GET | `/api/v1/admin/translations` | List translations for the review panel. Query params: `?locale=vi`, `?approved=false\|true`, `?limit=20`, `?offset=0`. Response includes `record_title` synthesized from a JOIN to each possible parent table. |
 | PATCH | `/api/v1/admin/translations/:id` | Approve a translation. Body `{translated_text?}` - omit to approve as-is, include to approve human-edited text. Sets `approved_by` to caller's JWT sub. |

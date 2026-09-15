@@ -71,16 +71,16 @@ func TestIsAllowedCalendarColor(t *testing.T) {
 
 	invalid := []string{
 		"",
-		"#FFF",                          // 3-digit shorthand is not the stored form
-		"#GGGGGG",                       // not hex digits
-		"#1234567",                      // too long
-		"7C3A6E",                        // missing the hash
-		"slate ",                        // trailing space - no trimming, exact match only
-		"Slate",                         // case-sensitive key lookup
-		"red; background-image:url(x)",  // CSS injection through a named key
-		"#000000; position:fixed",       // CSS injection through a hex
+		"#FFF",                         // 3-digit shorthand is not the stored form
+		"#GGGGGG",                      // not hex digits
+		"#1234567",                     // too long
+		"7C3A6E",                       // missing the hash
+		"slate ",                       // trailing space - no trimming, exact match only
+		"Slate",                        // case-sensitive key lookup
+		"red; background-image:url(x)", // CSS injection through a named key
+		"#000000; position:fixed",      // CSS injection through a hex
 		"javascript:alert(1)",
-		"rgb(255,0,0)",                  // valid CSS, but not a form we store
+		"rgb(255,0,0)", // valid CSS, but not a form we store
 		"var(--accent)",
 	}
 	for _, v := range invalid {
@@ -240,5 +240,109 @@ func TestUpdateCalendarEventRequest_Validate_customValues(t *testing.T) {
 	r = UpdateCalendarEventRequest{EventType: &bad}
 	if err := r.Validate(); err == nil {
 		t.Fatal("expected error for unnormalized event type, got nil")
+	}
+}
+
+// UpsertMonthNoteRequest.Validate exists to bound what reaches the translation
+// queue and, through it, the AI prompt. A month note is the one admin write
+// with no length ceiling anywhere else in the stack: the columns are `text`,
+// the modal is a textarea, and every non-empty field is enqueued for
+// translation. These cases pin the two properties that matter - a normal month
+// always saves, and no single paste can push an unbounded blob through the
+// worker.
+func TestUpsertMonthNoteRequest_Validate(t *testing.T) {
+	cases := []struct {
+		name    string
+		req     UpsertMonthNoteRequest
+		wantErr bool
+	}{
+		{
+			name: "a fully populated month is valid",
+			req: UpsertMonthNoteRequest{
+				Theme:          "Walking in Gratitude",
+				VerseText:      "Give thanks in all circumstances; for this is God's will for you in Christ Jesus.",
+				VerseReference: "1 Thessalonians 5:18",
+				Content:        "Bring guests on the 21st.",
+			},
+			wantErr: false,
+		},
+		// Clearing every field is how an admin removes the card. It must stay
+		// legal, or there would be no way to undo a theme.
+		{
+			name:    "all fields empty is valid",
+			req:     UpsertMonthNoteRequest{},
+			wantErr: false,
+		},
+		// Vietnamese is the authoring language for roughly half these notes and
+		// its diacritics are multi-byte, so the caps must count runes rather
+		// than bytes or a Vietnamese theme would hit the ceiling at a third of
+		// the length of an English one.
+		{
+			name: "vietnamese theme well under the cap is valid",
+			req: UpsertMonthNoteRequest{
+				Theme:          "Bước Đi Trong Lòng Biết Ơn",
+				VerseText:      "Hãy cảm tạ trong mọi hoàn cảnh, vì đây là ý muốn của Đức Chúa Trời cho anh em.",
+				VerseReference: "1 Tê-sa-lô-ni-ca 5:18",
+			},
+			wantErr: false,
+		},
+		{
+			name:    "theme past the cap is rejected",
+			req:     UpsertMonthNoteRequest{Theme: strings.Repeat("a", MaxMonthThemeLen+1)},
+			wantErr: true,
+		},
+		{
+			name:    "theme exactly at the cap is accepted",
+			req:     UpsertMonthNoteRequest{Theme: strings.Repeat("a", MaxMonthThemeLen)},
+			wantErr: false,
+		},
+		{
+			name:    "verse text past the cap is rejected",
+			req:     UpsertMonthNoteRequest{VerseText: strings.Repeat("a", MaxMonthVerseLen+1)},
+			wantErr: true,
+		},
+		{
+			name:    "verse reference past the cap is rejected",
+			req:     UpsertMonthNoteRequest{VerseReference: strings.Repeat("a", MaxMonthVerseRefLen+1)},
+			wantErr: true,
+		},
+		{
+			name:    "note content past the cap is rejected",
+			req:     UpsertMonthNoteRequest{Content: strings.Repeat("a", MaxMonthNoteLen+1)},
+			wantErr: true,
+		},
+		// A multi-byte theme at the rune cap must pass. This is the case a
+		// byte-counting implementation gets wrong, so it is worth pinning
+		// separately from the ASCII cap case above.
+		{
+			name:    "multibyte theme at the rune cap is accepted",
+			req:     UpsertMonthNoteRequest{Theme: strings.Repeat("ơ", MaxMonthThemeLen)},
+			wantErr: false,
+		},
+		// The reference is a single citation, never prose. A newline in it means
+		// something has gone wrong in the form, and it would break the one-line
+		// layout the card gives it.
+		{
+			name:    "newline in the verse reference is rejected",
+			req:     UpsertMonthNoteRequest{VerseReference: "1 Thess 5:18\nJohn 3:16"},
+			wantErr: true,
+		},
+		{
+			name:    "newline in the theme is rejected",
+			req:     UpsertMonthNoteRequest{Theme: "Walking\nin Gratitude"},
+			wantErr: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			err := c.req.Validate()
+			if c.wantErr && err == nil {
+				t.Errorf("Validate() = nil, want an error")
+			}
+			if !c.wantErr && err != nil {
+				t.Errorf("Validate() = %v, want nil", err)
+			}
+		})
 	}
 }

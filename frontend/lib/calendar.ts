@@ -177,13 +177,31 @@ export async function deletePaletteColor(id: string, token: string): Promise<voi
   await apiDelete(`/api/v1/calendar/palette/${id}`, token)
 }
 
+// The four fields an admin edits together in the month modal. Passed as an
+// object rather than four positional strings, because four same-typed
+// parameters in a row is a call-site bug waiting to happen - swapping the verse
+// and its reference would type-check perfectly.
+export interface MonthNoteInput {
+  content: string
+  theme: string
+  verse_text: string
+  verse_reference: string
+  /**
+   * The same verse in the other language. Filed as a human-authored, already
+   * approved translation rather than queued for the model - see the Memory
+   * verse section of EventModal, and `monthNoteTranslatableFields` on the
+   * backend, which omits the verse from everything sent to the AI.
+   */
+  verse_text_alt: string
+}
+
 export async function upsertMonthNote(
   year: number,
   month: number,
-  content: string,
+  fields: MonthNoteInput,
   token: string,
 ): Promise<CalendarMonthNote> {
-  return apiPut(`${BASE}/months/${year}/${month}/note`, { content }, token) as Promise<CalendarMonthNote>
+  return apiPut(`${BASE}/months/${year}/${month}/note`, fields, token) as Promise<CalendarMonthNote>
 }
 
 export async function upsertMonthSettings(

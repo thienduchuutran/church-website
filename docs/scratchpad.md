@@ -8,6 +8,155 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
+# SHIPPED 2026-09-15 - Month theme and memory verse on the calendar
+
+**Status:** shipped. Write-up and the decisions taken during the build (the verse is never machine
+translated; the badge split; partial i18n) are in `docs/progress.md` (2026-09-15). Users asked for a place on the calendar page to carry the
+month's theme and its memory verse.
+
+## Why this extends `calendar_month_notes` rather than adding a table
+
+The obvious shape is a new `month_content` table with `theme`, `verse_text`, `verse_reference`.
+It was rejected after reading what already exists:
+
+- `calendar_month_notes` is **already keyed `(year, month)`** - the exact same key. A second
+  table on the same key means two upserts, two reads and two null-checks for one concept.
+- The translation engine is already wired for `calendar_month_notes` in five places: the label
+  `CASE` and the `LEFT JOIN` in `repository/translation.go`, the orphan-sweep clause below them,
+  the `enqueueOne` call in `service/calendar.go`, and the emerald tint in
+  `TranslationReviewRecord.tsx`. A new table repeats all five.
+- The note editor's placeholder already reads *"Write a monthly note, address, theme verse…"* -
+  admins have been cramming this content into one freeform box. The feedback is that it needs
+  structure and rank, not a new capability.
+
+The cost of extending is that one `source_locale` now covers four text fields. That is already
+the established shape: `calendar_events` shares one `source_locale` across `title` and `notes`.
+
+## Why the card sits above the grid, and the note stays below it
+
+The existing month note renders at 11px in the info strip *below* the grid, third column after
+Birthdays and Bible Study. That is the right rank for logistics ("bring guests", an address).
+It is the wrong rank for the month's theme, which is the frame for everything in the grid.
+
+So the two split by kind, not by table: devotional content (theme + verse) goes in a card
+between the month nav and the grid; the freeform note stays the footnote it always was. One
+row still backs both.
+
+## Phase 1 - Database
+
+| File | Change | Why |
+|---|---|---|
+| `backend/migrations/000017_month_theme_verse.up.sql` | `ALTER TABLE calendar_month_notes` add `theme`, `verse_text`, `verse_reference`, each `text not null default ''` | Matches `content`'s existing `not null default ''` so "absent" stays exactly one thing (empty string) instead of introducing a null/empty ambiguity the read path would have to branch on. No backfill: every existing row lands on the default and is valid. |
+| `backend/migrations/000017_month_theme_verse.down.sql` | three `drop column if exists` | golang-migrate requires the pair, and migrations auto-apply on backend startup so the rollback has to be real. |
+
+## Phase 2 - Backend
+
+| File | Change | Why |
+|---|---|---|
+| `internal/model/types.go` | `CalendarMonthNote` += `Theme`, `VerseText`, `VerseReference` + their `*Source` twins; `UpsertMonthNoteRequest` += the three fields and a `Validate()` | The `*Source` fields exist so the admin modal edits the authored text while the page displays a translation - without twins for the new fields an admin would edit AI output. `Validate()` caps lengths so one paste cannot push a 50KB "verse" through the translation queue. |
+| `internal/model/calendar_types_test.go` | table tests for `UpsertMonthNoteRequest.Validate` | TDD rule: the only new pure logic in the model layer. |
+| `internal/repository/calendar.go` | `GetMonthNote`: three more `CASE`/`COALESCE` columns, each with its own `LEFT JOIN translations` on `field_name`. `UpsertMonthNote`: three columns through `INSERT`/`ON CONFLICT`/`RETURNING` | Per-field locale resolution is already this query's shape; each field needs its own join because each is translated and approved independently. |
+| `internal/service/calendar.go` | `UpsertMonthNote` detects `source_locale` across all four fields and enqueues one job per non-empty field; new `monthNoteFields` helper | Language detection is more accurate over more text. Skipping empty fields keeps junk rows out of the queue - the same reason the existing code guards `if req.Content != ""`. |
+| `internal/service/calendar_test.go` | table tests for `monthNoteFields` | TDD rule. |
+| `internal/handler/calendar.go` | strip the three new `*Source` fields for non-admins alongside `ContentSource` | Single audit boundary - the comment there already says every admin-only field is stripped in one place. |
+
+No new route. `PUT /calendar/months/{year}/{month}/note` already exists and its request body grows.
+
+## Phase 3 - Frontend form
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/components/features/calendar/types.ts` | mirror the six new fields on `CalendarMonthNote` | |
+| `frontend/lib/calendar.ts` | `upsertMonthNote` takes an object instead of a positional `content` | Four positional strings in a row is a caller bug waiting to happen. |
+| `frontend/components/features/calendar/EventModal.tsx` | `note` mode gains Theme / Verse / Reference inputs above the existing textarea; title becomes "This Month" | Keeps every month-scoped edit in one modal and one save. Calendar admin lives on the calendar page, not the dashboard - see below. |
+| `frontend/components/features/admin/TranslationReviewRecord.tsx` | `FIELD_LABELS` += the three new fields | Unlisted fields render as raw `verse_reference` in the review panel. |
+
+## Phase 4 - Display
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/components/features/calendar/MonthThemeCard.tsx` *(new)* | The card: theme and verse in one 1:2 split, `border-2` square block, accent label, machine-translation badge, admin edit affordance | `CalendarShell` is already 848 lines; a separate component keeps the shell readable and the card reusable. |
+| `frontend/components/features/calendar/CalendarShell.tsx` | render it between the masthead and the grid; `data-export-hide` on the admin affordance only | The Discord PNG export should carry the theme and verse - they are the month's headline - but not an Edit button. |
+
+### The accent contrast fix, folded in
+
+All card text takes its colour from `deriveRamp(accent).text` (`lib/color.ts`), not the raw
+accent. Three of the twelve month accents fail WCAG AA as 9px text on the page ground -
+April `#BEB5FA` at 1.78:1, October `#B25A73` at 4.32:1, and the custom September lavender at
+2.17:1. `deriveRamp` already walks a hex darker in 2% steps until it clears 4.5:1 against both
+white and its own highlight, so the fix is reuse, not new colour maths.
+
+One wrinkle it does not cover: `deriveRamp().text` is always dark, because it was written for
+event chips that supply their own light fill. The card paints straight onto the page ground,
+which is `#17101a` in dark mode, where dark ink vanishes. So the card takes `ramp.highlight`
+(the light end of the same ramp, same hue) when the page is dark.
+
+**Not touched:** the 64px month title keeps the raw accent. At that size it is a deliberate
+hero treatment and darkening it changes the whole page's character - a design call, not an
+accessibility fix to make silently. The three existing info-strip labels are likewise left
+alone; the same one-line change would fix them, but that is the owner's call.
+
+## Admin control - why nothing goes on the admin dashboard
+
+The brief assumed the dashboard was a flat list of top-level buttons needing grouping. It is
+not: `app/[locale]/admin/page.tsx` already has named sections (Edit Pages, Translation Review,
+Create New Post, All Posts). More to the point, **no calendar admin lives there at all** - the
+FAB, the note link and the accent picker are all in-place on the calendar page. Adding a
+dashboard form would scatter calendar editing across two surfaces.
+
+So the form extends the modal that already exists. The admin's choice count on the calendar
+page stays at three (event, month details, accent) rather than growing to four.
+
+**No dashboard reorganisation is proposed.** If the dashboard does need the same grouping
+treatment applied more broadly, that is a separate piece of work.
+
+## End-to-end flow
+
+```
+Admin opens calendar → "Edit month" (info strip link, FAB, or the card's own affordance)
+  → EventModal mode='note' → Theme / Verse / Reference / Note
+  → PUT /api/v1/calendar/months/2026/9/note
+      → service detects source_locale across all four fields
+      → repo upserts the one (year, month) row
+      → one translation job enqueued per non-empty field
+  → worker fills translations → admin approves in the review panel
+Visitor loads /vi/calendar → GET /api/v1/calendar?year=2026&month=9&locale=vi
+  → repo resolves each field: source_locale = vi ? stored : COALESCE(translation, stored)
+  → handler strips *_source for non-admins
+  → MonthThemeCard renders above the grid, badge shown per unapproved field
+Discord export → card included, Edit affordance excluded via data-export-hide
+```
+
+## Security callouts
+
+- **No new route, no new auth surface.** The write reuses the existing admin-only
+  `PUT /calendar/months/{year}/{month}/note` inside the `RequireAdmin` group.
+- **Gap closed:** the three new `*_source` fields join `content_source` in the non-admin strip.
+  Forgetting one would leak untranslated source text to public visitors - not a secret, but it
+  doubles payload size and exposes text the admin has not approved for display.
+- **Length caps** in `Validate()` bound what reaches the translation queue and the AI prompt.
+- Verse text renders as **plain text, not HTML** - it does not go near `sanitizeBody`, so there
+  is no new injection surface.
+
+## Scope estimate
+
+| Phase | Estimate |
+|---|---|
+| 1. Database | ~15 min |
+| 2. Backend | ~1 h |
+| 3. Frontend form | ~45 min |
+| 4. Display | ~1 h |
+| Docs | ~30 min |
+
+## Open question left for the owner
+
+`verse_reference` is enqueued for translation like the other fields, because Vietnamese book
+names genuinely differ (John → Giăng, Psalms → Thi Thiên). It is also the field most likely to
+come back mangled, since a model may reformat `5:18`. It passes through the human review panel
+either way - worth watching the first few rather than trusting them.
+
+---
+
 # SHIPPED 2026-09-05 - Homepage revival (rebased onto the logo palette)
 
 **Status:** implemented as Phase 4 of the "Sunday Bloom" redesign, alongside the site-wide

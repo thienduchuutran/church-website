@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"golang.org/x/text/runes"
 	"golang.org/x/text/transform"
@@ -492,21 +493,60 @@ func (r *UpdateCalendarPlaceRequest) Validate() error {
 }
 
 type CalendarMonthNote struct {
-	ID        string    `json:"id"`
-	Year      int       `json:"year"`
-	Month     int       `json:"month"`
-	Content   string    `json:"content"`
-	AdminID   *string   `json:"admin_id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	// MachineTranslated: true when this month note's content was served via
-	// an unapproved AI translation. Omitted on English responses.
+	ID    string `json:"id"`
+	Year  int    `json:"year"`
+	Month int    `json:"month"`
+	// Content is the freeform note rendered in the info strip BELOW the grid -
+	// logistics, an address, a reminder. Theme and the two verse fields are the
+	// devotional content rendered in the card ABOVE the grid. They share a row
+	// because they share a (year, month) key, not because they are the same
+	// kind of thing. See migration 000017.
+	Content string `json:"content"`
+	// Theme is the month's theme, a short phrase. Empty string means unset, and
+	// the card omits itself entirely when theme and verse are both empty.
+	Theme string `json:"theme"`
+	// VerseText is the memory verse, plain text - never HTML. It is rendered
+	// with {} interpolation rather than dangerouslySetInnerHTML, so unlike a
+	// post body it never passes through sanitizeBody.
+	VerseText string `json:"verse_text"`
+	// VerseReference is the citation, e.g. "1 Thessalonians 5:18". Stored apart
+	// from VerseText so the translation worker sees it as its own field; left
+	// inside the verse, a model rewriting the sentence would feel free to
+	// reformat the chapter and verse numbers with it.
+	VerseReference string    `json:"verse_reference"`
+	AdminID        *string   `json:"admin_id"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	// MachineTranslated: true when this month note's CONTENT - the footnote in
+	// the info strip below the grid - was served via an unapproved AI
+	// translation. Omitted on English responses.
 	MachineTranslated bool `json:"machine_translated,omitempty"`
-	// ContentSource: the authored content, so the Notes modal edits the source
-	// even while the sidebar displays a translation. See
-	// CalendarEvent.TitleSource - same rule, same handler-side stripping.
-	ContentSource *string `json:"content_source,omitempty"`
-	// SourceLocale: see CalendarEvent.SourceLocale.
+	// CardMachineTranslated: the same claim for the three fields the theme card
+	// above the grid displays (theme, verse_text, verse_reference).
+	//
+	// Two flags rather than one because there are two badges in two places. A
+	// single row-wide flag made each badge answer for text displayed somewhere
+	// else on the page - the note's badge lighting up because the theme was
+	// unapproved, and vice versa - which tells the reader something false about
+	// the text they are actually looking at.
+	CardMachineTranslated bool `json:"card_machine_translated,omitempty"`
+	// ContentSource and its three siblings: the authored text, so the modal edits
+	// the source even while the page displays a translation. See
+	// CalendarEvent.TitleSource - same rule, same handler-side stripping. All
+	// four are stripped together for non-admins; adding a field here without
+	// adding it to that strip would leak unapproved source text publicly.
+	ContentSource        *string `json:"content_source,omitempty"`
+	ThemeSource          *string `json:"theme_source,omitempty"`
+	VerseTextSource      *string `json:"verse_text_source,omitempty"`
+	VerseReferenceSource *string `json:"verse_reference_source,omitempty"`
+	// VerseTextAlt: the verse's wording in the other language, as the admin
+	// typed it. Admin-only and stripped with the *Source fields - a visitor is
+	// already served the right language by the CASE above, so this would only
+	// be the same verse twice. Round-trips under the same JSON key the upsert
+	// request accepts, so the modal sends back exactly what it received.
+	VerseTextAlt *string `json:"verse_text_alt,omitempty"`
+	// SourceLocale: see CalendarEvent.SourceLocale. One locale covers all four
+	// text fields, matching how CalendarEvent shares one across title and notes.
 	SourceLocale string `json:"source_locale"`
 }
 
@@ -800,10 +840,75 @@ func (r *UpdateCalendarEventRequest) Validate() error {
 	return nil
 }
 
+// Length caps for a month note's four text fields.
+//
+// These are the only ceiling in the stack: the columns are `text`, the form is
+// a textarea, and every non-empty field is enqueued for translation - so
+// without them one paste sends an unbounded blob to the model. The values are
+// generous against real use (a theme is two to five words, the longest verses
+// in either testament are comfortably under 800 characters) and are counted in
+// RUNES, not bytes, because Vietnamese diacritics are multi-byte and a byte cap
+// would give Vietnamese authors roughly a third of the room English ones get.
+const (
+	MaxMonthThemeLen    = 120
+	MaxMonthVerseLen    = 1000
+	MaxMonthVerseRefLen = 120
+	MaxMonthNoteLen     = 4000
+)
+
 type UpsertMonthNoteRequest struct {
-	Content string `json:"content"`
-	// No source_locale field - detected from Content. See
+	Content        string `json:"content"`
+	Theme          string `json:"theme"`
+	VerseText      string `json:"verse_text"`
+	VerseReference string `json:"verse_reference"`
+	// VerseTextAlt is the same verse in the OTHER language, typed by the admin.
+	//
+	// It exists because the memory verse is never machine translated. A
+	// Vietnamese C&MA congregation reads Bản Truyền Thống; an AI paraphrase of
+	// scripture is close to the published wording without being it, which is
+	// useless for the one piece of text on the page people are meant to learn
+	// word for word. So the admin supplies both wordings and the service files
+	// this one as a human-authored, pre-approved translation.
+	//
+	// It is NOT evidence for language detection - it is deliberately the
+	// opposite language from the rest of the note.
+	VerseTextAlt string `json:"verse_text_alt"`
+	// No source_locale field - detected from the note's own four fields. See
 	// CreateCalendarEventRequest.
+}
+
+// Validate bounds each field's length and keeps the two single-line fields on
+// one line.
+//
+// Every field is optional: clearing all four is how an admin removes the card
+// and the note, so an empty request is valid by design, not by omission.
+func (r *UpsertMonthNoteRequest) Validate() error {
+	for _, f := range []struct {
+		name  string
+		value string
+		max   int
+	}{
+		{"theme", r.Theme, MaxMonthThemeLen},
+		{"verse_text", r.VerseText, MaxMonthVerseLen},
+		{"verse_text_alt", r.VerseTextAlt, MaxMonthVerseLen},
+		{"verse_reference", r.VerseReference, MaxMonthVerseRefLen},
+		{"content", r.Content, MaxMonthNoteLen},
+	} {
+		if utf8.RuneCountInString(f.value) > f.max {
+			return fmt.Errorf("%s must be %d characters or fewer", f.name, f.max)
+		}
+	}
+	// The theme is a headline and the reference is a citation - both render on
+	// one line in the card. A newline in either means the form has been pasted
+	// into wrongly, and letting it through would break that layout. The verse
+	// itself and the note are free to wrap.
+	if strings.ContainsAny(r.Theme, "\n\r") {
+		return errors.New("theme must be a single line")
+	}
+	if strings.ContainsAny(r.VerseReference, "\n\r") {
+		return errors.New("verse_reference must be a single line")
+	}
+	return nil
 }
 
 type UpsertMonthSettingsRequest struct {

@@ -13,6 +13,7 @@ import CakeMarker from './CakeMarker'
 import EventModal from './EventModal'
 import DayEventsModal from './DayEventsModal'
 import MonthPicker from './MonthPicker'
+import MonthThemeCard from './MonthThemeCard'
 import AccentColorPicker from './AccentColorPicker'
 
 const MONTH_NAMES = [
@@ -575,6 +576,20 @@ export default function CalendarShell({
           </div>
         )}
 
+        {/* The month's theme and memory verse.
+            Placed between the nav row and the grid rather than under the month
+            title: the headline is already the one thing competing for attention
+            up here, and this is context for the grid rather than a second
+            headline. It renders nothing for a visitor when the month has no
+            theme, so a month nobody has filled in looks exactly as it did
+            before this existed. */}
+        <MonthThemeCard
+          note={monthNote}
+          accent={activeAccent}
+          isAdmin={isAdmin}
+          onEdit={() => { setEditingNote(true); setModalOpen(true) }}
+        />
+
         {/* Calendar grid - direction-aware slide on month change */}
         <div className="relative overflow-hidden">
           <AnimatePresence mode="wait" initial={false} custom={direction}>
@@ -673,7 +688,7 @@ export default function CalendarShell({
                     onClick={() => { setEditingNote(true); setModalOpen(true) }}
                     className="font-display text-[9px] text-muted/80 hover:text-foreground underline underline-offset-2 transition-colors"
                   >
-                    {monthNote ? 'Edit' : 'Add note'}
+                    {monthNote?.content ? 'Edit' : 'Add note'}
                   </button>
                 )}
               </div>

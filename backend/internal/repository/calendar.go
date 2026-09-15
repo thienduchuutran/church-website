@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -236,10 +238,12 @@ func (r *CalendarRepository) GetMonthNote(ctx context.Context, year, month int, 
 	if calendarRawRead(locale) {
 		var n model.CalendarMonthNote
 		err := r.pool.QueryRow(ctx,
-			`SELECT id, year, month, content, admin_id, created_at, updated_at, source_locale
+			`SELECT id, year, month, content, theme, verse_text, verse_reference,
+			        admin_id, created_at, updated_at, source_locale
 			 FROM calendar_month_notes WHERE year = $1 AND month = $2`,
 			year, month,
-		).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.AdminID, &n.CreatedAt, &n.UpdatedAt, &n.SourceLocale)
+		).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.Theme, &n.VerseText, &n.VerseReference,
+			&n.AdminID, &n.CreatedAt, &n.UpdatedAt, &n.SourceLocale)
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, nil
 		}
@@ -250,29 +254,77 @@ func (r *CalendarRepository) GetMonthNote(ctx context.Context, year, month int, 
 	}
 
 	var (
-		n       model.CalendarMonthNote
-		machine bool
+		n           model.CalendarMonthNote
+		machine     bool
+		machineCard bool
 	)
 	err := r.pool.QueryRow(ctx,
 		// Same per-row direction check as GetEventsByMonth - a note authored in
 		// Vietnamese is served as-is to a Vietnamese reader and translated only
 		// for an English one.
+		// One LEFT JOIN per translatable field, not one for the row. Each field
+		// is translated and approved independently in the review panel, so an
+		// admin can approve the theme while the verse is still pending - a
+		// single join keyed on the row could not express that.
+		//
+		// Two flags, because there are two badges in two places on the page.
+		// machine_translated covers `content` alone - the footnote below the
+		// grid - which is what it has always meant. card_machine_translated
+		// covers the three fields the theme card above the grid displays.
+		//
+		// One combined flag was wrong in both directions: the note's badge lit
+		// up when only the theme was unapproved, and the card's badge lit up
+		// when only the note was. Each badge must describe the text it sits
+		// next to and nothing else, or it is telling the reader something
+		// false about what they are looking at.
 		`SELECT mn.id, mn.year, mn.month,
 		        CASE WHEN mn.source_locale = $3 THEN mn.content
-		             ELSE COALESCE(t.translated_text, mn.content) END AS content,
+		             ELSE COALESCE(tc.translated_text, mn.content) END AS content,
+		        CASE WHEN mn.source_locale = $3 THEN mn.theme
+		             ELSE COALESCE(tt.translated_text, mn.theme) END AS theme,
+		        CASE WHEN mn.source_locale = $3 THEN mn.verse_text
+		             ELSE COALESCE(tv.translated_text, mn.verse_text) END AS verse_text,
+		        CASE WHEN mn.source_locale = $3 THEN mn.verse_reference
+		             ELSE COALESCE(tr.translated_text, mn.verse_reference) END AS verse_reference,
 		        mn.admin_id, mn.created_at, mn.updated_at,
 		        mn.source_locale <> $3 AND
-		        COALESCE((t.id IS NOT NULL AND t.is_ai_generated AND t.approved_by IS NULL), false) AS machine_translated,
-		        -- Authored source for the admin Notes modal; see the same pattern
-		        -- in GetEventsByMonth. Stripped for non-admins.
+		        COALESCE((tc.id IS NOT NULL AND tc.is_ai_generated AND tc.approved_by IS NULL), false)
+		          AS machine_translated,
+		        mn.source_locale <> $3 AND (
+		          COALESCE((tt.id IS NOT NULL AND tt.is_ai_generated AND tt.approved_by IS NULL), false) OR
+		          COALESCE((tv.id IS NOT NULL AND tv.is_ai_generated AND tv.approved_by IS NULL), false) OR
+		          COALESCE((tr.id IS NOT NULL AND tr.is_ai_generated AND tr.approved_by IS NULL), false)
+		        ) AS card_machine_translated,
+		        -- Authored source for the admin modal; see the same pattern in
+		        -- GetEventsByMonth. All four are stripped for non-admins.
 		        mn.content AS content_source,
+		        mn.theme AS theme_source,
+		        mn.verse_text AS verse_text_source,
+		        mn.verse_reference AS verse_reference_source,
+		        -- The verse's other-language wording, for the admin modal. Joined
+		        -- on "not the note's own language" rather than a passed-in locale
+		        -- because which locale that is depends on the row we are reading.
+		        -- Only two locales exist and (record, field, locale) is unique, so
+		        -- this matches at most one row.
+		        ta.translated_text AS verse_text_alt,
 		        mn.source_locale
 		 FROM calendar_month_notes mn
-		 LEFT JOIN translations t
-		   ON t.record_id = mn.id AND t.field_name = 'content' AND t.locale = $3
+		 LEFT JOIN translations tc
+		   ON tc.record_id = mn.id AND tc.field_name = 'content' AND tc.locale = $3
+		 LEFT JOIN translations tt
+		   ON tt.record_id = mn.id AND tt.field_name = 'theme' AND tt.locale = $3
+		 LEFT JOIN translations tv
+		   ON tv.record_id = mn.id AND tv.field_name = 'verse_text' AND tv.locale = $3
+		 LEFT JOIN translations tr
+		   ON tr.record_id = mn.id AND tr.field_name = 'verse_reference' AND tr.locale = $3
+		 LEFT JOIN translations ta
+		   ON ta.record_id = mn.id AND ta.field_name = 'verse_text' AND ta.locale <> mn.source_locale
 		 WHERE mn.year = $1 AND mn.month = $2`,
 		year, month, locale,
-	).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.AdminID, &n.CreatedAt, &n.UpdatedAt, &machine, &n.ContentSource, &n.SourceLocale)
+	).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.Theme, &n.VerseText, &n.VerseReference,
+		&n.AdminID, &n.CreatedAt, &n.UpdatedAt, &machine, &machineCard,
+		&n.ContentSource, &n.ThemeSource, &n.VerseTextSource, &n.VerseReferenceSource,
+		&n.VerseTextAlt, &n.SourceLocale)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -280,7 +332,64 @@ func (r *CalendarRepository) GetMonthNote(ctx context.Context, year, month int, 
 		return nil, err
 	}
 	n.MachineTranslated = machine
+	n.CardMachineTranslated = machineCard
 	return &n, nil
+}
+
+// UpsertHumanTranslation files a translation a PERSON wrote, already approved.
+//
+// The worker is the only other writer into this table, and everything it writes
+// arrives as is_ai_generated = true awaiting review. This is the opposite case:
+// the memory verse is never sent to the model, so its Vietnamese wording comes
+// from the admin typing the published Bản Truyền Thống text. Marking it
+// is_ai_generated = false with an approver set means the read path serves it
+// exactly like an approved AI translation, but the "Bản dịch tự động" badge
+// stays off and the review panel never lists it - both correct, because no
+// machine was involved and there is nothing for a reviewer to check.
+//
+// source_hash is the hash of the source text at the time of writing, the same
+// column the worker fills, so a later change to the source is still detectable.
+func (r *CalendarRepository) UpsertHumanTranslation(
+	ctx context.Context,
+	tableName, recordID, fieldName, locale, sourceText, translatedText, approverID string,
+) error {
+	sum := sha256.Sum256([]byte(sourceText))
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO translations
+		   (table_name, record_id, field_name, locale, source_hash, source_text,
+		    translated_text, is_ai_generated, approved_by, approved_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, now())
+		 ON CONFLICT (record_id, field_name, locale) DO UPDATE
+		   SET source_hash     = EXCLUDED.source_hash,
+		       source_text     = EXCLUDED.source_text,
+		       translated_text = EXCLUDED.translated_text,
+		       is_ai_generated = false,
+		       approved_by     = EXCLUDED.approved_by,
+		       approved_at     = now(),
+		       updated_at      = now()`,
+		tableName, recordID, fieldName, locale, hex.EncodeToString(sum[:]), sourceText,
+		translatedText, approverID,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert human translation %s/%s/%s: %w", recordID, fieldName, locale, err)
+	}
+	return nil
+}
+
+// DeleteTranslationForField removes one field's translation in one locale.
+//
+// Narrower than DeleteTranslationsForLocale on purpose: clearing the alternate
+// verse must not disturb the theme's or the note's translations, which live in
+// the same locale on the same record.
+func (r *CalendarRepository) DeleteTranslationForField(ctx context.Context, recordID, fieldName, locale string) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM translations WHERE record_id = $1 AND field_name = $2 AND locale = $3`,
+		recordID, fieldName, locale,
+	)
+	if err != nil {
+		return fmt.Errorf("delete translation %s/%s/%s: %w", recordID, fieldName, locale, err)
+	}
+	return nil
 }
 
 // DeleteTranslationsForLocale removes a record's translations for one locale.
@@ -1025,20 +1134,32 @@ func (r *CalendarRepository) UpsertMonthSettings(ctx context.Context, year, mont
 	return &s, nil
 }
 
-// UpsertMonthNote inserts or updates the sidebar note for a given year+month.
-func (r *CalendarRepository) UpsertMonthNote(ctx context.Context, year, month int, content string, adminID *string, sourceLocale string) (*model.CalendarMonthNote, error) {
+// UpsertMonthNote inserts or updates the month's note, theme and verse for a
+// given year+month.
+//
+// All four text fields are written together on purpose. They are one form and
+// one save, so a partial upsert would let a save that only changed the theme
+// silently resurrect a verse the admin had cleared in the same edit.
+func (r *CalendarRepository) UpsertMonthNote(ctx context.Context, year, month int, fields model.UpsertMonthNoteRequest, adminID *string, sourceLocale string) (*model.CalendarMonthNote, error) {
 	var n model.CalendarMonthNote
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO calendar_month_notes (year, month, content, admin_id, source_locale)
-		 VALUES ($1, $2, $3, $4, $5)
+		`INSERT INTO calendar_month_notes
+		   (year, month, content, theme, verse_text, verse_reference, admin_id, source_locale)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		 ON CONFLICT (year, month) DO UPDATE
 		   SET content = EXCLUDED.content,
+		       theme = EXCLUDED.theme,
+		       verse_text = EXCLUDED.verse_text,
+		       verse_reference = EXCLUDED.verse_reference,
 		       admin_id = EXCLUDED.admin_id,
 		       source_locale = EXCLUDED.source_locale,
 		       updated_at = now()
-		 RETURNING id, year, month, content, admin_id, created_at, updated_at, source_locale`,
-		year, month, content, adminID, sourceLocale,
-	).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.AdminID, &n.CreatedAt, &n.UpdatedAt, &n.SourceLocale)
+		 RETURNING id, year, month, content, theme, verse_text, verse_reference,
+		           admin_id, created_at, updated_at, source_locale`,
+		year, month, fields.Content, fields.Theme, fields.VerseText, fields.VerseReference,
+		adminID, sourceLocale,
+	).Scan(&n.ID, &n.Year, &n.Month, &n.Content, &n.Theme, &n.VerseText, &n.VerseReference,
+		&n.AdminID, &n.CreatedAt, &n.UpdatedAt, &n.SourceLocale)
 	if err != nil {
 		return nil, err
 	}

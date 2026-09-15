@@ -53,10 +53,13 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 	//     the SAME condition, because a place name identifies a household as
 	//     precisely as its street number - leaving "MST House" behind while
 	//     hiding "203 Essex Street" would defeat the whole point of the flag.
-	//   - title_source / notes_source / content_source: the untranslated English
-	//     text, needed only so the admin edit form saves the source instead of
-	//     the machine translation it is displaying. A public visitor has no use
-	//     for it, and shipping it would double the text in every payload.
+	//   - title_source / notes_source, and the month note's content_source,
+	//     theme_source, verse_text_source and verse_reference_source: the
+	//     untranslated authored text, needed only so the admin edit form saves
+	//     the source instead of the machine translation it is displaying. A
+	//     public visitor has no use for it, and shipping it would double the
+	//     text in every payload. Every *_source field on a model must be listed
+	//     here - a new one that is not stripped leaks unapproved source text.
 	if middleware.AdminEmailFromContext(r.Context()) == "" {
 		for i := range resp.Events {
 			if !resp.Events[i].AddressPublic {
@@ -69,6 +72,10 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 		}
 		if resp.MonthNote != nil {
 			resp.MonthNote.ContentSource = nil
+			resp.MonthNote.ThemeSource = nil
+			resp.MonthNote.VerseTextSource = nil
+			resp.MonthNote.VerseReferenceSource = nil
+			resp.MonthNote.VerseTextAlt = nil
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)

@@ -199,6 +199,12 @@ Three rules that are easy to break:
   `EventModal` shows a plain danger confirmation instead of the three-way scope
   prompt - the backend accepts a rule change only with `scope=series`, so
   offering "this event" would be offering an answer that cannot work.
+- **i18n on the calendar page is partial, on purpose.** `messages/*.json` has a `Calendar` namespace covering `MonthThemeCard`'s chrome only. The rest of `CalendarShell` ("Today", "Birthdays", "Bible Study", "Notes", "Locations", "None this month.") is still hardcoded English on both locales - a pre-existing gap, not introduced here. New calendar strings go through the namespace; finishing the shell is its own task.
+
+- **The month's theme and verse live above the grid; the note stays below it.** `MonthThemeCard` renders between the month navigation and the grid; the info strip's Notes column keeps the freeform `content`. They split by rank, not by table - one `calendar_month_notes` row backs both. A footnote is the right rank for logistics and the wrong rank for the frame the month hangs on.
+
+- **Accent-coloured text goes through `deriveRamp`, never the raw accent.** Three of the twelve `MONTH_THEMES` accents fail WCAG AA as 9px text on `--background` (April `#BEB5FA` at 1.78:1, October `#B25A73` at 4.32:1, plus any light custom accent). `deriveRamp(accent).text` walks the hex darker until it clears 4.5:1. One wrinkle: that value is always *dark*, because `deriveRamp` was written for event chips that supply their own light fill - a component painting onto the page ground must take `ramp.highlight` instead under `prefers-color-scheme: dark`, or the text vanishes. See `MonthThemeCard.useAccentInk`. The 64px month headline deliberately keeps the raw accent: at that size it is a hero treatment, not body text.
+
 - **The "running out" warning lives on the admin dashboard, not the calendar.**
   `RepeatingEventsNotice` renders nothing unless a series is within twelve
   months of its last date, which is why it sits above Edit Pages rather than

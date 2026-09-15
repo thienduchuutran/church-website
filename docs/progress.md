@@ -3,6 +3,180 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-09-15 - Month theme and memory verse above the calendar grid
+
+**Why.** Users asked for somewhere on the calendar page to carry the month's theme and its memory
+verse. The request looked like a new feature and was mostly a ranking problem: the note editor's
+placeholder has read *"Write a monthly note, address, theme verse…"* since it shipped, so this
+content was already being typed - into one freeform textarea, rendered at 11px in the info strip
+*below* the grid, third column after Birthdays and Bible Study.
+
+**The main decision: extend `calendar_month_notes`, do not add a table.** The obvious shape was a
+new `month_content` table with `theme` / `verse_text` / `verse_reference`. Rejected because
+`calendar_month_notes` is already keyed `(year, month)` - the identical key - so a second table
+buys two upserts, two reads and two null-checks for one concept, plus a second registration in all
+five places the translation engine knows about `calendar_month_notes`: the label `CASE`, the
+`LEFT JOIN` and the orphan-sweep clause in `repository/translation.go`, the `enqueueOne` call in
+`service/calendar.go`, and the emerald tint in `TranslationReviewRecord.tsx`.
+
+What we accept in exchange: one `source_locale` now covers four text fields. That is already the
+established trade - `calendar_events` has shared one across `title` and `notes` since migration
+`000013` - and a locale per field would widen the flip-cleanup logic fourfold for a case nobody
+has hit.
+
+**The content splits by rank, not by table.** Theme and verse render in a new card between the
+month navigation and the grid; the freeform `content` stays the footnote it always was. One row
+backs both. A footnote is the right rank for logistics ("bring guests", an address) and the wrong
+rank for the frame the rest of the month hangs on.
+
+**Placement, and what it is not.** The card sits between the nav row and the grid rather than
+under the month title, because the 64px headline is already the one thing competing for attention
+up there. It is sized as a supporting card, not a hero banner - theme at 19px Baloo 2, verse at
+13px Nunito, above the 11px info strip and well below the headline. It reuses the page's existing
+block idiom (`border-2 border-foreground`, square corners, `--background` fill, 9px accent label)
+rather than introducing a new shape: on this page rounding is reserved for pills and buttons.
+
+### The accent contrast fix, folded in
+
+The 9px uppercase labels in the info strip are painted in the raw month accent. Three of the
+twelve `MONTH_THEMES` accents fail WCAG AA as small text on `--background`: April `#BEB5FA` at
+**1.78:1**, October `#B25A73` at **4.32:1**, and any light custom accent (the lavender then set on
+September 2026 measured **2.17:1**). Minor while those labels sat below the grid with their
+content beside them; not minor once an accent-coloured label moves above the grid and the verse
+*reference* - something a reader actually looks up - is painted in it too.
+
+`lib/color.ts`'s `deriveRamp` already solves exactly this, so the fix is reuse: it walks a hex
+darker in 2% steps until it clears 4.5:1. Measured after: April `#200BA7` 11.93:1, October
+`#7A394B` 7.91:1, the custom lavender `#39238F` 10.99:1.
+
+**The non-obvious half.** `deriveRamp().text` is always *dark*, because it was written for event
+chips that supply their own light `highlight` fill to sit on. This card paints straight onto the
+page ground, which is `#17101a` under `prefers-color-scheme: dark`, where dark ink vanishes. So
+`MonthThemeCard.useAccentInk` takes `ramp.highlight` - the light end of the same ramp, same hue -
+when the page is dark. Any future component painting accent-coloured text directly on the page
+background needs the same two-ended treatment. This is written up in
+`docs/agents/frontend.md`.
+
+**Deliberately not changed:** the 64px month headline keeps the raw accent (at that size it is a
+hero treatment, not body text, and darkening it changes the page's character), and the three
+existing info-strip labels keep theirs. The same one-line change would fix them; that is the
+owner's call, not a side effect of this work.
+
+### Admin control - nothing was added to the dashboard
+
+The starting brief assumed the admin dashboard was a flat list of top-level buttons needing
+grouping. It is not: `app/[locale]/admin/page.tsx` already has named sections (Edit Pages,
+Translation Review, Create New Post, All Posts). More decisively, **no calendar admin lives there
+at all** - the FAB, the info-strip note link and the accent picker are all in-place on the
+calendar page. A dashboard form would have scattered calendar editing across two surfaces.
+
+So the form extends the modal that already exists: `EventModal` mode `note`, retitled "Monthly
+Note" → "This Month", now carrying Theme / Memory verse / Reference / Note in one form and one
+save. The admin's top-level choice count on the calendar page stays at three (event, month
+details, accent) rather than growing to four. **No dashboard reorganisation was done.** If the
+dashboard needs the same grouping treatment applied more broadly, that is separate work.
+
+### The memory verse is never machine translated (owner's call, 2026-09-15)
+
+Raised as an open question and answered: **do not send `verse_text` to the model.**
+
+A Vietnamese C&MA congregation reads Bản Truyền Thống 1926 - a translation the C&MA was itself
+involved in producing. A model asked to translate scripture returns fluent Vietnamese that is
+close to the published wording without being it, and a memory verse is the one piece of text on
+the page people are meant to learn word for word. Same rule sermons already follow.
+
+The decision had a consequence that had to be built, not just deleted: with nothing translating
+the verse, a Vietnamese reader would have been served the English one - the exact mixed-language
+problem the `Calendar` i18n namespace was added to fix. There was also no existing write path for
+a human-authored translation; `TranslationRepository.Approve` can only edit text the worker
+already created.
+
+So: the modal shows the verse **twice**, labelled by language off the note's `source_locale`, and
+`CalendarRepository.UpsertHumanTranslation` files the second wording as `is_ai_generated = false`
+with `approved_by` set. That one flag does a lot of work - the read path serves it like any
+approved translation with no special case, the "Bản dịch tự động" badge correctly stays off, and
+the review panel never lists it because there is nothing to review.
+
+Two collections now exist where there was one, and the difference matters:
+
+| | Contains | Used for |
+|---|---|---|
+| `monthNoteFields` | content, theme, verse_text, verse_reference | Language detection |
+| `monthNoteTranslatableFields` | content, theme, verse_reference | What reaches the AI |
+
+The verse stays in the first because it is the longest authored text in the note - dropping it
+would make the language of a verse-only month a coin flip - even though it is never sent
+anywhere. `verse_text_alt` is in neither: it is deliberately the opposite language, so letting it
+vote would drag detection toward whichever wording was typed second.
+
+Verified against a real schema: an English-source note with a human Vietnamese verse and a
+*pending AI theme* serves the Vietnamese verse, serves the AI theme, and raises the card badge -
+driven by the theme, with the human verse contributing nothing to it.
+
+### Partial i18n on the calendar, on purpose
+
+`messages/*.json` gained a `Calendar` namespace covering `MonthThemeCard`'s chrome. The rest of
+`CalendarShell` is still hardcoded English on both locales - pre-existing, and the owner chose to
+scope this change to the new strings so the feature adds no new violations of the
+no-mixed-language rule without turning into a page-wide i18n retrofit. `Câu gốc` is used for
+"memory verse": it is what Vietnamese congregations say, where a literal rendering is not.
+
+### The badge bug the owner caught on review
+
+First cut computed `machine_translated` as **one flag for the whole row**, true if any of the four
+fields was unapproved AI output - and both badges read it. So the note's badge below the grid lit
+up when only the *theme* was unapproved, and the card's badge above the grid lit up when only the
+*note* was. Each badge was answering for text displayed somewhere else on the page.
+
+That was the one place where sharing a row leaked into what a visitor can see, and it was an
+implementation slip rather than a consequence of the shared row - the comment in the first draft
+even described it as a decision. Split into two flags matching the two render surfaces:
+`machine_translated` for `content`, `card_machine_translated` for theme + verse + reference.
+Verified against a real schema: a month with only the note translated badges the note and not the
+card, and a month with only the theme translated does the reverse.
+
+**Lesson worth keeping:** when one row backs two display surfaces, every *derived* field on it
+needs the same split as the stored ones. The stored columns were separated correctly from the
+start; the computed flag was not, because it was easy to think of it as a property of the row
+rather than of a place on the page.
+
+### Bug this feature would have introduced, caught in build
+
+The info strip's admin link read `{monthNote ? 'Edit' : 'Add note'}`. Once a row can exist because
+a *theme* was set while `content` is still empty, that label reads "Edit" for a note that does not
+exist. Changed to `monthNote?.content`, matching the strip's own render condition one line above.
+
+### Files
+
+| Layer | Files |
+|---|---|
+| DB | `migrations/000017_month_theme_verse.{up,down}.sql` |
+| Backend | `model/types.go` (+ caps, `Validate`), `repository/calendar.go` (one `LEFT JOIN` per field), `service/calendar.go` (`monthNoteFields`, per-field enqueue), `handler/calendar.go` (strip three more `*_source`) |
+| Tests | `model/calendar_types_test.go`, `service/calendar_test.go` |
+| Frontend | `MonthThemeCard.tsx` (new), `CalendarShell.tsx`, `EventModal.tsx`, `types.ts`, `lib/calendar.ts`, `TranslationReviewRecord.tsx` |
+| Docs | `api.md`, `agents/database.md`, `agents/backend.md`, `agents/frontend.md`, `components.md` |
+
+### Notes for next time
+
+- `upsertMonthNote` now takes an object rather than positional strings. Four same-typed
+  parameters in a row would have let a caller swap the verse and its reference with a clean
+  type-check.
+- `verse_reference` is enqueued for translation like everything else, because Vietnamese book
+  names genuinely differ (John → Giăng, Psalms → Thi Thiên). It is also the field most likely to
+  come back mangled, since a model may reformat `5:18` while rewriting around it. Storing it apart
+  from `verse_text` is what keeps that blast radius to one short field. Worth watching the first
+  few in the review panel.
+- The `down` migration deletes the three fields' translations and strips their keys out of any
+  pending `translation_jobs.fields` jsonb. Without that, rolling back would leave suggestions in
+  the review panel forever: they are filed against a `calendar_month_notes` row that still exists,
+  so the orphan sweep (which matches on the *parent* being gone) would never collect them - the
+  same trap documented in `known-quirks.md` for cleared note text.
+- `translation_jobs` has **no** `field_name` column; it carries a `fields` jsonb keyed by field
+  name. The first draft of the down migration filtered on `field_name` and would have failed on
+  apply.
+
+---
+
 ## 2026-09-05 - "Sunday Bloom": logo palette, two fonts, committed color, homepage revival
 
 **Why.** The site had been retokened to the VGOMNE logo palette (deep magenta #8E1D5F, dark

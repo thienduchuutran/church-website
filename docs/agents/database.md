@@ -289,19 +289,29 @@ Swatches are deliberately **unnamed** - the color is its own label (GoodNotes' m
 ---
 
 ### `calendar_month_notes`
-One sidebar note per month - displayed in the 30% right panel of the calendar.
+Everything scoped to one month: the freeform note **and** (since migration `000017`) the month's theme and memory verse.
 ```sql
 create table calendar_month_notes (
-  id         uuid primary key default gen_random_uuid(),
-  year       int not null,
-  month      int not null check (month between 1 and 12),
-  content    text not null default '',
-  admin_id   uuid,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
+  id              uuid primary key default gen_random_uuid(),
+  year            int not null,
+  month           int not null check (month between 1 and 12),
+  content         text not null default '',   -- info strip, BELOW the grid
+  theme           text not null default '',   -- theme card, ABOVE the grid
+  verse_text      text not null default '',   -- theme card, plain text
+  verse_reference text not null default '',   -- theme card, e.g. '1 Thessalonians 5:18'
+  admin_id        uuid,
+  source_locale   text not null default 'en', -- migration 000013
+  created_at      timestamptz default now(),
+  updated_at      timestamptz default now(),
   unique (year, month)
 );
 ```
+
+**Why theme and verse live here rather than in a `month_content` table of their own.** This table is already keyed `(year, month)` - the same key - so a second table would mean two upserts, two reads and two null-checks for one concept, plus a second registration in all five places the translation engine knows about `calendar_month_notes` (the label `CASE`, the `LEFT JOIN`, and the orphan-sweep clause in `repository/translation.go`; the `enqueueOne` call in `service/calendar.go`; the tint in `TranslationReviewRecord.tsx`).
+
+**Why `not null default ''` and never `NULL`.** The read path resolves each field through `COALESCE(translation, stored)`. With `NULL`s in play, a field the admin had just *cleared* would let a stale translation win the `COALESCE` and reappear on the page. Empty string is a value, so it wins - "unset" stays exactly one representable state.
+
+**One `source_locale` covers all four text fields.** Same trade `calendar_events` has made across `title` and `notes` since migration `000013`: a note whose theme is Vietnamese and whose verse is English is detected as whichever dominates the combined text. A locale per field would make the flip-cleanup logic in `service/calendar.go` four times as wide for a case nobody has hit.
 
 ---
 
@@ -519,6 +529,7 @@ backend/migrations/
 ├── 000012_calendar_flexible_types_and_palette.up.sql  ← calendar_event_types + calendar_palette_colors; event_type enum → text + FK
 ├── 000012_calendar_flexible_types_and_palette.down.sql
 ├── 000013_source_locale.up.sql         ← posts/calendar_events/calendar_month_notes/translation_jobs += source_locale (seeds en_translation prompt)
+├── 000017_month_theme_verse.up.sql     ← calendar_month_notes += theme/verse_text/verse_reference (the card above the calendar grid)
 ├── 000013_source_locale.down.sql
 ├── 000014_calendar_places.up.sql       ← calendar_places + calendar_events.place_id (seeds place_name prompt)
 ├── 000014_calendar_places.down.sql

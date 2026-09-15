@@ -137,7 +137,7 @@ Returns the events for a given month, plus the optional sidebar note and the opt
 |-------|------|----------|-------------|
 | `year` | int | Yes | 4-digit year, e.g. `2026` |
 | `month` | int | Yes | 1–12 |
-| `locale` | string | No | When `vi`, event titles + notes and month note content are served from translations. Sets `machine_translated: true` per event / per note when the served value is unapproved AI output. See [Localized reads](#localized-reads-locale). |
+| `locale` | string | No | When `vi`, event titles + notes and all four month-note fields (`content`, `theme`, `verse_text`, `verse_reference`) are served from translations. Sets `machine_translated: true` per event / per note when the served value is unapproved AI output. See [Localized reads](#localized-reads-locale). |
 
 **Response `200`**
 ```json
@@ -782,15 +782,53 @@ Resolution happens server-side on write and is never client-supplied, which is w
 {
   "id": "uuid",
   "year": 2026,
-  "month": 5,
-  "content": "May focus: gratitude. Bring guests on Sunday.",
+  "month": 9,
+  "content": "Bring guests on the 21st.",
+  "theme": "Walking in Gratitude",
+  "verse_text": "Give thanks in all circumstances; for this is God's will for you in Christ Jesus.",
+  "verse_reference": "1 Thessalonians 5:18",
   "admin_id": "uuid",
-  "created_at": "2026-05-01T00:00:00Z",
-  "updated_at": "2026-05-01T00:00:00Z",
-  "machine_translated": true
+  "created_at": "2026-09-01T00:00:00Z",
+  "updated_at": "2026-09-01T00:00:00Z",
+  "machine_translated": true,
+  "card_machine_translated": false
 }
 ```
-Sidebar note attached to a (`year`, `month`) pair. Returned on `GET /api/v1/calendar` as `month_note`; `null` when no row exists for that month. `machine_translated` follows the same rule as on Post.
+Everything attached to a (`year`, `month`) pair. Returned on `GET /api/v1/calendar` as `month_note`; `null` when no row exists for that month.
+
+The four text fields split by **where they render**, not by kind of storage - one row backs both:
+
+| Field | Renders | Purpose |
+|---|---|---|
+| `theme` | `MonthThemeCard`, **above** the grid | The month's theme, a short phrase |
+| `verse_text` | `MonthThemeCard`, above the grid | The memory verse. Plain text, never HTML - it does not pass through `sanitizeBody`. **Never machine translated** - see below |
+| `verse_reference` | `MonthThemeCard`, above the grid | The citation. Stored apart from `verse_text` so the translation worker treats it as its own field rather than reformatting digits inside a rewritten sentence |
+| `content` | info strip, **below** the grid | Freeform logistics note - an address, a reminder |
+
+All four default to `""`, never `null` - "unset" is exactly one representable state (migration `000017`). The card omits itself entirely when `theme` and `verse_text` are both empty.
+
+**Two translation flags, because there are two badges in two places.** `machine_translated` covers `content` alone - the footnote below the grid, which is what this field has always meant. `card_machine_translated` covers the three fields the card above the grid displays (`theme`, `verse_text`, `verse_reference`).
+
+They are deliberately not one flag. A single row-wide flag made each badge answer for text rendered elsewhere on the page: the note's badge lit up when only the theme was unapproved, and the card's lit up when only the note was. A badge must describe the text beside it.
+
+Each field is translated and approved **independently** in the review panel, which is why the month query joins `translations` once per field.
+
+### The memory verse is never machine translated
+
+`verse_text` is excluded from everything sent to the model (`monthNoteTranslatableFields` on the backend omits it). A Vietnamese C&MA congregation reads **Bản Truyền Thống 1926**; a model asked to translate scripture returns a fluent paraphrase that is close to the published wording without being it, and a memory verse is the one piece of text on the page people are meant to learn word for word. This is the same rule sermons already follow.
+
+Instead the admin types both wordings. `verse_text_alt` on the upsert request carries the verse in the **other** language, and the service files it via `UpsertHumanTranslation` as `is_ai_generated = false` with `approved_by` set. Consequences:
+
+- The read path serves it exactly like an approved AI translation - no special case.
+- `card_machine_translated` stays **false** for it, because nothing machine-generated it.
+- It never appears in the review panel, because there is nothing to review.
+- Clearing it deletes that one translation row (`DeleteTranslationForField`) rather than the whole locale, so the theme's and note's translations are untouched.
+
+`verse_text` still counts as evidence for **language detection** even though it is never sent anywhere - it is the longest authored text in the note, so dropping it would make the language of a verse-only month a coin flip. `verse_text_alt` is excluded from detection, since it is deliberately the opposite language.
+
+The response echoes `verse_text_alt` back to admins under the same key the request accepts, so the modal sends back exactly what it received. Stripped for public visitors alongside the `*_source` fields - a visitor is already served the right language, so it would only be the same verse twice.
+
+Admins additionally receive `content_source`, `theme_source`, `verse_text_source` and `verse_reference_source` - the authored text, so the modal edits the source rather than the translation it is displaying. All four are stripped for public visitors.
 
 ### CalendarMonthSettings
 ```json

@@ -28,6 +28,13 @@
     "closeMenu": "Close navigation menu",
     "follow": "Follow us"
   },
+  "Calendar": {
+    "themeLabel": "This month's theme",
+    "verseLabel": "Memory verse",
+    "addThemeVerse": "Add this month's theme & verse",
+    "editThemeVerse": "Edit this month's theme and verse",
+    "edit": "Edit"
+  },
   "Home": {
     "eyebrow": "VGOMNE · Saugus, MA",
     "display": "Welcome home, <em>one family</em> in Christ.",

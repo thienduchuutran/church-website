@@ -78,6 +78,15 @@ const EXIT_MS = 280
 // Capping the input means an admin hits a stop rather than a 400.
 const MAX_PLACE_NAME_LEN = 40
 
+// Mirror the month-note caps in model/types.go, for the same reason. These are
+// a convenience, not the enforcement: maxLength counts UTF-16 code units while
+// the server counts runes, so the server stays authoritative - it just should
+// not normally be the thing that says no.
+const MAX_THEME = 120
+const MAX_VERSE = 1000
+const MAX_VERSE_REF = 120
+const MAX_NOTE = 4000
+
 export default function EventModal({
   mode,
   date,
@@ -125,7 +134,17 @@ export default function EventModal({
   // admin actually touched it. Sending an unchanged rule would regenerate the
   // series for nothing and destroy any occurrence edited on its own.
   const [originalRecurrence] = useState<RecurrenceValue>(initialRecurrence)
+  // Each field prefers its *_source twin: the modal must edit the authored text
+  // even when the page behind it is displaying a Vietnamese translation, or an
+  // admin would silently overwrite their own English with the machine's
+  // Vietnamese. Non-admins never get here, and never receive *_source at all.
   const [noteContent, setNoteContent] = useState(monthNote?.content_source ?? monthNote?.content ?? '')
+  const [noteTheme, setNoteTheme] = useState(monthNote?.theme_source ?? monthNote?.theme ?? '')
+  const [noteVerse, setNoteVerse] = useState(monthNote?.verse_text_source ?? monthNote?.verse_text ?? '')
+  const [noteRef, setNoteRef] = useState(monthNote?.verse_reference_source ?? monthNote?.verse_reference ?? '')
+  // The verse in the other language. Unlike the fields above it has no *_source
+  // twin, because it IS the translation - it comes straight off the row.
+  const [noteVerseAlt, setNoteVerseAlt] = useState(monthNote?.verse_text_alt ?? '')
   // Nothing here declares a language. The backend detects it from the text on
   // every save, so writing in either language files the record on the matching
   // side and queues the translation the other way.
@@ -442,7 +461,18 @@ export default function EventModal({
       // clears any existing span. The end-date picker's min keeps it >= start.
       const computedEndDate = multiDay && endDate ? endDate : null
       if (mode === 'note') {
-        await upsertMonthNote(year, month, noteContent, accessToken)
+        await upsertMonthNote(
+          year,
+          month,
+          {
+            content: noteContent,
+            theme: noteTheme,
+            verse_text: noteVerse,
+            verse_reference: noteRef,
+            verse_text_alt: noteVerseAlt,
+          },
+          accessToken,
+        )
       } else if (mode === 'create' && date) {
         // recurrence_until only travels when the admin actually picked a date.
         // Sending an empty string would be a third state the backend has to
@@ -539,6 +569,16 @@ export default function EventModal({
     swatches.push({ key: color, hex: color })
   }
 
+  // Which language the second verse box is for: whichever the note is not
+  // written in. A brand-new note has no source_locale yet and the admin UI
+  // authors English, so English-source is the right default.
+  const noteIsVietnamese = monthNote?.source_locale === 'vi'
+  const sourceVerseLabel = noteIsVietnamese ? 'Memory verse (Tiếng Việt)' : 'Memory verse (English)'
+  const altVerseLabel = noteIsVietnamese ? 'Memory verse (English)' : 'Memory verse (Tiếng Việt)'
+  const altVersePlaceholder = noteIsVietnamese
+    ? 'Give thanks in all circumstances…'
+    : 'Hãy cảm tạ trong mọi hoàn cảnh…'
+
   const canSave = mode === 'note'
     ? true
     : title.trim().length > 0
@@ -562,7 +602,7 @@ export default function EventModal({
         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-border">
           <div>
             <p className="font-display text-[10px] font-semibold tracking-widest uppercase text-muted">
-              {mode === 'note' ? 'Monthly Note' : mode === 'edit' ? 'Edit Event' : 'New Event'}
+              {mode === 'note' ? 'This Month' : mode === 'edit' ? 'Edit Event' : 'New Event'}
             </p>
             <h2 className="font-serif text-xl font-bold text-foreground mt-0.5">
               {mode === 'note'
@@ -582,19 +622,93 @@ export default function EventModal({
         <div className="overflow-y-auto flex-1 px-6 py-5 flex flex-col gap-5">
 
           {mode === 'note' ? (
-            <div className="flex flex-col gap-2">
-              <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
-                Sidebar note
-              </label>
-              <textarea
-                ref={firstInputRef as React.RefObject<HTMLTextAreaElement>}
-                value={noteContent}
-                onChange={(e) => setNoteContent(e.target.value)}
-                rows={6}
-                placeholder="Write a monthly note, address, theme verse…"
-                className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
-              />
-            </div>
+            /* Theme, verse and note are one form and one save because they are
+               all scoped to the same (year, month) row and are filled in
+               together at the start of a month. Splitting them into two places
+               would mean two round trips and a fourth top-level admin choice on
+               a page that already has three. */
+            <>
+              <div className="flex flex-col gap-2">
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
+                  Theme
+                </label>
+                <input
+                  ref={firstInputRef as React.RefObject<HTMLInputElement>}
+                  type="text"
+                  value={noteTheme}
+                  onChange={(e) => setNoteTheme(e.target.value)}
+                  maxLength={MAX_THEME}
+                  placeholder="Walking in Gratitude"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
+                  {sourceVerseLabel}
+                </label>
+                <textarea
+                  value={noteVerse}
+                  onChange={(e) => setNoteVerse(e.target.value)}
+                  rows={3}
+                  maxLength={MAX_VERSE}
+                  placeholder="Give thanks in all circumstances…"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+                <input
+                  type="text"
+                  value={noteRef}
+                  onChange={(e) => setNoteRef(e.target.value)}
+                  maxLength={MAX_VERSE_REF}
+                  placeholder="1 Thessalonians 5:18"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2 font-sans text-[13px] text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+                <p className="font-sans text-[11px] text-muted/80 leading-snug">
+                  The reference is stored separately so it can be translated on its
+                  own - Vietnamese book names differ (John becomes Giăng).
+                </p>
+
+                {/* The verse is the one field never sent to the AI: a model asked
+                    to translate scripture returns a fluent paraphrase, not the
+                    published wording a congregation memorises. So both wordings
+                    are typed here, and the second is filed as an already-approved
+                    human translation. */}
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted mt-1">
+                  {altVerseLabel}
+                </label>
+                <textarea
+                  value={noteVerseAlt}
+                  onChange={(e) => setNoteVerseAlt(e.target.value)}
+                  rows={3}
+                  maxLength={MAX_VERSE}
+                  placeholder={altVersePlaceholder}
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+                <p className="font-sans text-[11px] text-muted/80 leading-snug">
+                  The verse is never machine translated - paste the wording from the
+                  translation the congregation reads. Leave empty to show the same
+                  verse on both languages.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
+                  Note
+                </label>
+                <textarea
+                  value={noteContent}
+                  onChange={(e) => setNoteContent(e.target.value)}
+                  rows={4}
+                  maxLength={MAX_NOTE}
+                  placeholder="Bring guests on the 21st…"
+                  className="w-full rounded-lg border border-border bg-background px-3 py-2.5 font-sans text-sm text-foreground placeholder:text-muted resize-none focus:outline-none focus:ring-2 focus:ring-accent/40"
+                />
+                <p className="font-sans text-[11px] text-muted/80 leading-snug">
+                  Shown in the strip below the calendar, for logistics. The theme and
+                  verse above appear over the grid.
+                </p>
+              </div>
+            </>
           ) : (
             <>
               {/* Title */}

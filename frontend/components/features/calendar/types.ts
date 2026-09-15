@@ -153,16 +153,40 @@ export interface CalendarMonthNote {
   id: string
   year: number
   month: number
+  // The freeform note rendered in the info strip BELOW the grid - logistics, an
+  // address, a reminder.
   content: string
+  // Theme and the two verse fields are the devotional content rendered in the
+  // card ABOVE the grid (MonthThemeCard). They share this row because they
+  // share a (year, month) key, not because they are the same kind of content.
+  // Empty string means unset; the card omits itself when theme and verse are
+  // both empty.
+  theme: string
+  // Plain text, never HTML - rendered with {} interpolation, so unlike a post
+  // body it never goes near sanitizeBody.
+  verse_text: string
+  verse_reference: string
   admin_id: string | null
   created_at: string
   updated_at: string
-  // Same semantics as CalendarEvent.machine_translated - applies to the
-  // sidebar note's content field.
+  // Same semantics as CalendarEvent.machine_translated, for `content` alone -
+  // the footnote in the info strip below the grid.
   machine_translated?: boolean
-  // Same semantics as CalendarEvent.title_source - the authored source the Notes
-  // modal edits while the sidebar displays the translation.
+  // The same claim for the three fields MonthThemeCard shows above the grid.
+  // Two flags because there are two badges in two places: one row-wide flag
+  // made each badge answer for text rendered somewhere else on the page.
+  card_machine_translated?: boolean
+  // Same semantics as CalendarEvent.title_source - the authored text the modal
+  // edits while the page displays the translation. Absent for non-admins: the
+  // handler strips all four together.
   content_source?: string | null
+  theme_source?: string | null
+  verse_text_source?: string | null
+  verse_reference_source?: string | null
+  // The verse's wording in the OTHER language, typed by an admin rather than
+  // produced by the model - the memory verse is never machine translated. Admin
+  // only, stripped alongside the *_source fields.
+  verse_text_alt?: string | null
   // See CalendarEvent.source_locale.
   source_locale: SourceLocale
 }
