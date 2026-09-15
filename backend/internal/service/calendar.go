@@ -478,29 +478,47 @@ func (s *CalendarService) ListSeries(ctx context.Context) ([]model.CalendarSerie
 	if err != nil {
 		return nil, fmt.Errorf("list series: %w", err)
 	}
-	cutoff := time.Now().AddDate(0, extensionWarningMonths, 0)
+	now := time.Now()
 	for i := range all {
-		last, err := time.Parse("2006-01-02", all[i].LastDate)
-		if err != nil {
-			continue // a series we cannot read a date for is not one to nag about
-		}
-		finished := false
-		if all[i].Until != nil {
-			if until, err := time.Parse("2006-01-02", *all[i].Until); err == nil {
-				finished = !last.Before(until)
-			}
-		}
-		// A COUNT-bounded series is finished once it has all its occurrences.
-		// Without this it would be flagged forever: it has no end DATE, so it
-		// looks open-ended, while extending it can never produce anything.
-		if !finished {
-			if r, err := ParseRRule(all[i].Rule); err == nil && r.Count > 0 && all[i].Count >= r.Count {
-				finished = true
-			}
-		}
-		all[i].NeedsExtension = !finished && last.Before(cutoff)
+		all[i].NeedsExtension = needsExtension(all[i], now)
 	}
 	return all, nil
+}
+
+// needsExtension decides whether one series should be flagged as running out.
+//
+// Split out from ListSeries and given `now` as an argument so it can be tested.
+// That is not ceremony: with a three-year horizon, this rule cannot return true
+// for any series created today, so the only way to find out whether it works
+// before 2029 is to hand it a date. A rule whose first real evaluation is three
+// years away, in code that will be touched many times in between, is a rule
+// that quietly rots unless something exercises it.
+//
+// Two situations look identical in the data and mean opposite things. A series
+// that stops because the admin gave it an end date is FINISHED, and nagging
+// about it would train them to ignore the warning. A series that stops because
+// the horizon ran out is RUNNING OUT. Only the second is flagged.
+func needsExtension(s model.CalendarSeries, now time.Time) bool {
+	last, err := time.Parse("2006-01-02", s.LastDate)
+	if err != nil {
+		return false // a series whose date we cannot read is not one to nag about
+	}
+
+	// Bounded by an "ends on" date, and already generated up to it.
+	if s.Until != nil {
+		if until, err := time.Parse("2006-01-02", *s.Until); err == nil && !last.Before(until) {
+			return false
+		}
+	}
+
+	// Bounded by COUNT, and already holding all its occurrences. Without this
+	// such a series would be flagged forever: it carries no end DATE so it
+	// looks open-ended, while extending it can never produce anything.
+	if r, err := ParseRRule(s.Rule); err == nil && r.Count > 0 && s.Count >= r.Count {
+		return false
+	}
+
+	return last.Before(now.AddDate(0, extensionWarningMonths, 0))
 }
 
 // ExtendSeries writes another horizon's worth of occurrences onto an existing
