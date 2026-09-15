@@ -74,8 +74,11 @@ type row struct {
 
 // group is a set of rows believed to be one person's birthday across years.
 type group struct {
-	Key   string
-	Title string // the anchor's title, for display
+	Key string
+	// Title is what the series should be called: the MOST RECENT row's wording
+	// with any "'s Birthday" removed. The newer entries are the house style the
+	// admin settled on, so they win over the older ones.
+	Title string
 	Month time.Month
 	Day   int
 	Rows  []row // sorted by date ascending; Rows[0] is the anchor
@@ -186,13 +189,88 @@ func loadBirthdays(ctx context.Context, pool *pgxpool.Pool) ([]row, int, error) 
 	return out, already, res.Err()
 }
 
+// titleAliases are merges a HUMAN decided, not rules the tool worked out.
+//
+// They exist because the calendar holds two entries for one person that no
+// amount of string handling can connect: a nickname, and a name recorded with
+// a surname one year and without it the next. Each line is somebody looking at
+// the congregation and saying "those two are the same person".
+//
+// Keys and values are already normalized (lower case, suffix removed). Keep
+// this list short and keep it explicit - the moment it grows into pattern
+// matching it becomes the guessing this tool exists to avoid.
+var titleAliases = map[string]string{
+	"sebastian": "seb",             // the 2027 entry uses the nickname
+	"khang":     "khang le",        // the 2027 entry carries the surname
+	"nha nghi":  "hudson/nha nghi", // one entry; Hudson was added to it in 2027
+}
+
+// birthdaySuffixes are the trailing words that describe the OCCASION rather
+// than the person. The calendar was entered with them in 2026 and without them
+// in 2027, which left one member looking like two.
+//
+// Longest first, so "'s birthday" is tried before the bare "birthday" and the
+// apostrophe is not left stranded.
+//
+// There is deliberately NO "s birthday" entry, tempting as it looks for a
+// possessive typed without an apostrophe. It would eat the last letter of any
+// name that ends in s: "Thomas birthday" becomes "Thoma", and Thomas is a real
+// member of this congregation. The bare " birthday" rule below handles that
+// case correctly anyway, because the space is part of the match.
+var birthdaySuffixes = []string{"'s birthday", "’s birthday", " birthday"}
+
 // normalizeTitle is the grouping rule, written out so it can be read and
 // argued with. Trim, collapse any run of internal whitespace to one space,
-// case-fold. Deliberately NOT diacritic-folding: in a Vietnamese congregation
-// two names differing only by an accent can be two different people, and
-// merging them is the one mistake this tool must never make.
+// case-fold, drop a trailing "'s Birthday", then apply the alias list.
+//
+// Deliberately NOT diacritic-folding: in a Vietnamese congregation two names
+// differing only by an accent can be two different people, and merging them is
+// the one mistake this tool must never make. Note the asymmetry - removing a
+// word that means "birthday" from a birthday entry cannot merge two people,
+// while folding accents can.
 func normalizeTitle(t string) string {
-	return strings.ToLower(strings.Join(strings.Fields(t), " "))
+	n := strings.ToLower(strings.Join(strings.Fields(t), " "))
+	n = stripBirthdaySuffix(n)
+	if alias, ok := titleAliases[n]; ok {
+		return alias
+	}
+	return n
+}
+
+// stripBirthdaySuffix removes a trailing occasion word. It only ever removes
+// from the END, so a member actually called "Birthday Nguyen" is untouched.
+func stripBirthdaySuffix(n string) string {
+	for _, suffix := range birthdaySuffixes {
+		if strings.HasSuffix(n, suffix) {
+			stripped := strings.TrimSpace(strings.TrimSuffix(n, suffix))
+			// An entry called nothing but "Birthday" has no name left once the
+			// occasion word is gone. Keeping the original stops every such row
+			// collapsing into one nameless group.
+			if stripped == "" {
+				return n
+			}
+			return stripped
+		}
+	}
+	return n
+}
+
+// displayTitle is what a series should be CALLED, as opposed to how it is
+// matched: the given wording with the occasion words removed, original
+// capitalisation kept.
+func displayTitle(t string) string {
+	clean := strings.Join(strings.Fields(t), " ")
+	lower := strings.ToLower(clean)
+	for _, suffix := range birthdaySuffixes {
+		if strings.HasSuffix(lower, suffix) {
+			trimmed := strings.TrimSpace(clean[:len(clean)-len(suffix)])
+			if trimmed == "" {
+				return clean
+			}
+			return trimmed
+		}
+	}
+	return clean
 }
 
 func groupRows(rows []row) []group {
@@ -210,7 +288,11 @@ func groupRows(rows []row) []group {
 	out := make([]group, 0, len(byKey))
 	for _, g := range byKey {
 		sort.Slice(g.Rows, func(i, j int) bool { return g.Rows[i].Date.Before(g.Rows[j].Date) })
-		g.Title = g.Rows[0].Title // the anchor's spelling is the one shown
+		// The newest row's wording is the house style the admin settled on, so
+		// it becomes the series title - even though the OLDEST row is the
+		// anchor. Those are two different questions: which row owns the series,
+		// and what the series is called.
+		g.Title = displayTitle(g.Rows[len(g.Rows)-1].Title)
 		out = append(out, *g)
 	}
 	sort.Slice(out, func(i, j int) bool {
@@ -293,8 +375,12 @@ func report(rows []row, alreadyInSeries int, clean, duplicates []group, sameDay 
 		if note == "" {
 			note = "(nothing new to generate)"
 		}
-		fmt.Printf("  %-34s %s %2d   have: %-16s  new: %s\n",
-			truncate(g.Title, 34), g.Month.String()[:3], g.Day, strings.Join(years, ","), note)
+		rename := ""
+		if g.Rows[0].Title != g.Title {
+			rename = fmt.Sprintf("   (renaming %q)", g.Rows[0].Title)
+		}
+		fmt.Printf("  %-24s %s %2d   have: %-14s  new: %s%s\n",
+			truncate(g.Title, 24), g.Month.String()[:3], g.Day, strings.Join(years, ","), note, rename)
 	}
 
 	if len(duplicates) > 0 {
@@ -345,9 +431,23 @@ func adopt(ctx context.Context, pool *pgxpool.Pool, repo *repository.CalendarRep
 
 	if _, err := tx.Exec(ctx,
 		`UPDATE calendar_events
-		 SET series_id = id, recurrence_rule = 'FREQ=YEARLY', recurrence_until = NULL, updated_at = now()
-		 WHERE id = $1`, anchor.ID); err != nil {
+		 SET series_id = id, recurrence_rule = 'FREQ=YEARLY', recurrence_until = NULL,
+		     title = $2, updated_at = now()
+		 WHERE id = $1`, anchor.ID, g.Title); err != nil {
 		return 0, fmt.Errorf("stamp anchor: %w", err)
+	}
+
+	// A renamed anchor's stored translation describes wording nobody will see
+	// again, and the read path would keep serving it to Vietnamese viewers.
+	// Deleting it drops the row back to showing its own text - which for a
+	// person's name is the right answer anyway, and costs no review-queue entry
+	// because nothing is re-enqueued.
+	if anchor.Title != g.Title {
+		if _, err := tx.Exec(ctx,
+			`DELETE FROM translations WHERE table_name = 'calendar_events' AND record_id = $1`,
+			anchor.ID); err != nil {
+			return 0, fmt.Errorf("clear stale translation: %w", err)
+		}
 	}
 
 	for _, r := range g.Rows[1:] {

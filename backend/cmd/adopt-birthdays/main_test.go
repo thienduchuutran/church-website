@@ -124,3 +124,102 @@ func TestPlannedDatesStartAfterTheLastExistingRow(t *testing.T) {
 		}
 	}
 }
+
+// The actual production case: 2026 entries were written "X's Birthday" and
+// 2027 entries just "X", which left one member looking like two people.
+func TestGroupRowsMergesTheTwoNamingConventions(t *testing.T) {
+	groups := groupRows([]row{
+		{ID: "a", Date: d(t, "2026-03-03"), Title: "Huy's Birthday"},
+		{ID: "b", Date: d(t, "2027-03-03"), Title: "Huy"},
+	})
+	if len(groups) != 1 {
+		t.Fatalf("got %d groups, want 1 - the two naming styles must merge", len(groups))
+	}
+	if groups[0].Rows[0].ID != "a" {
+		t.Errorf("anchor = %s, want a (the earliest row)", groups[0].Rows[0].ID)
+	}
+	// The newest wording is the house style and becomes the series title, even
+	// though the OLDEST row is the anchor.
+	if groups[0].Title != "Huy" {
+		t.Errorf("series title = %q, want \"Huy\"", groups[0].Title)
+	}
+}
+
+// Stripping happens only at the end of the title, so a member whose name
+// contains the word is untouched.
+func TestStripBirthdaySuffixOnlyTrims(t *testing.T) {
+	for in, want := range map[string]string{
+		"huy's birthday":  "huy",
+		"huy’s birthday":  "huy", // curly apostrophe, which phones produce
+		"davids birthday": "davids",
+		"huy birthday":    "huy",
+		"huy":             "huy",
+		"birthday nguyen": "birthday nguyen",
+	} {
+		if got := stripBirthdaySuffix(in); got != want {
+			t.Errorf("stripBirthdaySuffix(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+// displayTitle keeps the original capitalisation - it names the series, it does
+// not match it.
+func TestDisplayTitleKeepsCapitalisation(t *testing.T) {
+	if got := displayTitle("David Do's Birthday"); got != "David Do" {
+		t.Errorf("displayTitle = %q, want \"David Do\"", got)
+	}
+}
+
+// The two merges a person decided, which no string rule could reach.
+func TestTitleAliasesMergeTheHumanDecidedPairs(t *testing.T) {
+	seb := groupRows([]row{
+		{ID: "a", Date: d(t, "2026-04-23"), Title: "Sebastian's Birthday"},
+		{ID: "b", Date: d(t, "2027-04-23"), Title: "Seb"},
+	})
+	if len(seb) != 1 {
+		t.Fatalf("Seb/Sebastian did not merge: %d groups", len(seb))
+	}
+	if seb[0].Title != "Seb" {
+		t.Errorf("series title = %q, want \"Seb\"", seb[0].Title)
+	}
+
+	khang := groupRows([]row{
+		{ID: "a", Date: d(t, "2026-06-26"), Title: "Khang's Birthday"},
+		{ID: "b", Date: d(t, "2027-06-26"), Title: "Khang Le"},
+	})
+	if len(khang) != 1 {
+		t.Fatalf("Khang/Khang Le did not merge: %d groups", len(khang))
+	}
+	if khang[0].Title != "Khang Le" {
+		t.Errorf("series title = %q, want \"Khang Le\"", khang[0].Title)
+	}
+}
+
+// Feb 3 in the real calendar: the 2026 entry names one person, the 2027 entry
+// names the household. Confirmed by the owner as a single entry, so they merge
+// under the 2027 wording.
+func TestTitleAliasMergesTheHouseholdEntry(t *testing.T) {
+	groups := groupRows([]row{
+		{ID: "a", Date: d(t, "2026-02-03"), Title: "Nha Nghi's Birthday"},
+		{ID: "b", Date: d(t, "2027-02-03"), Title: "Hudson/Nha Nghi"},
+	})
+	if len(groups) != 1 {
+		t.Fatalf("got %d groups, want 1 - Feb 3 is one entry", len(groups))
+	}
+	if groups[0].Title != "Hudson/Nha Nghi" {
+		t.Errorf("series title = %q, want \"Hudson/Nha Nghi\"", groups[0].Title)
+	}
+}
+
+// The guard that matters most: two genuinely different people who share a date
+// must survive the new, looser matching. Jason and Thomas are both on Feb 15 in
+// the real calendar.
+func TestGroupRowsStillSeparatesTwoPeopleOnOneDate(t *testing.T) {
+	groups := groupRows([]row{
+		{ID: "a", Date: d(t, "2026-02-15"), Title: "Jason's Birthday"},
+		{ID: "b", Date: d(t, "2026-02-15"), Title: "Thomas's Birthday"},
+	})
+	if len(groups) != 2 {
+		t.Fatalf("got %d groups, want 2 - Jason and Thomas are different people", len(groups))
+	}
+}
