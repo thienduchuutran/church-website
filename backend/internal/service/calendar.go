@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
@@ -162,7 +163,35 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 		AdminID:        &adminID,
 		SourceLocale:   sourceLocale,
 	}
-	if err := s.repo.InsertEvent(ctx, e); err != nil {
+	// A recurring create writes the whole series in one transaction; a one-off
+	// takes the path it always took. Either way exactly ONE row is enqueued for
+	// translation below, because the anchor's id is what the read path resolves
+	// a sibling's text through - see the series fallback in GetEventsByMonth.
+	// That is the difference between forty review entries and a hundred and
+	// twenty, and it is the whole reason this design was viable.
+	if req.Recurrence != nil && *req.Recurrence != "" {
+		start, err := time.Parse("2006-01-02", req.Date)
+		if err != nil {
+			return nil, fmt.Errorf("parse start date: %w", err)
+		}
+		var until *time.Time
+		if req.RecurrenceUntil != nil && *req.RecurrenceUntil != "" {
+			u, err := time.Parse("2006-01-02", *req.RecurrenceUntil)
+			if err != nil {
+				return nil, fmt.Errorf("parse recurrence_until: %w", err)
+			}
+			until = &u
+		}
+		later, err := OccurrencesForCreate(start, *req.Recurrence, until)
+		if err != nil {
+			return nil, fmt.Errorf("generate occurrences: %w", err)
+		}
+		e.RecurrenceRule = req.Recurrence
+		e.RecurrenceUntil = req.RecurrenceUntil
+		if err := s.repo.InsertSeries(ctx, e, later); err != nil {
+			return nil, fmt.Errorf("insert series: %w", err)
+		}
+	} else if err := s.repo.InsertEvent(ctx, e); err != nil {
 		return nil, fmt.Errorf("insert event: %w", err)
 	}
 
@@ -186,7 +215,7 @@ func (s *CalendarService) CreateEvent(ctx context.Context, req model.CreateCalen
 // actually changed. Calendar entries get edited and re-edited (typo fixes,
 // date corrections) - the diff prevents a no-op PATCH from spawning worker
 // activity.
-func (s *CalendarService) UpdateEvent(ctx context.Context, id string, req model.UpdateCalendarEventRequest) (*model.CalendarEvent, error) {
+func (s *CalendarService) UpdateEvent(ctx context.Context, id string, req model.UpdateCalendarEventRequest, scope model.WriteScope) (*model.CalendarEvent, error) {
 	if err := req.Validate(); err != nil {
 		return nil, fmt.Errorf("validation: %w", err)
 	}
@@ -226,6 +255,14 @@ func (s *CalendarService) UpdateEvent(ctx context.Context, id string, req model.
 		if place := s.resolveEventPlace(ctx, req.PrivateAddress, newTitle); place != nil {
 			placeID = &place.ID
 		}
+	}
+
+	// A scope wider than this one occurrence only means anything for a row that
+	// belongs to a series. Asking for "all events" on a one-off is not an error
+	// worth rejecting - it describes a series of one - so it quietly takes the
+	// single-row path.
+	if scope != model.ScopeOccurrence && existing.SeriesID != nil {
+		return s.updateSeries(ctx, existing, &req, sourceLocale, placeID, scope)
 	}
 
 	e, err := s.repo.UpdateEvent(ctx, id, &req, sourceLocale, placeID)
@@ -272,8 +309,285 @@ func (s *CalendarService) UpdateEvent(ctx context.Context, id string, req model.
 	return e, nil
 }
 
-// DeleteEvent removes a calendar event by id.
-func (s *CalendarService) DeleteEvent(ctx context.Context, id string) error {
+// updateSeries applies a descriptive edit to a whole series, or to the clicked
+// occurrence and every later one.
+//
+// Translation is where this differs from editing a single row, and it is worth
+// stating plainly. The new text is enqueued ONCE, against the anchor, because
+// the anchor is what every sibling resolves through. Any occurrence that had
+// been edited on its own owns a translation that now describes text nobody can
+// see any more, and the read path would keep preferring it - so those rows are
+// cleared and fall back onto the anchor's fresh translation.
+func (s *CalendarService) updateSeries(ctx context.Context, existing *model.CalendarEvent, req *model.UpdateCalendarEventRequest, sourceLocale string, placeID *string, scope model.WriteScope) (*model.CalendarEvent, error) {
+	seriesID := *existing.SeriesID
+
+	// "This and following" is a date comparison and nothing more - the rows are
+	// already sitting in the table with real dates on them, which is the payoff
+	// of storing occurrences instead of a rule.
+	var from *string
+	if scope == model.ScopeFollowing {
+		from = &existing.Date
+	}
+
+	if _, err := s.repo.UpdateBySeries(ctx, seriesID, from, req, sourceLocale, placeID); err != nil {
+		return nil, fmt.Errorf("update series: %w", err)
+	}
+
+	if req.Recurrence != nil {
+		if err := req.ValidateRecurrenceCleanup(); err != nil {
+			return nil, err
+		}
+		if scope != model.ScopeSeries {
+			return nil, fmt.Errorf("changing how a series repeats applies to the whole series; use scope=series")
+		}
+		if err := s.applyRuleChange(ctx, seriesID, req); err != nil {
+			return nil, err
+		}
+	}
+
+	textChanged := (req.Title != nil && *req.Title != existing.Title) ||
+		(req.Notes != nil && !stringPtrEqual(req.Notes, existing.Notes)) ||
+		existing.SourceLocale != sourceLocale
+
+	if textChanged {
+		if err := s.repo.DeleteOccurrenceTranslations(ctx, seriesID, from); err != nil {
+			// Best-effort, exactly like the language-flip purge below: the edit
+			// is already saved, and a leftover row shows stale text on one
+			// occurrence rather than breaking the page.
+			log.Printf("calendar: clear diverged translations for series %s: %v", seriesID, err)
+		}
+		if existing.SourceLocale != sourceLocale {
+			if err := s.repo.DeleteTranslationsForLocale(ctx, seriesID, sourceLocale); err != nil {
+				log.Printf("calendar: purge stale %s translations for series %s: %v", sourceLocale, seriesID, err)
+			}
+		}
+		changed := map[string]*string{}
+		title := existing.Title
+		if req.Title != nil {
+			title = *req.Title
+		}
+		changed["title"] = &title
+		notes := existing.Notes
+		if req.Notes != nil {
+			notes = req.Notes
+		}
+		if notes != nil && *notes != "" {
+			changed["notes"] = notes
+		}
+		s.enqueueEventFields(seriesID, sourceLocale, changed)
+	}
+
+	// Return the occurrence the admin actually clicked, re-read so the response
+	// reflects what was written rather than what was requested.
+	updated, err := s.repo.GetEventByID(ctx, existing.ID)
+	if err != nil {
+		return nil, fmt.Errorf("re-read edited occurrence: %w", err)
+	}
+	s.attachPlace(ctx, updated)
+	return updated, nil
+}
+
+// applyRuleChange rewrites how a series repeats, then rebuilds its future.
+//
+// The anchor is left in place and everything else is regenerated. That is the
+// only version of this that stays coherent: the anchor is the series' start
+// date, it owns the rule, it holds the translation every sibling resolves
+// through, and its id is what the series is grouped by. Re-creating it would
+// hand the series a new identity and orphan its translation for nothing.
+//
+// Occurrences that had been edited individually are destroyed here. That is not
+// a bug introduced by this path - it is the trade-off already accepted for any
+// series-wide edit, and the modal says so before the admin confirms.
+//
+// An empty rule means "stop repeating". It deliberately does NOT delete the
+// dates already on the calendar: those are real events the congregation may
+// have planned around, and quietly removing three years of them because
+// somebody switched a dropdown would be the most destructive thing this feature
+// could do. It stops generating; it does not retract.
+func (s *CalendarService) applyRuleChange(ctx context.Context, seriesID string, req *model.UpdateCalendarEventRequest) error {
+	anchor, err := s.repo.GetEventByID(ctx, seriesID)
+	if err != nil {
+		return fmt.Errorf("fetch series anchor: %w", err)
+	}
+
+	rule := strings.TrimSpace(*req.Recurrence)
+	if rule == "" {
+		if err := s.repo.SetSeriesRule(ctx, seriesID, nil, nil); err != nil {
+			return err
+		}
+		// The admin said what should happen to the dates already generated;
+		// the request validator guarantees they said something.
+		if req.RecurrenceCleanup != nil && *req.RecurrenceCleanup == model.RecurrenceCleanupFuture {
+			if _, err := s.repo.DeleteFutureOccurrences(ctx, seriesID); err != nil {
+				return fmt.Errorf("remove future occurrences: %w", err)
+			}
+		}
+		return nil
+	}
+
+	var until *time.Time
+	var untilArg *string
+	if req.RecurrenceUntil != nil && *req.RecurrenceUntil != "" {
+		u, err := time.Parse("2006-01-02", *req.RecurrenceUntil)
+		if err != nil {
+			return fmt.Errorf("parse recurrence_until: %w", err)
+		}
+		until, untilArg = &u, req.RecurrenceUntil
+	}
+
+	start, err := time.Parse("2006-01-02", anchor.Date)
+	if err != nil {
+		return fmt.Errorf("parse series start: %w", err)
+	}
+	// Generate BEFORE deleting anything: an unparseable rule should leave the
+	// calendar exactly as it was rather than emptying a series and then failing.
+	dates, err := OccurrencesForCreate(start, rule, until)
+	if err != nil {
+		return fmt.Errorf("generate occurrences: %w", err)
+	}
+
+	if err := s.repo.SetSeriesRule(ctx, seriesID, &rule, untilArg); err != nil {
+		return err
+	}
+	if _, err := s.repo.DeleteGeneratedOccurrences(ctx, seriesID); err != nil {
+		return fmt.Errorf("clear old occurrences: %w", err)
+	}
+	if _, err := s.repo.AppendOccurrences(ctx, seriesID, dates); err != nil {
+		return fmt.Errorf("write new occurrences: %w", err)
+	}
+	return nil
+}
+
+// extensionWarningMonths is how far ahead a series has to be running out
+// before the admin panel mentions it. Twelve months means a yearly birthday is
+// flagged a whole cycle before it would ever be missed, which is the only
+// warning window that actually protects a yearly series.
+const extensionWarningMonths = 12
+
+// ListSeries returns every recurring series with a flag for the ones that need
+// extending.
+//
+// The flag is computed here rather than in SQL because it is a judgement about
+// two different situations that look identical in the data. A series with an
+// "Ends on" date that has been fully generated is FINISHED - it stops because
+// the admin said so, and nagging about it would train them to ignore the
+// warning. A series that stops early, or has no end date at all, is RUNNING
+// OUT. Only the second kind is flagged.
+func (s *CalendarService) ListSeries(ctx context.Context) ([]model.CalendarSeries, error) {
+	all, err := s.repo.ListSeries(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list series: %w", err)
+	}
+	cutoff := time.Now().AddDate(0, extensionWarningMonths, 0)
+	for i := range all {
+		last, err := time.Parse("2006-01-02", all[i].LastDate)
+		if err != nil {
+			continue // a series we cannot read a date for is not one to nag about
+		}
+		finished := false
+		if all[i].Until != nil {
+			if until, err := time.Parse("2006-01-02", *all[i].Until); err == nil {
+				finished = !last.Before(until)
+			}
+		}
+		// A COUNT-bounded series is finished once it has all its occurrences.
+		// Without this it would be flagged forever: it has no end DATE, so it
+		// looks open-ended, while extending it can never produce anything.
+		if !finished {
+			if r, err := ParseRRule(all[i].Rule); err == nil && r.Count > 0 && all[i].Count >= r.Count {
+				finished = true
+			}
+		}
+		all[i].NeedsExtension = !finished && last.Before(cutoff)
+	}
+	return all, nil
+}
+
+// ExtendSeries writes another horizon's worth of occurrences onto an existing
+// series, starting after the last one already stored.
+//
+// Manual rather than automatic on purpose. Generating rows on backend startup
+// would be a write-on-boot on a system where migrations already auto-apply, and
+// a bad deploy that also mutates data is a much worse afternoon than one that
+// only fails to start. The warning plus a button has the same effect with none
+// of that risk.
+func (s *CalendarService) ExtendSeries(ctx context.Context, seriesID string) (int, error) {
+	anchor, err := s.repo.GetEventByID(ctx, seriesID)
+	if err != nil {
+		return 0, fmt.Errorf("fetch series anchor: %w", err)
+	}
+	if anchor.RecurrenceRule == nil {
+		return 0, fmt.Errorf("event %s is not a recurring series", seriesID)
+	}
+
+	all, err := s.repo.ListSeries(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("read series state: %w", err)
+	}
+	var lastDate string
+	for _, c := range all {
+		if c.ID == seriesID {
+			lastDate = c.LastDate
+			break
+		}
+	}
+	if lastDate == "" {
+		return 0, model.ErrNotFound
+	}
+
+	// The rule is still applied from the ORIGINAL start date, so a birthday
+	// keeps landing on its real day; only the lower bound moves.
+	start, err := time.Parse("2006-01-02", anchor.Date)
+	if err != nil {
+		return 0, fmt.Errorf("parse series start: %w", err)
+	}
+	after, err := time.Parse("2006-01-02", lastDate)
+	if err != nil {
+		return 0, fmt.Errorf("parse last occurrence: %w", err)
+	}
+	var until *time.Time
+	if anchor.RecurrenceUntil != nil && *anchor.RecurrenceUntil != "" {
+		if u, err := time.Parse("2006-01-02", *anchor.RecurrenceUntil); err == nil {
+			until = &u
+		}
+	}
+
+	dates, err := OccurrencesForExtend(start, *anchor.RecurrenceRule, until, after)
+	if err != nil {
+		return 0, fmt.Errorf("generate occurrences: %w", err)
+	}
+	n, err := s.repo.AppendOccurrences(ctx, seriesID, dates)
+	if err != nil {
+		return 0, fmt.Errorf("append occurrences: %w", err)
+	}
+	return int(n), nil
+}
+
+// DeleteEvent removes a calendar event, or part of its series, depending on
+// scope. The scope is always supplied explicitly by the caller - the handler
+// rejects a request that omits it rather than guessing, because guessing is how
+// an admin deletes forty birthdays intending to delete one.
+func (s *CalendarService) DeleteEvent(ctx context.Context, id string, scope model.WriteScope) error {
+	if scope != model.ScopeOccurrence {
+		existing, err := s.repo.GetEventByID(ctx, id)
+		if err != nil {
+			return fmt.Errorf("fetch event for scoped delete: %w", err)
+		}
+		if existing.SeriesID != nil {
+			var from *string
+			if scope == model.ScopeFollowing {
+				from = &existing.Date
+			}
+			n, err := s.repo.DeleteBySeries(ctx, *existing.SeriesID, from)
+			if err != nil {
+				return fmt.Errorf("delete series: %w", err)
+			}
+			if n == 0 {
+				return model.ErrNotFound
+			}
+			return nil
+		}
+	}
 	if err := s.repo.DeleteEvent(ctx, id); err != nil {
 		return fmt.Errorf("delete event: %w", err)
 	}

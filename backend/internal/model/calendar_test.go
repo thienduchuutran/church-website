@@ -86,3 +86,49 @@ func TestUpdateCalendarEventRequest_Validate_endDate(t *testing.T) {
 		}
 	})
 }
+
+// Turning recurrence off has two reasonable meanings - keep the dates already
+// created, or also drop the ones still to come - so the request must say which.
+// A missing value is rejected rather than defaulted, for the same reason every
+// edit and delete carries an explicit scope.
+func TestValidateRecurrenceCleanupRequiresAChoiceWhenClearing(t *testing.T) {
+	empty := ""
+	req := UpdateCalendarEventRequest{Recurrence: &empty}
+	if err := req.ValidateRecurrenceCleanup(); err == nil {
+		t.Fatal("clearing recurrence without a cleanup mode was accepted; it must be rejected")
+	}
+
+	for _, mode := range []string{RecurrenceCleanupKeep, RecurrenceCleanupFuture} {
+		m := mode
+		req := UpdateCalendarEventRequest{Recurrence: &empty, RecurrenceCleanup: &m}
+		if err := req.ValidateRecurrenceCleanup(); err != nil {
+			t.Errorf("cleanup mode %q was rejected: %v", mode, err)
+		}
+	}
+
+	bad := "nuke"
+	req = UpdateCalendarEventRequest{Recurrence: &empty, RecurrenceCleanup: &bad}
+	if err := req.ValidateRecurrenceCleanup(); err == nil {
+		t.Error("an unknown cleanup mode was accepted")
+	}
+}
+
+// A cleanup mode sent when nothing is being cleared is a client bug, and
+// accepting it would let a future change quietly act on it.
+func TestValidateRecurrenceCleanupRejectsAStrayMode(t *testing.T) {
+	rule := "FREQ=WEEKLY"
+	keep := RecurrenceCleanupKeep
+	req := UpdateCalendarEventRequest{Recurrence: &rule, RecurrenceCleanup: &keep}
+	if err := req.ValidateRecurrenceCleanup(); err == nil {
+		t.Error("a cleanup mode alongside a real rule was accepted")
+	}
+}
+
+// The ordinary case: an edit that does not touch recurrence at all.
+func TestValidateRecurrenceCleanupIgnoresUnrelatedEdits(t *testing.T) {
+	title := "Choir practice"
+	req := UpdateCalendarEventRequest{Title: &title}
+	if err := req.ValidateRecurrenceCleanup(); err != nil {
+		t.Errorf("an edit that does not touch recurrence was rejected: %v", err)
+	}
+}

@@ -43,23 +43,23 @@ type Tag struct {
 }
 
 type Post struct {
-	ID           string          `json:"id"`
-	Type         PostType        `json:"type"`
-	Title        string          `json:"title"`
-	Body         *string         `json:"body"`
-	EventDate    *time.Time      `json:"event_date"`
-	ExternalLink *string         `json:"external_link"`
-	AdminID      *string         `json:"admin_id"`
-	CreatedAt    time.Time       `json:"created_at"`
-	UpdatedAt    time.Time       `json:"updated_at"`
+	ID           string     `json:"id"`
+	Type         PostType   `json:"type"`
+	Title        string     `json:"title"`
+	Body         *string    `json:"body"`
+	EventDate    *time.Time `json:"event_date"`
+	ExternalLink *string    `json:"external_link"`
+	AdminID      *string    `json:"admin_id"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
 	// ArchivedAt records when an admin manually moved an event into the Past
 	// section. NULL means "not manually archived" - the event's section is then
 	// decided by event_date alone. Sent as null (not omitted) so the frontend
 	// can rely on the field always being present. See migration 000007.
-	ArchivedAt   *time.Time      `json:"archived_at"`
-	Images       []PostImage     `json:"images,omitempty"`
-	Reactions    []ReactionCount `json:"reactions,omitempty"`
-	Tags         []Tag           `json:"tags,omitempty"`
+	ArchivedAt *time.Time      `json:"archived_at"`
+	Images     []PostImage     `json:"images,omitempty"`
+	Reactions  []ReactionCount `json:"reactions,omitempty"`
+	Tags       []Tag           `json:"tags,omitempty"`
 	// MachineTranslated is true when the response is in a non-English locale
 	// AND at least one rendered field was served from translations (rather
 	// than the English source) AND that translation has not been human-approved.
@@ -99,9 +99,9 @@ type ReactionSummary struct {
 }
 
 type Admin struct {
-	ID          string    `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName *string   `json:"display_name"`
+	ID          string  `json:"id"`
+	Email       string  `json:"email"`
+	DisplayName *string `json:"display_name"`
 	// Discord identity, filled by the one-time "Link Discord" OAuth flow. All
 	// nullable: an admin who never links still posts, falling back to
 	// DisplayName + a default church avatar (see discord.IdentityForAdmin).
@@ -356,24 +356,24 @@ func (r *CreatePaletteColorRequest) Validate() error {
 }
 
 type CalendarEvent struct {
-	ID        string            `json:"id"`
-	Date      string            `json:"date"` // YYYY-MM-DD
+	ID   string `json:"id"`
+	Date string `json:"date"` // YYYY-MM-DD
 	// EndDate is the inclusive last day of a multi-day span (YYYY-MM-DD), or
 	// nil for a single-day event. Drives the banner ribbon in the grid.
-	EndDate   *string           `json:"end_date,omitempty"`
-	Title     string            `json:"title"`
-	EventType CalendarEventType `json:"event_type"`
+	EndDate        *string           `json:"end_date,omitempty"`
+	Title          string            `json:"title"`
+	EventType      CalendarEventType `json:"event_type"`
 	Icon           string            `json:"icon"`
 	PrivateAddress *string           `json:"private_address,omitempty"`
 	// AddressPublic controls whether private_address is shown on the public
 	// website. The PNG export always includes the address regardless.
-	AddressPublic  bool              `json:"address_public"`
+	AddressPublic bool `json:"address_public"`
 	// PlaceID is the venue this event's address resolved to (migration 000014),
 	// or nil for an event with no address and for every event authored before
 	// that migration. Resolved server-side on write from PrivateAddress - never
 	// supplied by a client - which is why it appears on the response type but on
 	// neither request type.
-	PlaceID        *string           `json:"place_id,omitempty"`
+	PlaceID *string `json:"place_id,omitempty"`
 	// Place is that venue expanded - the name and address the Locations strip
 	// prints. Joined on read rather than stored, so an admin renaming a place
 	// changes every event at it at once.
@@ -381,12 +381,23 @@ type CalendarEvent struct {
 	// Stripped for non-admins under the SAME condition as PrivateAddress: a
 	// place name identifies a household as precisely as its street number does,
 	// so "MST House" must not survive a hidden address.
-	Place          *CalendarPlace    `json:"place,omitempty"`
-	Color          string            `json:"color"`
-	Notes     *string           `json:"notes"`
-	AdminID   *string           `json:"admin_id"`
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
+	Place *CalendarPlace `json:"place,omitempty"`
+	Color string         `json:"color"`
+	// SeriesID groups the occurrences one recurrence toggle created. It holds
+	// the ANCHOR occurrence's own id, so series_id == id marks the anchor. nil
+	// on every one-off event, which is every event authored before migration
+	// 000015.
+	SeriesID *string `json:"series_id,omitempty"`
+	// RecurrenceRule and RecurrenceUntil are set on the anchor row only - the
+	// rule describes the series, so it is stored once rather than copied onto
+	// every generated sibling. The frontend uses their presence to decide
+	// whether an event needs the scope prompt on edit and delete.
+	RecurrenceRule  *string   `json:"recurrence_rule,omitempty"`
+	RecurrenceUntil *string   `json:"recurrence_until,omitempty"`
+	Notes           *string   `json:"notes"`
+	AdminID         *string   `json:"admin_id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
 	// MachineTranslated: see Post.MachineTranslated. True when this event's
 	// title or notes were served via an unapproved AI translation. Omitted
 	// from JSON on English responses and on approved translations.
@@ -525,7 +536,17 @@ type CreateCalendarEventRequest struct {
 	PrivateAddress *string           `json:"private_address"`
 	AddressPublic  bool              `json:"address_public"`
 	Color          string            `json:"color"`
-	Notes          *string           `json:"notes"`
+	// Recurrence turns this create into a series: nil or "" for a one-off,
+	// otherwise "weekly" or "yearly". The occurrences are generated server-side
+	// at write time - the client never computes dates and never sends more than
+	// this one event.
+	Recurrence *string `json:"recurrence"`
+	// RecurrenceUntil is the admin's "Ends on" date (YYYY-MM-DD). nil means
+	// open-ended, which is the ONLY case the three-year horizon and its warning
+	// apply to: a series with a real end date is generated to exactly that date
+	// and never needs extending.
+	RecurrenceUntil *string `json:"recurrence_until"`
+	Notes           *string `json:"notes"`
 	// No source_locale field: the language is detected from Title+Notes by the
 	// service and never supplied by the client. See resolveSourceLocale.
 }
@@ -557,8 +578,101 @@ func (r *CreateCalendarEventRequest) Validate() error {
 			return err
 		}
 	}
+	if err := r.validateRecurrence(); err != nil {
+		return err
+	}
 	return nil
 }
+
+// validateRecurrence checks the two recurrence fields together, because
+// neither means anything alone: an "ends on" date with no rule is not a
+// series, and a rule whose end date precedes its start would generate nothing.
+//
+// The multi-day rejection is a deliberate v1 scope line, not an oversight.
+// Repeating a span raises a question nobody has answered - whether the second
+// occurrence of a three-day retreat keeps the three days or just the first -
+// and refusing it here costs nothing while lifting it later is a UI change
+// rather than a migration.
+func (r *CreateCalendarEventRequest) validateRecurrence() error {
+	if r.Recurrence == nil || *r.Recurrence == "" {
+		if r.RecurrenceUntil != nil && *r.RecurrenceUntil != "" {
+			return errors.New("recurrence_until requires a recurrence rule")
+		}
+		return nil
+	}
+	if r.EndDate != nil && *r.EndDate != "" {
+		return errors.New("a multi-day event cannot repeat yet")
+	}
+	if r.RecurrenceUntil != nil && *r.RecurrenceUntil != "" {
+		if err := validateDateRange(r.Date, *r.RecurrenceUntil); err != nil {
+			return fmt.Errorf("recurrence_until: %w", err)
+		}
+	}
+	return nil
+}
+
+// CalendarSeries summarises one recurring series for the admin panel. It is a
+// read-only view assembled by a GROUP BY, not a table - the series has no row
+// of its own beyond its anchor occurrence.
+type CalendarSeries struct {
+	// ID is the anchor occurrence's id, which is also every member's series_id.
+	ID    string `json:"id"`
+	Title string `json:"title"`
+	Rule  string `json:"rule"`
+	// Until is the admin's "Ends on" date, or nil for an open-ended series.
+	Until *string `json:"until,omitempty"`
+	// LastDate is the furthest occurrence currently written.
+	LastDate string `json:"last_date"`
+	Count    int    `json:"count"`
+	// NeedsExtension is true when this series will run out of occurrences soon
+	// and more can still be generated. A series with an "Ends on" date that has
+	// been fully generated is finished, not running out, and never sets this -
+	// which is why an admin with only fixed-term series is never nagged.
+	NeedsExtension bool `json:"needs_extension"`
+}
+
+// WriteScope says which part of a recurring series an edit or delete applies
+// to. It exists because the alternative - letting the server assume - is how
+// an admin deletes forty birthdays intending to delete one. There is
+// deliberately no zero-value default: ParseWriteScope rejects an empty string
+// rather than picking the safest-looking option, so a client that forgets to
+// send a scope gets a 400 instead of a silent mass edit.
+type WriteScope string
+
+const (
+	// ScopeOccurrence touches the one row the admin clicked. It is also the
+	// only legal scope for an event that is not part of a series.
+	ScopeOccurrence WriteScope = "occurrence"
+	// ScopeFollowing touches that row and every later one in the series. Past
+	// occurrences are left alone because they are a record of what happened.
+	ScopeFollowing WriteScope = "following"
+	// ScopeSeries touches every row in the series, past included.
+	ScopeSeries WriteScope = "series"
+)
+
+// ParseWriteScope converts the wire value, rejecting anything unrecognized -
+// including "", which is the case this function mainly exists to catch.
+func ParseWriteScope(v string) (WriteScope, error) {
+	switch WriteScope(v) {
+	case ScopeOccurrence, ScopeFollowing, ScopeSeries:
+		return WriteScope(v), nil
+	case "":
+		return "", errors.New("scope is required: one of occurrence, following, series")
+	default:
+		return "", fmt.Errorf("invalid scope: %s", v)
+	}
+}
+
+// Recurrence rules are RFC 5545 RRULE text since migration 000016. The model
+// deliberately does NOT own the vocabulary: service.ParseRRule is the single
+// authority on which rules exist, because the set of rules that may be STORED
+// has to be exactly the set the generator can EXPAND, and the generator lives
+// there. Checking the shape in two places would let those two sets drift, and a
+// rule that can be saved but not expanded renders confidently wrong dates on
+// the public calendar.
+//
+// What stays here is the part that is genuinely about the request as a whole:
+// how the recurrence fields relate to the event's own dates.
 
 // validateDateRange parses two YYYY-MM-DD strings and confirms end is on or
 // after start. Shared by the create and update validators so the rule lives in
@@ -587,12 +701,74 @@ type UpdateCalendarEventRequest struct {
 	PrivateAddress *string            `json:"private_address"`
 	// AddressPublic is written directly (the EventModal always submits the full
 	// event), so a partial PATCH never silently flips visibility.
-	AddressPublic  bool               `json:"address_public"`
-	Color          *string            `json:"color"`
-	Notes          *string            `json:"notes"`
+	AddressPublic bool    `json:"address_public"`
+	Color         *string `json:"color"`
+	Notes         *string `json:"notes"`
 	// No source_locale field - see CreateCalendarEventRequest. An edit re-detects
 	// from the patched text, so rewriting an English event in Vietnamese moves it
 	// to the Vietnamese side automatically.
+
+	// Recurrence changes how the series repeats. Present only when the admin
+	// actually touched the Repeats controls; nil leaves the rule alone, and an
+	// empty string means "stop repeating", which keeps the occurrences already
+	// on the calendar and simply stops generating more.
+	//
+	// A rule change is only accepted with scope=series. Applying a new rule to
+	// part of a series would mean splitting it into two, which the design
+	// deliberately defers (DECISIONS.md 2026-09-14) - so the honest answer is to
+	// change the whole thing or delete it and start again.
+	Recurrence *string `json:"recurrence"`
+	// RecurrenceUntil is the "Ends on" date. Follows Recurrence: nil leaves it
+	// alone, empty string clears it back to open-ended.
+	RecurrenceUntil *string `json:"recurrence_until"`
+	// RecurrenceCleanup says what to do with the dates already on the calendar
+	// when recurrence is switched OFF. Required in that case and meaningless
+	// otherwise.
+	//
+	// It exists because "stop repeating" has two reasonable meanings and the
+	// server must not pick. Keeping every generated date leaves the calendar
+	// showing an event that the form now calls "does not repeat". Deleting the
+	// future ones removes events the congregation may already have planned
+	// around. Neither is safe to assume, which is the same reason every edit
+	// and delete carries an explicit scope.
+	RecurrenceCleanup *string `json:"recurrence_cleanup"`
+}
+
+// Recurrence cleanup modes, used when a series' rule is cleared.
+const (
+	// RecurrenceCleanupKeep stops generating new dates and leaves every
+	// existing one exactly where it is.
+	RecurrenceCleanupKeep = "keep"
+	// RecurrenceCleanupFuture additionally removes occurrences that have not
+	// happened yet. The past is always kept: it is a record of what the church
+	// actually did, not a schedule to be tidied.
+	RecurrenceCleanupFuture = "future"
+)
+
+// ValidateRecurrenceCleanup checks the cleanup mode against the rule change it
+// accompanies. Deliberately rejects a missing value rather than defaulting - a
+// client that forgets it gets a 400, not a guess about the admin's intent.
+//
+// Removing EVERY date is intentionally not an option here. That is what Delete
+// with scope=series already does, and giving one operation two ways to wipe a
+// series is how the two drift apart.
+func (r *UpdateCalendarEventRequest) ValidateRecurrenceCleanup() error {
+	clearing := r.Recurrence != nil && *r.Recurrence == ""
+	if !clearing {
+		if r.RecurrenceCleanup != nil {
+			return errors.New("recurrence_cleanup only applies when recurrence is being cleared")
+		}
+		return nil
+	}
+	if r.RecurrenceCleanup == nil {
+		return errors.New("recurrence_cleanup is required when turning recurrence off: one of keep, future")
+	}
+	switch *r.RecurrenceCleanup {
+	case RecurrenceCleanupKeep, RecurrenceCleanupFuture:
+		return nil
+	default:
+		return fmt.Errorf("invalid recurrence_cleanup: %s", *r.RecurrenceCleanup)
+	}
 }
 
 func (r *UpdateCalendarEventRequest) Validate() error {
@@ -657,7 +833,7 @@ var AllowedVideoContentTypes = map[string]bool{
 // layers for the homepage background video.
 type HeroVideo struct {
 	ID          string    `json:"id"`
-	StorageKey  string    `json:"-"`           // S3 object key - never sent to the client
+	StorageKey  string    `json:"-"` // S3 object key - never sent to the client
 	FileName    string    `json:"file_name"`
 	FileSize    *int64    `json:"file_size"`
 	ContentType *string   `json:"content_type"`
@@ -781,7 +957,7 @@ type ReplaceTagsRequest struct {
 
 // AssistantMessage represents a single turn in the chat conversation history.
 type AssistantMessage struct {
-	Role    string `json:"role"`    // "user" or "assistant"
+	Role    string `json:"role"` // "user" or "assistant"
 	Content string `json:"content"`
 }
 
@@ -795,7 +971,7 @@ type AssistantChatRequest struct {
 // The frontend renders these as clickable chips so visitors can verify the answer.
 type AssistantSource struct {
 	ID    string `json:"id"`
-	Type  string `json:"type"`  // "post", "calendar_event", "page"
+	Type  string `json:"type"` // "post", "calendar_event", "page"
 	Title string `json:"title"`
 }
 

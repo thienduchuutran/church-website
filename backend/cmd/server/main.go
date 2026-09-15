@@ -460,6 +460,12 @@ func main() {
 				// wrong AI-proposed venue label.
 				r.Get("/calendar/places", calendarHandler.ListPlaces)
 				r.Patch("/calendar/places/{id}", calendarHandler.RenamePlace)
+				// Recurring series: an operational view of which series are
+				// about to run out of generated occurrences, plus the manual
+				// top-up. Admin-only for the same reason as /calendar/places -
+				// it describes the calendar's internals, not its contents.
+				r.Get("/calendar/series", calendarHandler.ListSeries)
+				r.Post("/calendar/series/{id}/extend", calendarHandler.ExtendSeries)
 				r.Put("/calendar/months/{year}/{month}/note", calendarHandler.UpsertMonthNote)
 				r.Put("/calendar/months/{year}/{month}/settings", calendarHandler.UpsertMonthSettings)
 			})

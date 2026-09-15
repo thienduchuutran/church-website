@@ -90,6 +90,51 @@ func (h *CalendarHandler) CreateEvent(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, e)
 }
 
+// ListSeries handles GET /api/v1/calendar/series (admin only).
+//
+// Admin-only for the same reason as /calendar/places: it is an operational
+// view of the calendar's internals rather than something a visitor reads, and
+// it exposes every series whether or not its events are public.
+func (h *CalendarHandler) ListSeries(w http.ResponseWriter, r *http.Request) {
+	series, err := h.svc.ListSeries(r.Context())
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to list series")
+		return
+	}
+	writeJSON(w, http.StatusOK, series)
+}
+
+// ExtendSeries handles POST /api/v1/calendar/series/{id}/extend (admin only).
+func (h *CalendarHandler) ExtendSeries(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	n, err := h.svc.ExtendSeries(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, model.ErrNotFound) {
+			writeError(w, http.StatusNotFound, "series not found")
+			return
+		}
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]int{"added": n})
+}
+
+// requireScope reads ?scope= and refuses to proceed without it.
+//
+// It is a query parameter rather than a body field so that PATCH and DELETE
+// answer the question the same way - DELETE conventionally carries no body,
+// and one parsing path is easier to keep honest than two.
+//
+// There is deliberately no default. A missing scope is a 400, including on an
+// event that turns out not to repeat at all, because the server cannot know
+// which kind of event it is holding until after it has looked, and by then a
+// guess has already been made. The cost of the strictness is one required
+// parameter; the cost of the leniency is an admin deleting forty birthdays
+// while intending to delete one.
+func requireScope(r *http.Request) (model.WriteScope, error) {
+	return model.ParseWriteScope(r.URL.Query().Get("scope"))
+}
+
 // UpdateEvent handles PATCH /api/v1/calendar/events/{id} (admin only).
 func (h *CalendarHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
@@ -98,7 +143,12 @@ func (h *CalendarHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	e, err := h.svc.UpdateEvent(r.Context(), id, req)
+	scope, err := requireScope(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	e, err := h.svc.UpdateEvent(r.Context(), id, req, scope)
 	if err != nil {
 		if errors.Is(err, model.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "event not found")
@@ -113,7 +163,12 @@ func (h *CalendarHandler) UpdateEvent(w http.ResponseWriter, r *http.Request) {
 // DeleteEvent handles DELETE /api/v1/calendar/events/{id} (admin only).
 func (h *CalendarHandler) DeleteEvent(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	if err := h.svc.DeleteEvent(r.Context(), id); err != nil {
+	scope, err := requireScope(r)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := h.svc.DeleteEvent(r.Context(), id, scope); err != nil {
 		if errors.Is(err, model.ErrNotFound) {
 			writeError(w, http.StatusNotFound, "event not found")
 			return
