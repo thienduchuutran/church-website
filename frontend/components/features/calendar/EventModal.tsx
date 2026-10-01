@@ -166,7 +166,6 @@ export default function EventModal({
   // re-pointed when the address is changed to a known place.
   const [place, setPlace] = useState<CalendarPlace | null>(event?.place ?? null)
   const [placeName, setPlaceName] = useState(event?.place?.name ?? '')
-  const [renamingPlace, setRenamingPlace] = useState(false)
 
   // Inline "create a type as you type" state (the Linear/Airtable pattern).
   const [addingType, setAddingType] = useState(false)
@@ -337,26 +336,31 @@ export default function EventModal({
   // Correcting the venue label. This is the escape hatch that makes shipping an
   // AI-proposed name defensible: the answer renders on the public calendar and
   // inside the exported PNG, and re-typing the address can't fix it (it
-  // resolves back to the same place by design). Saving also pins the name so
+  // resolves back to the same place by design). Renaming also pins the name so
   // the model can never overwrite it.
-  async function handleRenamePlace() {
+  //
+  // It commits as part of Save rather than through a button of its own. The
+  // field sits inside the event form, so Save is what an admin expects to
+  // persist it - and when it did not, a typed name was silently thrown away on
+  // close with nothing to show it had happened.
+  //
+  // Runs BEFORE the event write: if the rename fails, nothing else has changed
+  // and the admin can fix it and save again. Doing it afterwards would leave a
+  // saved event behind an error message, with the modal closing over it.
+  async function commitPlaceRename(): Promise<void> {
     const next = placeName.trim()
-    if (!place || !accessToken || !next || next === place.name) return
-    setRenamingPlace(true)
-    setError(null)
-    try {
-      const updated = await renamePlace(place.id, next, accessToken)
-      setPlace(updated)
-      setPlaceName(updated.name)
-      // Keep the suggestion list in step. Spread over the existing row rather
-      // than replacing it, so the usage count the rename response does not
-      // carry survives - it is what the server orders suggestions by.
-      setPlaces((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't rename this place")
-    } finally {
-      setRenamingPlace(false)
-    }
+    if (!place || !accessToken || !showAddress) return
+    // An emptied box is not a request to erase the venue's name - the public
+    // calendar would then print a bare address. Treat it as "leave it alone",
+    // which is what the old disabled-button state meant too.
+    if (!next || next === place.name) return
+    const updated = await renamePlace(place.id, next, accessToken)
+    setPlace(updated)
+    setPlaceName(updated.name)
+    // Keep the suggestion list in step. Spread over the existing row rather
+    // than replacing it, so the usage count the rename response does not
+    // carry survives - it is what the server orders suggestions by.
+    setPlaces((prev) => prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p)))
   }
 
   const choose = useChoose()
@@ -457,6 +461,9 @@ export default function EventModal({
       // may equal the start for a one-day banner). Otherwise send null, which
       // clears any existing span. The end-date picker's min keeps it >= start.
       const computedEndDate = multiDay && endDate ? endDate : null
+      // Before the event write - see commitPlaceRename. A no-op unless the
+      // admin actually edited the venue label.
+      await commitPlaceRename()
       if (mode === 'note') {
         await upsertMonthNote(
           year,
@@ -1031,23 +1038,13 @@ export default function EventModal({
                             </p>
                           </InfoTip>
                         </span>
-                        <div className="flex items-center gap-2">
-                          <input
-                            value={placeName}
-                            onChange={(e) => setPlaceName(e.target.value)}
-                            maxLength={MAX_PLACE_NAME_LEN}
-                            placeholder="Church"
-                            className="min-w-0 flex-1 rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
-                          />
-                          <button
-                            type="button"
-                            onClick={handleRenamePlace}
-                            disabled={renamingPlace || !placeName.trim() || placeName.trim() === place.name}
-                            className="shrink-0 rounded-lg border border-border px-3 py-2 font-display text-[11px] font-semibold uppercase tracking-wider text-foreground transition-colors hover:bg-muted/10 disabled:opacity-40 disabled:hover:bg-transparent"
-                          >
-                            {renamingPlace ? 'Saving…' : 'Rename'}
-                          </button>
-                        </div>
+                        <input
+                          value={placeName}
+                          onChange={(e) => setPlaceName(e.target.value)}
+                          maxLength={MAX_PLACE_NAME_LEN}
+                          placeholder="Church"
+                          className="w-full rounded-lg border border-border bg-background px-3 py-2 font-sans text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/40"
+                        />
                         <p className="font-sans text-[11px] leading-snug text-muted">
                           Renaming updates every event at this address.
                         </p>
