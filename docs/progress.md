@@ -3,6 +3,89 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-10-02 - Bible study chips name the house they are at
+
+**Why.** Congregation members asked that a Friday BBS chip say whose house it is at. The grid
+could not answer that anywhere: the Locations strip below it deliberately dropped the day and the
+event title when it became one row per *venue*, so the date-to-house mapping existed nowhere on
+the page.
+
+**The map already existed.** The owner proposed a hash map of normalized address to house name.
+That is `calendar_places`, shipped in migration `000014`: `address_key` (written by
+`model.NormalizeAddressKey`) is the key, `name` is the value, the UNIQUE constraint makes "same
+place" a database guarantee, the first event at a new address triggers an async Gemini naming
+call, and `name_source='admin'` locks the model out after a human renames it. So this change
+added **no storage and no migration** - it reads a map that was already there. The names were even
+already the right shape: the place-naming prompt is explicitly told to strip weekday and activity
+words, with `Friday BBS MST''s House` → `MST House` as one of its own worked examples.
+
+### The privacy rule reversed, deliberately
+
+`handler.GetMonth` stripped the whole `place` object - name included - whenever `address_public`
+was false, on the stated reasoning that *"a place name identifies a household as precisely as its
+street number."* That is now wrong by decision, not by accident.
+
+The owner's call: for this congregation a family name is already known to everyone who reads the
+calendar, while a street address is not. So the strip became **field-level** - `private_address`
+and `place.address` are both emptied for the public, `place.name` and `place.id` survive.
+
+Blanking `place.address` rather than only `private_address` is the load-bearing half. They are the
+same street address by two routes, and hiding one while shipping the other would have accomplished
+nothing.
+
+The strip was extracted from the handler body into a pure `stripAdminOnlyFields(resp, isAdmin)`
+with its own table test - six cases, written before the change. It had no test at all before, which
+is a poor state for the one function standing between a household's address and the public
+internet.
+
+**A lucky consequence, now pinned by a test.** `groupEventsByPlace` keys the Locations strip off
+the address, so a named venue with a blanked address still produces no row. The public strip
+therefore behaves exactly as it did - private venues stay absent from it - and the name reaches
+the reader on the chip instead. That is relied upon rather than incidental, so
+`places.test.ts` now asserts it.
+
+### Why a second line and not `Friday BBS - Hoang House`
+
+Appending to the title was the obvious reading of the request and was rejected on measurements:
+
+- A chip is about **24 characters** wide in the 1100px PNG export. `Friday BBS - Hoang House` is
+  exactly 24. One longer surname clips, and a PNG has no tooltip to recover it.
+- Text baked into `title` goes stale the moment a place is renamed, and re-queues the title for
+  translation - changing a title resets `approved_by` to NULL and revokes any human-approved
+  Vietnamese.
+- It would have written derived text into an admin-authored field, which this project already
+  built, shipped and removed once (2026-08-01, `seedMonthNote`): *"The 1:1 mapping was the whole
+  problem."*
+
+So the name is composed at render time into a second chip line, and **no event title changes**.
+`chipSubtitle(e)` is exported from `CalendarGrid` and used by both the three chip call sites and
+`chipRows`, because the two must not drift: a subtitled chip is two lines tall and is charged 2
+rows exactly as a birthday is. Under-counting there makes a busy day's cell outgrow its ~115px box
+and throws that week's row taller than the other four in the export - the failure
+`DESKTOP_CELL_BUDGET` exists to prevent.
+
+Bible studies only. Every other type is at the church, where a second line reading "Church" under
+each chip is noise. **Weekday is not part of the condition** - nothing in the codebase
+distinguishes a Friday study (a weekly one carries `BYDAY=FR` inside its RRULE and nothing else),
+and a Tuesday study at a home benefits identically.
+
+### Files
+
+| Layer | Files |
+|---|---|
+| Backend | `handler/calendar.go` (strip extracted + field-level), `model/types.go` (comment restated) |
+| Tests | `handler/calendar_test.go` *(new)*, `frontend/lib/__tests__/places.test.ts` |
+| Frontend | `EventChip.tsx` (`subtitle` prop), `CalendarGrid.tsx` (`chipSubtitle`, `chipRows`, 3 call sites), `DayEventsModal.tsx` |
+| Docs | `api.md`, `agents/backend.md`, `components.md` |
+
+### Note for next time
+
+The frontend **does** have tests - `lib/__tests__/color.test.ts` and `places.test.ts`, run on
+Node's built-in runner via `npm run test:color` / `npm run test:places`. There is no vitest or
+jest, which is why they are easy to miss when grepping `package.json` for a `test` script.
+
+---
+
 ## 2026-09-15 - Month theme and memory verse above the calendar grid
 
 **Why.** Users asked for somewhere on the calendar page to carry the month's theme and its memory
