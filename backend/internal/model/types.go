@@ -377,11 +377,15 @@ type CalendarEvent struct {
 	PlaceID *string `json:"place_id,omitempty"`
 	// Place is that venue expanded - the name and address the Locations strip
 	// prints. Joined on read rather than stored, so an admin renaming a place
-	// changes every event at it at once.
+	// changes every event at it at once, with no event title to keep in step.
 	//
-	// Stripped for non-admins under the SAME condition as PrivateAddress: a
-	// place name identifies a household as precisely as its street number does,
-	// so "MST House" must not survive a hidden address.
+	// Partially stripped for non-admins: Place.Address is blanked under the same
+	// condition as PrivateAddress (it is the same street address by another
+	// route), but the NAME and id survive for everyone. That split is
+	// deliberate - the calendar needs the name to say whose house a Bible study
+	// is at, and for this congregation a family name is already common knowledge
+	// where a street address is not. See handler.stripAdminOnlyFields, which is
+	// the only place the rule is applied.
 	Place *CalendarPlace `json:"place,omitempty"`
 	Color string         `json:"color"`
 	// SeriesID groups the occurrences one recurrence toggle created. It holds

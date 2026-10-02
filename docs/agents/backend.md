@@ -99,6 +99,10 @@ Every endpoint below is split into a **public** group (no middleware) and an **a
 
 If you find yourself wanting to add auth to a public read path, it's almost certainly the wrong fix. The only thing that should ever require a token is a *write* (POST/PATCH/PUT/DELETE) - and even then, public reactions write without one because they're rate-limited per fingerprint, not per user.
 
+**Field-level stripping on `GET /calendar`.** The calendar read is public, so what an admin may see and what the world may see is decided *inside* the response rather than at the route. That decision lives in exactly one pure function - `handler.stripAdminOnlyFields` - with its own tests in `internal/handler/calendar_test.go`. Anything admin-only must be listed there; a new `*_source` field that is not stripped leaks unapproved source text.
+
+It is field-level, not all-or-nothing. On an event whose `address_public` is false, a public viewer gets `private_address: null` **and** `place.address: ""` (the same street address by another route), but keeps `place.name` and `place.id`. The name is public on purpose - it used to be stripped with the address, on the reasoning that a place name identifies a household as precisely as its street number; the owner's call for this congregation is that a family name is already common knowledge where a street address is not, and the calendar needs the name so a Bible study chip can say whose house it is at. See `docs/api.md` → CalendarEvent.
+
 ### Public (no auth - intentional, do not protect)
 | Method | Path | Description |
 |--------|------|-------------|

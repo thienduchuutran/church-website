@@ -45,40 +45,66 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusInternalServerError, "failed to load calendar")
 		return
 	}
-	// Admin-only fields, all stripped in one place so there is a single boundary
-	// to audit:
-	//   - private_address: non-admins only see an address explicitly marked
-	//     public on the site.
-	//   - place / place_id: the venue that address resolved to. Stripped under
-	//     the SAME condition, because a place name identifies a household as
-	//     precisely as its street number - leaving "MST House" behind while
-	//     hiding "203 Essex Street" would defeat the whole point of the flag.
-	//   - title_source / notes_source, and the month note's content_source,
-	//     theme_source, verse_text_source and verse_reference_source: the
-	//     untranslated authored text, needed only so the admin edit form saves
-	//     the source instead of the machine translation it is displaying. A
-	//     public visitor has no use for it, and shipping it would double the
-	//     text in every payload. Every *_source field on a model must be listed
-	//     here - a new one that is not stripped leaks unapproved source text.
-	if middleware.AdminEmailFromContext(r.Context()) == "" {
-		for i := range resp.Events {
-			if !resp.Events[i].AddressPublic {
-				resp.Events[i].PrivateAddress = nil
-				resp.Events[i].Place = nil
-				resp.Events[i].PlaceID = nil
-			}
-			resp.Events[i].TitleSource = nil
-			resp.Events[i].NotesSource = nil
-		}
-		if resp.MonthNote != nil {
-			resp.MonthNote.ContentSource = nil
-			resp.MonthNote.ThemeSource = nil
-			resp.MonthNote.VerseTextSource = nil
-			resp.MonthNote.VerseReferenceSource = nil
-			resp.MonthNote.VerseTextAlt = nil
-		}
-	}
+	stripAdminOnlyFields(resp, middleware.AdminEmailFromContext(r.Context()) != "")
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// stripAdminOnlyFields removes everything a public visitor must not receive.
+//
+// It is the single boundary between admin-visible and world-visible calendar
+// data, kept as one pure function so there is exactly one thing to audit and so
+// the rules can be tested without a database. GetMonth is its only caller, and
+// GetMonth is the only public read path for events.
+//
+// What it protects:
+//
+//   - private_address: non-admins only see an address explicitly marked public
+//     on the site.
+//
+//   - place.address: the same street address reached through the venue. Blanked
+//     under the same condition, or hiding private_address would accomplish
+//     nothing - the address would simply arrive by the other route.
+//
+//   - title_source / notes_source, and the month note's content_source,
+//     theme_source, verse_text_source, verse_reference_source and
+//     verse_text_alt: the untranslated authored text, needed only so the admin
+//     edit form saves the source instead of the machine translation it is
+//     displaying. A public visitor has no use for it, and shipping it would
+//     double the text in every payload. Every *_source field on a model must be
+//     listed here - a new one that is not stripped leaks unapproved source text.
+//
+// What it deliberately does NOT strip, and why this changed: the venue's NAME
+// and id now survive for everyone. They used to be removed alongside the
+// address, on the reasoning that "MST House" identifies a household as
+// precisely as its street number does. The owner's call for this congregation
+// is that the two are not equivalent - a family name is already known to
+// everyone who reads this calendar, while a street address is not - and the
+// calendar needs the name to say whose house a Bible study is at. So the strip
+// is field-level: the name goes out, the address never does.
+func stripAdminOnlyFields(resp *model.CalendarMonthResponse, isAdmin bool) {
+	if isAdmin {
+		return
+	}
+	for i := range resp.Events {
+		if !resp.Events[i].AddressPublic {
+			resp.Events[i].PrivateAddress = nil
+			// Blank the address in place rather than dropping the whole place:
+			// buildPlace allocates a fresh CalendarPlace per row, so no other
+			// event shares this pointer and mutating it here is safe.
+			if resp.Events[i].Place != nil {
+				resp.Events[i].Place.Address = ""
+			}
+		}
+		resp.Events[i].TitleSource = nil
+		resp.Events[i].NotesSource = nil
+	}
+	if resp.MonthNote != nil {
+		resp.MonthNote.ContentSource = nil
+		resp.MonthNote.ThemeSource = nil
+		resp.MonthNote.VerseTextSource = nil
+		resp.MonthNote.VerseReferenceSource = nil
+		resp.MonthNote.VerseTextAlt = nil
+	}
 }
 
 // CreateEvent handles POST /api/v1/calendar/events (admin only).
