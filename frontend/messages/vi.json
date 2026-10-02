@@ -8,6 +8,12 @@
     "vi": "Tiếng Việt",
     "switchTo": "Chuyển sang {language}"
   },
+  "Theme": {
+    "system": "Theo thiết bị",
+    "light": "Sáng",
+    "dark": "Tối",
+    "current": "Giao diện: {mode}"
+  },
   "Nav": {
     "primary": "Điều hướng chính",
     "home": "Trang chủ",

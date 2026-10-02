@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { deriveRamp } from '@/lib/color'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
@@ -140,21 +140,16 @@ export default function MonthThemeCard({ note, accent, isAdmin, onEdit }: MonthT
  * `#17101a` in dark mode, where dark ink disappears. So dark mode takes the
  * light end of the same ramp - same hue, opposite end.
  *
- * Resolved in an effect rather than during render because the server has no
- * `matchMedia`; the first paint uses the light-mode ink, which is also the right
- * answer for every viewer not in dark mode.
+ * Read from next-themes' resolvedTheme rather than a raw matchMedia listener,
+ * so a visitor's manual light/dark override (which may disagree with their
+ * OS setting) is respected, not just the OS preference. `resolvedTheme` is
+ * `undefined` on the server and before mount, so the first paint still uses
+ * the light-mode ink - the same fallback the matchMedia version relied on,
+ * which is also the right answer for every viewer not in dark mode.
  */
 function useAccentInk(accent: string): string {
   const ramp = deriveRamp(accent)
-  const [dark, setDark] = useState(false)
+  const { resolvedTheme } = useTheme()
 
-  useEffect(() => {
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const sync = () => setDark(mq.matches)
-    sync()
-    mq.addEventListener('change', sync)
-    return () => mq.removeEventListener('change', sync)
-  }, [])
-
-  return dark ? ramp.highlight : ramp.text
+  return resolvedTheme === 'dark' ? ramp.highlight : ramp.text
 }

@@ -8,6 +8,12 @@
     "vi": "Vietnamese",
     "switchTo": "Switch to {language}"
   },
+  "Theme": {
+    "system": "Match device",
+    "light": "Light",
+    "dark": "Dark",
+    "current": "Theme: {mode}"
+  },
   "Nav": {
     "primary": "Primary",
     "home": "Home",

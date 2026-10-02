@@ -3,6 +3,7 @@ import { Nunito, Geist_Mono, Baloo_2 } from 'next/font/google'
 import { NextIntlClientProvider, hasLocale } from 'next-intl'
 import { setRequestLocale } from 'next-intl/server'
 import { notFound } from 'next/navigation'
+import { ThemeProvider } from 'next-themes'
 import '../globals.css'
 import { AuthProvider } from '@/lib/auth'
 import { EditModalProvider } from '@/lib/edit-modal'
@@ -111,6 +112,7 @@ export default async function LocaleLayout({
     <html
       lang={locale}
       className={`${nunito.variable} ${geistMono.variable} ${baloo2.variable} h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="flex min-h-full flex-col bg-background text-foreground">
         <a
@@ -127,6 +129,10 @@ export default async function LocaleLayout({
             wrong language and then no-ops. Binding the prop to the resolved
             segment param forces the client context to track the URL. */}
         <NextIntlClientProvider locale={locale}>
+          {/* attribute="class" targets the .dark selector in globals.css;
+              defaultTheme="system" + enableSystem matches the pre-existing
+              prefers-color-scheme fallback until a visitor overrides it. */}
+          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
             {/* ConfirmProvider wraps UnsavedChangesProvider because
                 confirmDiscard prompts through it. */}
@@ -147,6 +153,7 @@ export default async function LocaleLayout({
             </UnsavedChangesProvider>
             </ConfirmProvider>
           </AuthProvider>
+          </ThemeProvider>
         </NextIntlClientProvider>
       </body>
     </html>

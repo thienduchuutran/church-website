@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   /* ─── VGOMNE logo palette ───
      Five brand values: deep magenta, its darker hover, rose, mid magenta,
@@ -65,6 +67,58 @@
   --ease-card: cubic-bezier(0.22, 1, 0.36, 1);
   /* The logo's gradient, rose into magenta, as a horizontal rule. */
   --brand-gradient: linear-gradient(90deg, var(--secondary), var(--primary));
+
+  /* ─── Dark-field values ───
+     Same structure on a plum-charcoal field. The logo palette has no
+     dark-field variant, so rose stands in wherever magenta must be read as
+     text: deep magenta is 2.2:1 on this field, rose is 6.1:1. Solid fills
+     therefore become rose and darken to mid magenta on hover. Kept as named
+     variables (rather than only living inside a media query) so both the
+     manual `.dark` class and the no-JS/pre-hydration media fallback below
+     read the same values and can never drift apart. */
+  --background-dark: #17101a;
+  --foreground-dark: #f6eef4;
+  --primary-dark: #de718e;
+  --primary-light-dark: #a6366d;
+  --secondary-dark: #de718e;
+  --accent-dark: #de718e;
+  --accent-light-dark: #de718e;
+  --panel-dark: #2d1f33;
+  --panel-strong-dark: #4a3f7a;
+  --surface-dark: #221722;
+  --muted-dark: #c9a9bf;
+  --border-dark: #3d2d43;
+  --hero-bg-dark: #17101a;
+  --hero-text-dark: #ffffff;
+  /* Magenta-tinted shadows at 6-16% alpha are invisible on a #17101a field -
+     there is no darker value left to cast. Dark mode therefore switches to
+     near-black at much higher alpha, which is what actually separates a
+     #221722 card from a #17101a page. */
+  --elevation-card-dark: 0 1px 3px rgba(0, 0, 0, 0.38), 0 6px 18px -3px rgba(0, 0, 0, 0.52);
+  --elevation-card-hover-dark: 0 2px 6px rgba(0, 0, 0, 0.42), 0 18px 40px -6px rgba(0, 0, 0, 0.68);
+}
+
+/* Applied by next-themes once JS has resolved the visitor's explicit choice
+   (or "system" resolved to dark). Reassigns the live variable names rather
+   than repeating literals, so this and the --*-dark block above are the only
+   place dark values are ever written. */
+.dark {
+  --background: var(--background-dark);
+  --foreground: var(--foreground-dark);
+  --primary: var(--primary-dark);
+  --primary-light: var(--primary-light-dark);
+  --secondary: var(--secondary-dark);
+  --accent: var(--accent-dark);
+  --accent-light: var(--accent-light-dark);
+  --panel: var(--panel-dark);
+  --panel-strong: var(--panel-strong-dark);
+  --surface: var(--surface-dark);
+  --muted: var(--muted-dark);
+  --border: var(--border-dark);
+  --hero-bg: var(--hero-bg-dark);
+  --hero-text: var(--hero-text-dark);
+  --elevation-card: var(--elevation-card-dark);
+  --elevation-card-hover: var(--elevation-card-hover-dark);
 }
 
 @theme inline {
@@ -104,33 +158,27 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* No-JS / pre-hydration fallback only: next-themes always writes an explicit
+   .light or .dark class once JS runs (including for the "system" choice), so
+   this only matches before that class lands, or when JS is unavailable. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    /* Same structure on a plum-charcoal field. The logo palette has no
-       dark-field variant, so rose stands in wherever magenta must be read
-       as text: deep magenta is 2.2:1 on this field, rose is 6.1:1. Solid
-       fills therefore become rose and darken to mid magenta on hover. */
-    --background: #17101a;
-    --foreground: #f6eef4;
-    --primary: #de718e;
-    --primary-light: #a6366d;
-    --secondary: #de718e;
-    --accent: #de718e;
-    --accent-light: #de718e;
-    --panel: #2d1f33;
-    --panel-strong: #4a3f7a;
-    --surface: #221722;
-    --muted: #c9a9bf;
-    --border: #3d2d43;
-    --hero-bg: #17101a;
-    --hero-text: #ffffff;
-
-    /* Magenta-tinted shadows at 6-16% alpha are invisible on a #17101a
-       field - there is no darker value left to cast. Dark mode therefore
-       switches to near-black at much higher alpha, which is what actually
-       separates a #221722 card from a #17101a page. */
-    --elevation-card: 0 1px 3px rgba(0, 0, 0, 0.38), 0 6px 18px -3px rgba(0, 0, 0, 0.52);
-    --elevation-card-hover: 0 2px 6px rgba(0, 0, 0, 0.42), 0 18px 40px -6px rgba(0, 0, 0, 0.68);
+  :root:not(.light):not(.dark) {
+    --background: var(--background-dark);
+    --foreground: var(--foreground-dark);
+    --primary: var(--primary-dark);
+    --primary-light: var(--primary-light-dark);
+    --secondary: var(--secondary-dark);
+    --accent: var(--accent-dark);
+    --accent-light: var(--accent-light-dark);
+    --panel: var(--panel-dark);
+    --panel-strong: var(--panel-strong-dark);
+    --surface: var(--surface-dark);
+    --muted: var(--muted-dark);
+    --border: var(--border-dark);
+    --hero-bg: var(--hero-bg-dark);
+    --hero-text: var(--hero-text-dark);
+    --elevation-card: var(--elevation-card-dark);
+    --elevation-card-hover: var(--elevation-card-hover-dark);
   }
 }
 

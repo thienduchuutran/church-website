@@ -7,6 +7,7 @@ import { useState, useEffect, useRef, useCallback, startTransition } from 'react
 import { useAuth } from '@/lib/auth'
 import SocialIconBar from '@/components/ui/SocialIconBar'
 import LanguageSwitcher from '@/components/ui/LanguageSwitcher'
+import ThemeToggle from '@/components/ui/ThemeToggle'
 
 // Labels are message keys in the `Nav` namespace so the chrome is entirely in
 // the active language - a /vi visitor never sees an English word in the bar.
@@ -243,6 +244,7 @@ export default function Navbar() {
                   Vietnamese-speaking visitor must find it without opening any
                   menu. On phones it collapses to the single inactive option. */}
               <LanguageSwitcher />
+              <ThemeToggle />
 
               {/* Social icons only where there is room for them (xl+). Below
                   that they live at the foot of the mobile panel and in the
