@@ -140,6 +140,18 @@ export default function DayEventsModal({
                   </p>
                   <p className="font-display text-[11px] text-muted mt-0.5">
                     {eventTypeLabel(e.event_type, eventTypes)}
+                    {/* The venue, in full. A chip truncates its second line -
+                        badly on a phone, where there is no tooltip and no
+                        hover - so this modal is where a clipped house name
+                        becomes readable again. Shown for every type that has a
+                        place, not just Bible studies: once a name is on screen
+                        it should be reachable in full everywhere. */}
+                    {e.place?.name && (
+                      <>
+                        <span className="mx-1 text-muted/60">·</span>
+                        <span className="font-semibold text-foreground/80">{e.place.name}</span>
+                      </>
+                    )}
                   </p>
                   {e.notes && (
                     <p className="font-sans text-xs text-foreground/80 mt-1.5 leading-relaxed whitespace-pre-wrap">

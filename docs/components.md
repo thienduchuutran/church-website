@@ -816,6 +816,17 @@ The "highlighter swipe" chip used to render a single calendar event inside a day
 | `color` | `string` | required | A named palette key **or** a 6-digit hex, passed through `resolveColor()`; supplies the `highlight` tint and `text` color |
 | `tooltip` | `string` | `title` | Native hover tooltip - the desktop grid passes the event's notes so full text is reachable when truncated |
 | `compact` | `boolean` | `false` | Mobile variant: smaller text, tighter padding, no icon for the ~50px columns |
+| `subtitle` | `string` | - | A second line under the title: the venue's name, so a Bible study chip can say whose house it is at |
+
+### The `subtitle` line (venue name)
+
+Supplied by `chipSubtitle(e)` in `CalendarGrid`, which returns a name only for a `bible_study` event that has a place. Other types are at the church, where a second line reading "Church" under every chip would be noise. **Weekday is deliberately not part of the condition** - nothing in the codebase distinguishes a Friday study (a weekly one carries `BYDAY=FR` inside its RRULE string and nothing else), and a Tuesday study at a home benefits identically.
+
+**Why a second line rather than appending to the title.** A chip is about 24 characters wide in the 1100px PNG export, which `Friday BBS - Hoang House` exactly fills, so appending would clip the moment a surname ran long - and a PNG has no tooltip to recover it. Composing at render time also means a place rename updates every chip at once, where text baked into `title` would go stale and would re-queue the title for translation (changing a title resets `approved_by` to `NULL` and revokes any human-approved Vietnamese).
+
+**It costs 2 rows in the cell budget.** `chipRows` charges a subtitled chip the same as a birthday, because it really is two lines tall. Miss this and `DESKTOP_CELL_BUDGET` under-counts, a busy day's cell grows past its ~115px box, and that week's row ends up taller than the other four in the exported PNG - the exact failure the budget was introduced to prevent. `chipSubtitle` is exported and used by both `chipRows` and the three chip call sites so the cost and the rendering cannot drift apart.
+
+**It renders on mobile too.** A ~53px column clips it to roughly `Hoang Hou…`, which still answers "whose house" better than nothing; `DayEventsModal` carries the full name for the tap-through. The compact variant has no tooltip and the export has none either, which is why the truncated line is shown rather than hidden behind hover.
 
 **Data flow:** pure presentational. `CalendarGrid` maps each **single-day** event to an `<EventChip>` in both its desktop (full) and mobile (`compact`) grids, so the look stays identical and the PNG export (which renders the desktop grid) matches the live page. Multi-day events are rendered as `<EventBanner>` ribbons instead (see below).
 

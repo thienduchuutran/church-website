@@ -45,8 +45,32 @@ function isSpanEvent(e: CalendarEvent): boolean {
 // about what fits below the date number in a week with no multi-day banners.
 const DESKTOP_CELL_BUDGET = 3
 
+// The venue name a chip shows beneath its title, or undefined for no second
+// line. One helper so the three chip call sites and the row budget cannot drift
+// apart - a chip costed at one row that renders two is what makes a day cell
+// outgrow its box.
+//
+// Bible studies only: they are the ones held in members' homes, and "whose
+// house is it this Friday" is the question the grid could not answer. Every
+// other type is at the church, where a second line reading "Church" under each
+// one would be noise.
+//
+// Weekday is deliberately not part of this. Nothing in the codebase
+// distinguishes a Friday study - a weekly one carries BYDAY=FR inside its RRULE
+// string and nothing else - and a study held on a Tuesday benefits identically.
+export function chipSubtitle(e: CalendarEvent): string | undefined {
+  if (e.event_type !== 'bible_study') return undefined
+  const name = e.place?.name?.trim()
+  return name ? name : undefined
+}
+
 function chipRows(e: CalendarEvent): number {
-  return e.event_type === 'birthday' ? 2 : 1
+  if (e.event_type === 'birthday') return 2
+  // A chip with a venue line is two lines tall, so it costs what a birthday
+  // costs. Without this the budget under-counts and a busy day's cell grows
+  // past its ~115px box, which throws that whole week row taller than the other
+  // four in the PNG - the exact failure this budget exists to prevent.
+  return chipSubtitle(e) ? 2 : 1
 }
 
 // Decide which single-day chips a desktop cell shows on screen and which spill
@@ -284,6 +308,7 @@ export default function CalendarGrid({
                     <EventChip
                       key={e.id}
                       title={e.title}
+                      subtitle={chipSubtitle(e)}
                       icon={e.icon}
                       color={e.color}
                       tooltip={e.notes ?? e.title}
@@ -317,6 +342,7 @@ export default function CalendarGrid({
                         <EventChip
                           key={e.id}
                           title={e.title}
+                          subtitle={chipSubtitle(e)}
                           icon={e.icon}
                           color={e.color}
                           tooltip={e.notes ?? e.title}
@@ -440,7 +466,7 @@ export default function CalendarGrid({
                   {visibleEvents.length > 0 && (
                     <div className="flex flex-col gap-[3px] min-w-0">
                       {visibleEvents.map((e) => (
-                        <EventChip key={e.id} title={e.title} icon={e.icon} color={e.color} compact />
+                        <EventChip key={e.id} title={e.title} subtitle={chipSubtitle(e)} icon={e.icon} color={e.color} compact />
                       ))}
                       {overflow > 0 && (
                         <span className="font-sans text-[9px] text-muted leading-none mx-0.5 mt-0.5">

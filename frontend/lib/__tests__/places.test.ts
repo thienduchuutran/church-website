@@ -158,3 +158,36 @@ test('a stripped event renders nothing', () => {
   ])
   assert.deepEqual(groups, [])
 })
+
+// Since the handler started blanking place.address instead of dropping the whole
+// place, a public visitor's payload carries a NAMED venue with no address. The
+// Locations strip is a list of addresses, so such a venue still has nothing to
+// print and must stay out of it - the name reaches the reader on the event's
+// chip instead. This is load-bearing: without it the strip would render a row
+// whose address span is empty.
+test('a named place with its address stripped still renders no row', () => {
+  const groups = groupEventsByPlace([
+    ev({
+      id: '1',
+      private_address: null,
+      address_public: false,
+      place: { id: 'p-hoang', name: 'Hoang House', address: '', name_source: 'admin' },
+    }),
+  ])
+  assert.deepEqual(groups, [])
+})
+
+// The admin view of the same event is unchanged - address present, row printed.
+test('an admin still sees the named place as a row', () => {
+  const groups = groupEventsByPlace([
+    ev({
+      id: '1',
+      private_address: '203 Essex Street, Saugus MA',
+      address_public: false,
+      place: { id: 'p-hoang', name: 'Hoang House', address: '203 Essex Street, Saugus MA', name_source: 'admin' },
+    }),
+  ])
+  assert.equal(groups.length, 1)
+  assert.equal(groups[0].name, 'Hoang House')
+  assert.equal(groups[0].hiddenFromPublic, true)
+})
