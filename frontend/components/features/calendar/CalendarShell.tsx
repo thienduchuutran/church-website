@@ -6,7 +6,7 @@ import { useLocale } from 'next-intl'
 import { CaretLeft, CaretRight, Plus, Palette, DownloadSimple } from '@phosphor-icons/react'
 import { getMonth, upsertMonthSettings } from '@/lib/calendar'
 import { groupEventsByPlace } from '@/lib/places'
-import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP, resolveColor } from './types'
+import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarYearContent, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP, resolveColor } from './types'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 import CalendarGrid from './CalendarGrid'
 import CakeMarker from './CakeMarker'
@@ -84,6 +84,7 @@ export default function CalendarShell({
 }: CalendarShellProps) {
   const [events, setEvents] = useState<CalendarEvent[]>([])
   const [monthNote, setMonthNote] = useState<CalendarMonthNote | null>(null)
+  const [yearContent, setYearContent] = useState<CalendarYearContent | null>(null)
   const [monthSettings, setMonthSettings] = useState<CalendarMonthSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -167,6 +168,7 @@ export default function CalendarShell({
       if (seq !== requestSeq.current) return
       setEvents(data.events ?? [])
       setMonthNote(data.month_note ?? null)
+      setYearContent(data.year_content ?? null)
       setMonthSettings(data.month_settings ?? null)
       setLiveAccent(null)
     } catch {
@@ -584,7 +586,7 @@ export default function CalendarShell({
             theme, so a month nobody has filled in looks exactly as it did
             before this existed. */}
         <MonthThemeCard
-          note={monthNote}
+          content={yearContent}
           accent={activeAccent}
           isAdmin={isAdmin}
           onEdit={() => { setEditingNote(true); setModalOpen(true) }}
@@ -840,6 +842,7 @@ export default function CalendarShell({
           date={selectedDate}
           event={editingEvent}
           monthNote={monthNote}
+          yearContent={yearContent}
           year={year}
           month={month}
           accessToken={accessToken}

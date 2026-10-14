@@ -35,10 +35,10 @@
     "follow": "Theo dõi chúng tôi"
   },
   "Calendar": {
-    "themeLabel": "Chủ đề tháng này",
+    "themeLabel": "Chủ đề năm nay",
     "verseLabel": "Câu gốc",
-    "addThemeVerse": "Thêm chủ đề & câu gốc tháng này",
-    "editThemeVerse": "Sửa chủ đề và câu gốc tháng này",
+    "addThemeVerse": "Thêm chủ đề & câu gốc năm nay",
+    "editThemeVerse": "Sửa chủ đề và câu gốc năm nay",
     "edit": "Sửa"
   },
   "Home": {

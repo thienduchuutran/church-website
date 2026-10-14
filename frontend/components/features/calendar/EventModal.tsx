@@ -15,6 +15,7 @@ import {
   renamePlace,
   updateEvent,
   upsertMonthNote,
+  upsertYearContent,
 } from '@/lib/calendar'
 import {
   CalendarEvent,
@@ -22,6 +23,7 @@ import {
   CalendarEventTypeDef,
   CalendarMonthNote,
   CalendarPlace,
+  CalendarYearContent,
   COLOR_MAP,
   EVENT_TYPE_LABELS,
   ICON_LABELS,
@@ -43,6 +45,7 @@ interface EventModalProps {
   date: string | null        // YYYY-MM-DD, for create
   event: CalendarEvent | null // for edit
   monthNote: CalendarMonthNote | null
+  yearContent: CalendarYearContent | null
   year: number
   month: number
   accessToken: string | null
@@ -76,6 +79,8 @@ const EXIT_MS = 280
 
 // Mirrors model.MaxPlaceNameLen on the backend, which rejects anything longer.
 // Capping the input means an admin hits a stop rather than a 400.
+const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
 const MAX_PLACE_NAME_LEN = 40
 
 // Mirror the month-note caps in model/types.go, for the same reason. These are
@@ -92,6 +97,7 @@ export default function EventModal({
   date,
   event,
   monthNote,
+  yearContent,
   year,
   month,
   accessToken,
@@ -139,9 +145,9 @@ export default function EventModal({
   // admin would silently overwrite their own English with the machine's
   // Vietnamese. Non-admins never get here, and never receive *_source at all.
   const [noteContent, setNoteContent] = useState(monthNote?.content_source ?? monthNote?.content ?? '')
-  const [noteTheme, setNoteTheme] = useState(monthNote?.theme_source ?? monthNote?.theme ?? '')
-  const [noteVerse, setNoteVerse] = useState(monthNote?.verse_text_source ?? monthNote?.verse_text ?? '')
-  const [noteRef, setNoteRef] = useState(monthNote?.verse_reference_source ?? monthNote?.verse_reference ?? '')
+  const [noteTheme, setNoteTheme] = useState(yearContent?.theme_source ?? yearContent?.theme ?? '')
+  const [noteVerse, setNoteVerse] = useState(yearContent?.verse_text_source ?? yearContent?.verse_text ?? '')
+  const [noteRef, setNoteRef] = useState(yearContent?.verse_reference_source ?? yearContent?.verse_reference ?? '')
   // Nothing here declares a language. The backend detects it from the text on
   // every save, so writing in either language files the record on the matching
   // side and queues the translation the other way.
@@ -465,17 +471,15 @@ export default function EventModal({
       // admin actually edited the venue label.
       await commitPlaceRename()
       if (mode === 'note') {
-        await upsertMonthNote(
+        // Two scopes, two writes, one Save. The year row goes first: if it
+        // fails the note is untouched and the admin can retry without half of
+        // their edit already committed.
+        await upsertYearContent(
           year,
-          month,
-          {
-            content: noteContent,
-            theme: noteTheme,
-            verse_text: noteVerse,
-            verse_reference: noteRef,
-          },
+          { theme: noteTheme, verse_text: noteVerse, verse_reference: noteRef },
           accessToken,
         )
+        await upsertMonthNote(year, month, noteContent, accessToken)
       } else if (mode === 'create' && date) {
         // recurrence_until only travels when the admin actually picked a date.
         // Sending an empty string would be a third state the backend has to
@@ -599,7 +603,7 @@ export default function EventModal({
             </p>
             <h2 className="font-serif text-xl font-bold text-foreground mt-0.5">
               {mode === 'note'
-                ? `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][month - 1]} ${year}`
+                ? `${MONTH_LABELS[month - 1]} ${year}`
                 : date ?? event?.date ?? ''}
             </h2>
           </div>
@@ -623,7 +627,7 @@ export default function EventModal({
             <>
               <div className="flex flex-col gap-2">
                 <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
-                  Theme
+                  Theme for {year}
                 </label>
                 <input
                   ref={firstInputRef as React.RefObject<HTMLInputElement>}
@@ -638,7 +642,7 @@ export default function EventModal({
 
               <div className="flex flex-col gap-2">
                 <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
-                  Memory verse
+                  Memory verse for {year}
                 </label>
                 <textarea
                   value={noteVerse}
@@ -660,7 +664,7 @@ export default function EventModal({
 
               <div className="flex flex-col gap-2">
                 <label className="font-display text-[11px] font-semibold tracking-wider uppercase text-muted">
-                  Note
+                  Note for {MONTH_LABELS[month - 1]}
                 </label>
                 <textarea
                   value={noteContent}

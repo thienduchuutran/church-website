@@ -154,40 +154,42 @@ export interface CalendarMonthNote {
   year: number
   month: number
   // The freeform note rendered in the info strip BELOW the grid - logistics, an
-  // address, a reminder.
+  // address, a reminder. The theme and verse that used to sit alongside it moved
+  // to CalendarYearContent in migration 000018; they were never month-scoped.
   content: string
-  // Theme and the two verse fields are the devotional content rendered in the
-  // card ABOVE the grid (MonthThemeCard). They share this row because they
-  // share a (year, month) key, not because they are the same kind of content.
-  // Empty string means unset; the card omits itself when theme and verse are
-  // both empty.
+  admin_id: string | null
+  created_at: string
+  updated_at: string
+  machine_translated?: boolean
+  content_source?: string | null
+  source_locale: SourceLocale
+}
+
+// The theme and memory verse for a whole year, rendered in the card above the
+// grid on every month of that year. One row per year - the same object comes
+// back from all twelve month requests, which is the grain, not duplication.
+export interface CalendarYearContent {
+  id: string
+  year: number
   theme: string
   // Plain text, never HTML - rendered with {} interpolation, so unlike a post
-  // body it never goes near sanitizeBody.
+  // body it never goes near sanitizeBody. Never machine translated.
   verse_text: string
   verse_reference: string
   admin_id: string | null
   created_at: string
   updated_at: string
-  // Same semantics as CalendarEvent.machine_translated, for `content` alone -
-  // the footnote in the info strip below the grid.
+  // True when any field the card shows is serving unapproved AI output. One
+  // flag because the card carries one badge.
   machine_translated?: boolean
-  // The same claim for the three fields MonthThemeCard shows above the grid.
-  // Two flags because there are two badges in two places: one row-wide flag
-  // made each badge answer for text rendered somewhere else on the page.
-  card_machine_translated?: boolean
-  // Same semantics as CalendarEvent.title_source - the authored text the modal
-  // edits while the page displays the translation. Absent for non-admins: the
-  // handler strips all four together.
-  content_source?: string | null
+  // The authored text, so the form edits the source while the page displays a
+  // translation. Admin only - stripped by handler.stripAdminOnlyFields.
   theme_source?: string | null
   verse_text_source?: string | null
   verse_reference_source?: string | null
   // The verse's wording in the OTHER language, typed by an admin rather than
-  // produced by the model - the memory verse is never machine translated. Admin
-  // only, stripped alongside the *_source fields.
+  // produced by the model. Admin only.
   verse_text_alt?: string | null
-  // See CalendarEvent.source_locale.
   source_locale: SourceLocale
 }
 
@@ -204,6 +206,7 @@ export interface CalendarMonthSettings {
 export interface CalendarMonthResponse {
   events: CalendarEvent[]
   month_note: CalendarMonthNote | null
+  year_content: CalendarYearContent | null
   month_settings: CalendarMonthSettings | null
 }
 

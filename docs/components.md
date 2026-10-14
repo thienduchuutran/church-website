@@ -655,7 +655,7 @@ The month's theme and memory verse, rendered between the month navigation and th
 **Props**
 | Prop | Type | Description |
 |------|------|-------------|
-| `note` | `CalendarMonthNote \| null` | The month's row. Reads `theme`, `verse_text`, `verse_reference` and `machine_translated`; ignores `content`, which the info strip below the grid owns |
+| `content` | `CalendarYearContent \| null` | The **year's** row. Reads `theme`, `verse_text`, `verse_reference` and `machine_translated`. The month's freeform note is a different object entirely, owned by the info strip below the grid |
 | `accent` | `string` | The month's active accent hex - the same value the headline and grid header use |
 | `isAdmin` | `boolean` | Gates the Edit affordance and the empty-state prompt |
 | `onEdit` | `() => void` | Opens `EventModal` in `note` mode; `CalendarShell` owns that state |
@@ -663,6 +663,9 @@ The month's theme and memory verse, rendered between the month navigation and th
 **Client component:** yes (`useTranslations`, and `matchMedia` for the dark-mode ink; see below)
 
 Its labels come from the `Calendar` namespace in `messages/*.json` (`themeLabel` → "Câu gốc" is the term Vietnamese congregations actually use for a memory verse, not a literal rendering). The theme and verse themselves arrive already in the right language from the API.
+
+### It is the year's theme, not the month's
+One theme and one verse cover a whole year, so the same card renders on all twelve months. It shipped month-scoped and that was wrong; migration `000018` moved the data and this component only had to change which object it reads.
 
 ### Why it sits above the grid
 The freeform note already renders in the info strip *below* the grid. That is the right rank for logistics ("bring guests", an address) and the wrong rank for the frame the rest of the month hangs on. The two split by **kind**, not by table - one `calendar_month_notes` row backs both.
@@ -690,7 +693,9 @@ The 64px month headline deliberately keeps the raw accent: at that size it is a 
 ## `EventModal`
 The admin create/edit sheet for a calendar event, and the "This Month" editor (same component, three modes: `create`, `edit`, `note`).
 
-In `note` mode it edits the month-scoped text in one form and one save: **Theme**, the **Memory verse** in both languages + its **Reference**, and the freeform **Note**.
+In `note` mode it edits **two different scopes** in one form and one Save: the year's **Theme** and **Memory verse** + **Reference**, and the month's freeform **Note**. The labels carry the scope - `Theme for 2026`, `Note for Oct` - rather than a sentence explaining it.
+
+Saving fires two writes, year first: if that fails the note is untouched and the admin can retry without half their edit already committed.
 
 **The verse is the one field never sent to the AI** - a model asked to translate scripture returns a paraphrase, not the published wording a congregation memorises. It currently shows in the language it was written in on both locales.
 

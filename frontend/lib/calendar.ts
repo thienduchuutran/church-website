@@ -1,5 +1,6 @@
 import { apiDelete, apiGet, apiPatch, apiPost, apiPut } from './api'
 import type {
+  CalendarYearContent,
   CalendarEvent,
   CalendarEventType,
   CalendarEventTypeDef,
@@ -177,34 +178,36 @@ export async function deletePaletteColor(id: string, token: string): Promise<voi
   await apiDelete(`/api/v1/calendar/palette/${id}`, token)
 }
 
-// The four fields an admin edits together in the month modal. Passed as an
-// object rather than four positional strings, because four same-typed
-// parameters in a row is a call-site bug waiting to happen - swapping the verse
-// and its reference would type-check perfectly.
-export interface MonthNoteInput {
-  content: string
+export async function upsertMonthNote(
+  year: number,
+  month: number,
+  content: string,
+  token: string,
+): Promise<CalendarMonthNote> {
+  return apiPut(`${BASE}/months/${year}/${month}/note`, { content }, token) as Promise<CalendarMonthNote>
+}
+
+// The year's theme and verse. Separate from the note because the grain differs -
+// one theme covers twelve months (migration 000018).
+export interface YearContentInput {
   theme: string
   verse_text: string
   verse_reference: string
   /**
-   * The same verse in the other language, filed as a human-authored, already
-   * approved translation rather than queued for the model.
-   *
-   * The month modal does not currently collect it - the verse shows in the
-   * language it was written in on both locales. The backend still accepts it,
-   * so offering a second verse box again is a UI-only change. Omitting the key
-   * clears any wording previously stored for the other locale.
+   * The same verse in the other language. Filed as a human-authored, already
+   * approved translation rather than queued for the model - the memory verse is
+   * never machine translated. The form does not currently collect it; omitting
+   * the key clears any wording previously stored for the other locale.
    */
   verse_text_alt?: string
 }
 
-export async function upsertMonthNote(
+export async function upsertYearContent(
   year: number,
-  month: number,
-  fields: MonthNoteInput,
+  fields: YearContentInput,
   token: string,
-): Promise<CalendarMonthNote> {
-  return apiPut(`${BASE}/months/${year}/${month}/note`, fields, token) as Promise<CalendarMonthNote>
+): Promise<CalendarYearContent> {
+  return apiPut(`${BASE}/years/${year}/content`, fields, token) as Promise<CalendarYearContent>
 }
 
 export async function upsertMonthSettings(

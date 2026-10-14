@@ -4,10 +4,10 @@ import { useTheme } from 'next-themes'
 import { useTranslations } from 'next-intl'
 import { deriveRamp } from '@/lib/color'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
-import { CalendarMonthNote } from './types'
+import { CalendarYearContent } from './types'
 
 interface MonthThemeCardProps {
-  note: CalendarMonthNote | null
+  content: CalendarYearContent | null
   /** The month's active accent - the same value the headline and grid header use. */
   accent: string
   isAdmin: boolean
@@ -16,8 +16,12 @@ interface MonthThemeCardProps {
 }
 
 /**
- * The month's theme and memory verse, rendered between the month navigation and
- * the calendar grid.
+ * The YEAR's theme and memory verse, rendered between the month navigation and
+ * the calendar grid - the same card on every month of that year.
+ *
+ * It began life month-scoped and that was wrong: the congregation picks one
+ * theme and one verse for the year. Migration 000018 moved the data; this
+ * component only had to change which object it reads.
  *
  * Why it sits here and not in the info strip below the grid, where the note
  * already lives: the strip is a footnote, and a footnote is the right rank for
@@ -30,16 +34,16 @@ interface MonthThemeCardProps {
  * for attention; one block with two zones reads as "this month's focus", which
  * is what it is.
  */
-export default function MonthThemeCard({ note, accent, isAdmin, onEdit }: MonthThemeCardProps) {
+export default function MonthThemeCard({ content, accent, isAdmin, onEdit }: MonthThemeCardProps) {
   // The card's own chrome is translated; the theme and verse themselves arrive
   // already in the right language from the API. The rest of CalendarShell is
   // still hardcoded English - a pre-existing gap, tracked separately.
   const t = useTranslations('Calendar')
   const ink = useAccentInk(accent)
 
-  const theme = note?.theme?.trim() ?? ''
-  const verse = note?.verse_text?.trim() ?? ''
-  const reference = note?.verse_reference?.trim() ?? ''
+  const theme = content?.theme?.trim() ?? ''
+  const verse = content?.verse_text?.trim() ?? ''
+  const reference = content?.verse_reference?.trim() ?? ''
   const hasContent = theme !== '' || verse !== ''
 
   // A visitor sees nothing at all when the month has no theme - no empty shell,
@@ -100,10 +104,9 @@ export default function MonthThemeCard({ note, accent, isAdmin, onEdit }: MonthT
         </div>
       )}
 
-      {/* card_machine_translated, not machine_translated: the latter describes
-          the freeform note in the strip below the grid, which this card does
-          not display. A badge must answer for the text beside it. */}
-      {note?.card_machine_translated && (
+      {/* The year row carries its own flag, so this badge answers only for the
+          text beside it. The month note below the grid has a separate one. */}
+      {content?.machine_translated && (
         <div className="@xl:col-span-2 px-4 pb-2 -mt-1">
           <MachineTranslatedBadge />
         </div>
