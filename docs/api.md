@@ -144,6 +144,7 @@ Returns the events for a given month, plus the optional sidebar note and the opt
 {
   "events": [ /* CalendarEvent[] */ ],
   "month_note": { /* CalendarMonthNote */ } ,
+  "year_content": { /* CalendarYearContent */ } ,
   "month_settings": { /* CalendarMonthSettings */ }
 }
 ```
@@ -846,6 +847,34 @@ The request still accepts `verse_text_alt` - the verse in the **other** language
 The response echoes `verse_text_alt` back to admins under the same key the request accepts, so the modal sends back exactly what it received. Stripped for public visitors alongside the `*_source` fields - a visitor is already served the right language, so it would only be the same verse twice.
 
 Admins additionally receive `content_source`, `theme_source`, `verse_text_source` and `verse_reference_source` - the authored text, so the modal edits the source rather than the translation it is displaying. All four are stripped for public visitors.
+
+### CalendarYearContent
+```json
+{
+  "id": "uuid",
+  "year": 2026,
+  "theme": "Priority",
+  "verse_text": "But seek first His kingdom and His righteousness...",
+  "verse_reference": "Matthew 6:33",
+  "admin_id": "uuid",
+  "created_at": "2026-10-01T00:00:00Z",
+  "updated_at": "2026-10-01T00:00:00Z",
+  "machine_translated": true
+}
+```
+The theme and memory verse for one **year**, rendered in the card above the calendar grid on every month of that year. Returned on `GET /api/v1/calendar` as `year_content`; `null` when no row exists. The *same object* comes back from all twelve month requests for a year - that is the grain, not duplication.
+
+It is returned on the month endpoint rather than needing its own GET so a month view is still one request.
+
+Written by `PUT /api/v1/calendar/years/:year/content`. All three fields default to `""`, never `null`, so "unset" is one representable state; the card omits itself entirely when `theme` and `verse_text` are both empty.
+
+`machine_translated` is one flag across the three fields, because the card carries one badge. Each field is still translated and approved **independently** in the review panel, which is why the query joins `translations` once per field.
+
+**`verse_text` is never machine translated.** A Vietnamese C&MA congregation reads Bản Truyền Thống 1926; a model asked to translate scripture returns a fluent paraphrase that is not that text, and a memory verse is the one thing on the page people are meant to learn word for word - the same rule sermons follow. `verse_text_alt` on the request carries the other-language wording, filed via `UpsertHumanTranslation` as `is_ai_generated = false` with `approved_by` set. `verse_text` still counts as evidence for language detection even though it is never sent anywhere; `verse_text_alt` is excluded from detection, being deliberately the opposite language.
+
+Admins additionally receive `theme_source`, `verse_text_source`, `verse_reference_source` and `verse_text_alt`. All are stripped for public visitors by `handler.stripAdminOnlyFields`.
+
+**History:** these three fields lived on `CalendarMonthNote` until migration `000018`. The grain was wrong - one theme covers a year, not a month.
 
 ### CalendarMonthSettings
 ```json

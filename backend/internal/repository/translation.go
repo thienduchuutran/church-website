@@ -49,6 +49,7 @@ const translationSelectColumns = `
       WHEN 'page_content'         THEN pc.page_slug || ' / ' || pc.section_key
       WHEN 'calendar_events'      THEN ce.title || ' · ' || ce.date::text
       WHEN 'calendar_month_notes' THEN 'Month note · ' || cmn.year || '-' || LPAD(cmn.month::text, 2, '0')
+      WHEN 'calendar_year_content'  THEN 'Year theme · ' || cyc.year
     END,
     -- Parent row was deleted but the translation lingers. Surface it with a
     -- recognizable label; the reviewer clears these with the "Clean up
@@ -64,7 +65,8 @@ const translationFromClause = `
   LEFT JOIN posts                p   ON t.table_name = 'posts'                AND t.record_id = p.id
   LEFT JOIN page_content         pc  ON t.table_name = 'page_content'         AND t.record_id = pc.id
   LEFT JOIN calendar_events      ce  ON t.table_name = 'calendar_events'      AND t.record_id = ce.id
-  LEFT JOIN calendar_month_notes cmn ON t.table_name = 'calendar_month_notes' AND t.record_id = cmn.id`
+  LEFT JOIN calendar_month_notes cmn ON t.table_name = 'calendar_month_notes' AND t.record_id = cmn.id
+  LEFT JOIN calendar_year_content  cyc ON t.table_name = 'calendar_year_content'  AND t.record_id = cyc.id`
 
 // List returns paginated translations matching the filters, plus the total
 // count (without the LIMIT/OFFSET) so the frontend can render pagination
@@ -267,7 +269,8 @@ const orphanConditions = `
      (%[1]s.table_name = 'posts'                AND NOT EXISTS (SELECT 1 FROM posts                p   WHERE p.id   = %[1]s.record_id))
   OR (%[1]s.table_name = 'page_content'         AND NOT EXISTS (SELECT 1 FROM page_content         pc  WHERE pc.id  = %[1]s.record_id))
   OR (%[1]s.table_name = 'calendar_events'      AND NOT EXISTS (SELECT 1 FROM calendar_events      ce  WHERE ce.id  = %[1]s.record_id OR ce.series_id = %[1]s.record_id))
-  OR (%[1]s.table_name = 'calendar_month_notes' AND NOT EXISTS (SELECT 1 FROM calendar_month_notes cmn WHERE cmn.id = %[1]s.record_id))`
+  OR (%[1]s.table_name = 'calendar_month_notes' AND NOT EXISTS (SELECT 1 FROM calendar_month_notes cmn WHERE cmn.id = %[1]s.record_id))
+  OR (%[1]s.table_name = 'calendar_year_content'  AND NOT EXISTS (SELECT 1 FROM calendar_year_content  cyc WHERE cyc.id = %[1]s.record_id))`
 
 // DeleteOrphanedTranslations removes translations whose parent record has
 // been deleted. The translations table has no FKs by design (it serves many

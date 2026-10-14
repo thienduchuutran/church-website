@@ -467,6 +467,10 @@ func main() {
 				r.Get("/calendar/series", calendarHandler.ListSeries)
 				r.Post("/calendar/series/{id}/extend", calendarHandler.ExtendSeries)
 				r.Put("/calendar/months/{year}/{month}/note", calendarHandler.UpsertMonthNote)
+				// Year-scoped, so a sibling of the month route rather than
+				// nested under one: the theme belongs to the year regardless of
+				// which month the admin was looking at.
+				r.Put("/calendar/years/{year}/content", calendarHandler.UpsertYearContent)
 				r.Put("/calendar/months/{year}/{month}/settings", calendarHandler.UpsertMonthSettings)
 			})
 		}

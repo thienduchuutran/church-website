@@ -55,9 +55,9 @@ func TestStripAdminOnlyFields(t *testing.T) {
 
 	t.Run("public viewer never receives authored source text", func(t *testing.T) {
 		resp := &model.CalendarMonthResponse{
-			Events: []model.CalendarEvent{privateEvent()},
-			MonthNote: &model.CalendarMonthNote{
-				ContentSource:        sptr("note"),
+			Events:    []model.CalendarEvent{privateEvent()},
+			MonthNote: &model.CalendarMonthNote{ContentSource: sptr("note")},
+			YearContent: &model.CalendarYearContent{
 				ThemeSource:          sptr("theme"),
 				VerseTextSource:      sptr("verse"),
 				VerseReferenceSource: sptr("ref"),
@@ -69,8 +69,13 @@ func TestStripAdminOnlyFields(t *testing.T) {
 		if resp.Events[0].TitleSource != nil || resp.Events[0].NotesSource != nil {
 			t.Error("event source text leaked to the public")
 		}
-		n := resp.MonthNote
-		if n.ContentSource != nil || n.ThemeSource != nil || n.VerseTextSource != nil ||
+		if resp.MonthNote.ContentSource != nil {
+			t.Error("month note source text leaked to the public")
+		}
+		// The theme and verse moved to the year row in 000018; the strip has to
+		// have moved with them or authored text goes out publicly.
+		n := resp.YearContent
+		if n.ThemeSource != nil || n.VerseTextSource != nil ||
 			n.VerseReferenceSource != nil || n.VerseTextAlt != nil {
 			t.Error("month note source text leaked to the public")
 		}
@@ -95,8 +100,9 @@ func TestStripAdminOnlyFields(t *testing.T) {
 
 	t.Run("admins see everything", func(t *testing.T) {
 		resp := &model.CalendarMonthResponse{
-			Events:    []model.CalendarEvent{privateEvent()},
-			MonthNote: &model.CalendarMonthNote{ContentSource: sptr("note")},
+			Events:      []model.CalendarEvent{privateEvent()},
+			MonthNote:   &model.CalendarMonthNote{ContentSource: sptr("note")},
+			YearContent: &model.CalendarYearContent{ThemeSource: sptr("theme")},
 		}
 		stripAdminOnlyFields(resp, true)
 
@@ -107,8 +113,8 @@ func TestStripAdminOnlyFields(t *testing.T) {
 		if e.TitleSource == nil {
 			t.Error("an admin lost the source text the edit form needs")
 		}
-		if resp.MonthNote.ContentSource == nil {
-			t.Error("an admin lost the month note source the modal edits")
+		if resp.MonthNote.ContentSource == nil || resp.YearContent.ThemeSource == nil {
+			t.Error("an admin lost the source text the modal edits")
 		}
 	})
 

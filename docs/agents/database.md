@@ -334,6 +334,32 @@ create table calendar_month_settings (
 
 ---
 
+### `calendar_year_content`
+One theme and memory verse per **year**, rendered in the card above the calendar grid on every month of that year.
+```sql
+create table calendar_year_content (
+  id              uuid primary key default gen_random_uuid(),
+  year            int not null unique,
+  theme           text not null default '',
+  verse_text      text not null default '',   -- NEVER machine translated
+  verse_reference text not null default '',
+  source_locale   text not null default 'en',
+  admin_id        uuid,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+```
+
+**Why a uuid primary key with `year` UNIQUE, rather than `year` as the key.** `translations.record_id` is a `uuid`, so any row the translation engine can point at needs one. `year` still carries the real rule - one row per year, enforced by the database.
+
+**Why this exists at all.** Migration `000017` put these three columns on `calendar_month_notes`, which was the wrong grain: the congregation picks one theme and one verse for the *year*. Keying it per month meant twelve copies of one fact with nothing to say they were the same fact. `000018` moved them.
+
+**The move preserved translations rather than regenerating them.** Production already held AI Vietnamese for the theme (`Ưu tiên`) and the reference (`Ma-thi-ơ 6:33`), neither approved yet. The migration re-points those `translations` rows at the new record with `approved_by` untouched, instead of deleting and re-enqueueing - which would have discarded review work in progress and paid for the model to redo it. Only the translations belonging to the copied row move; the rest are deleted, because the column they describe is being dropped and the orphan sweep would never collect them (it matches on the *parent row* being gone, and `calendar_month_notes` survives).
+
+**The freeform note stayed behind.** `calendar_month_notes.content` is logistics and genuinely differs month to month. Only the devotional columns moved.
+
+---
+
 ## Translation tables
 
 Three tables back the async translation engine. They are populated by the Go backend's `internal/translation/` worker; the frontend never writes to them directly. Schema source: `backend/migrations/000004_translations.up.sql`, extended by `000013_source_locale.up.sql`.
@@ -530,6 +556,7 @@ backend/migrations/
 ├── 000012_calendar_flexible_types_and_palette.down.sql
 ├── 000013_source_locale.up.sql         ← posts/calendar_events/calendar_month_notes/translation_jobs += source_locale (seeds en_translation prompt)
 ├── 000017_month_theme_verse.up.sql     ← calendar_month_notes += theme/verse_text/verse_reference (the card above the calendar grid)
+├── 000018_year_theme_verse.up.sql      ← moves those three to a new calendar_year_content, keyed by YEAR (000017 had the grain wrong)
 ├── 000013_source_locale.down.sql
 ├── 000014_calendar_places.up.sql       ← calendar_places + calendar_events.place_id (seeds place_name prompt)
 ├── 000014_calendar_places.down.sql

@@ -76,7 +76,7 @@ func TestTextFields(t *testing.T) {
 	}
 }
 
-// monthNoteFields collects a month note's four text fields for language
+// yearContentFields collects a year's three text fields for language
 // detection and for the translation queue. It exists because the old code
 // passed the note through textFields(content, nil), which labelled it "title" -
 // harmless when there was one field, wrong now that there are four and each is
@@ -85,49 +85,47 @@ func TestTextFields(t *testing.T) {
 // The contract is the same as textFields': empty and whitespace-only values are
 // dropped, so a cleared verse cannot dilute the evidence a populated theme
 // gives DetectLocaleFields.
-func TestMonthNoteFields(t *testing.T) {
+func TestYearContentFields(t *testing.T) {
 	cases := []struct {
 		name string
-		req  model.UpsertMonthNoteRequest
+		req  model.UpsertYearContentRequest
 		want map[string]string
 	}{
 		{
 			name: "every field populated is carried under its own key",
-			req: model.UpsertMonthNoteRequest{
+			req: model.UpsertYearContentRequest{
 				Theme:          "Walking in Gratitude",
 				VerseText:      "Give thanks in all circumstances.",
 				VerseReference: "1 Thessalonians 5:18",
-				Content:        "Bring guests on the 21st.",
 			},
 			want: map[string]string{
 				"theme":           "Walking in Gratitude",
 				"verse_text":      "Give thanks in all circumstances.",
 				"verse_reference": "1 Thessalonians 5:18",
-				"content":         "Bring guests on the 21st.",
 			},
 		},
 		{
 			name: "empty fields are dropped rather than carried as empty strings",
-			req:  model.UpsertMonthNoteRequest{Theme: "Gratitude"},
+			req:  model.UpsertYearContentRequest{Theme: "Gratitude"},
 			want: map[string]string{"theme": "Gratitude"},
 		},
 		{
 			name: "whitespace-only is treated as empty",
-			req:  model.UpsertMonthNoteRequest{Theme: "Gratitude", VerseText: "   \n  "},
+			req:  model.UpsertYearContentRequest{Theme: "Gratitude", VerseText: "   \n  "},
 			want: map[string]string{"theme": "Gratitude"},
 		},
 		{
 			name: "a wholly cleared note yields nothing to detect or enqueue",
-			req:  model.UpsertMonthNoteRequest{},
+			req:  model.UpsertYearContentRequest{},
 			want: map[string]string{},
 		},
 	}
 
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := monthNoteFields(c.req)
+			got := yearContentFields(c.req)
 			if len(got) != len(c.want) {
-				t.Fatalf("monthNoteFields() = %v, want %v", got, c.want)
+				t.Fatalf("yearContentFields() = %v, want %v", got, c.want)
 			}
 			for k, v := range c.want {
 				if got[k] != v {
@@ -138,35 +136,35 @@ func TestMonthNoteFields(t *testing.T) {
 	}
 }
 
-// The month note's source language is detected across all four fields together,
+// The year content's source language is detected across all four fields together,
 // not from whichever one happens to be first. A Vietnamese verse alongside a
 // short English-looking reference must still read as Vietnamese, because the
 // reference ("1 Te-sa-lo-ni-ca 5:18") is mostly digits and proper nouns and
 // carries almost no language signal.
-func TestResolveSourceLocale_MonthNote(t *testing.T) {
-	vi := model.UpsertMonthNoteRequest{
+func TestResolveSourceLocale_YearContent(t *testing.T) {
+	vi := model.UpsertYearContentRequest{
 		Theme:          "Bước Đi Trong Lòng Biết Ơn",
 		VerseText:      "Hãy cảm tạ trong mọi hoàn cảnh, vì đây là ý muốn của Đức Chúa Trời cho anh em.",
 		VerseReference: "1 Tê-sa-lô-ni-ca 5:18",
 	}
-	if got := resolveSourceLocale(monthNoteFields(vi), ""); got != "vi" {
-		t.Errorf("vietnamese month note detected as %q, want \"vi\"", got)
+	if got := resolveSourceLocale(yearContentFields(vi), ""); got != "vi" {
+		t.Errorf("vietnamese year content detected as %q, want \"vi\"", got)
 	}
 
-	en := model.UpsertMonthNoteRequest{
+	en := model.UpsertYearContentRequest{
 		Theme:          "Walking in Gratitude",
 		VerseText:      "Give thanks in all circumstances; for this is God's will for you in Christ Jesus.",
 		VerseReference: "1 Thessalonians 5:18",
 	}
-	if got := resolveSourceLocale(monthNoteFields(en), ""); got != "en" {
-		t.Errorf("english month note detected as %q, want \"en\"", got)
+	if got := resolveSourceLocale(yearContentFields(en), ""); got != "en" {
+		t.Errorf("english year content detected as %q, want \"en\"", got)
 	}
 
 	// Clearing every field leaves no evidence, so the note keeps the language it
 	// already had rather than silently flipping to English - the same rule the
 	// existing "no text" case in TestResolveSourceLocale pins.
-	if got := resolveSourceLocale(monthNoteFields(model.UpsertMonthNoteRequest{}), "vi"); got != "vi" {
-		t.Errorf("cleared month note detected as %q, want the prior \"vi\"", got)
+	if got := resolveSourceLocale(yearContentFields(model.UpsertYearContentRequest{}), "vi"); got != "vi" {
+		t.Errorf("cleared year content detected as %q, want the prior \"vi\"", got)
 	}
 }
 
@@ -178,21 +176,20 @@ func TestResolveSourceLocale_MonthNote(t *testing.T) {
 //
 // So there are two collections, deliberately different:
 //
-//	monthNoteFields             - evidence for language detection (all four)
-//	monthNoteTranslatableFields - what gets queued for the AI (no verse)
-func TestMonthNoteTranslatableFields_ExcludesVerse(t *testing.T) {
-	req := model.UpsertMonthNoteRequest{
+//	yearContentFields             - evidence for language detection (all four)
+//	yearContentTranslatableFields - what gets queued for the AI (no verse)
+func TestYearContentTranslatableFields_ExcludesVerse(t *testing.T) {
+	req := model.UpsertYearContentRequest{
 		Theme:          "Walking in Gratitude",
 		VerseText:      "Give thanks in all circumstances.",
 		VerseReference: "1 Thessalonians 5:18",
-		Content:        "Bring guests on the 21st.",
 	}
 
-	queued := monthNoteTranslatableFields(req)
+	queued := yearContentTranslatableFields(req)
 	if _, ok := queued["verse_text"]; ok {
 		t.Error("verse_text was queued for machine translation; it must never be")
 	}
-	for _, want := range []string{"theme", "verse_reference", "content"} {
+	for _, want := range []string{"theme", "verse_reference"} {
 		if _, ok := queued[want]; !ok {
 			t.Errorf("%s should still be queued, got %v", want, queued)
 		}
@@ -201,7 +198,7 @@ func TestMonthNoteTranslatableFields_ExcludesVerse(t *testing.T) {
 	// Detection still reads the verse. It is the longest piece of authored text
 	// in the note, so dropping it from the evidence would make the language of a
 	// verse-only month a coin flip.
-	if _, ok := monthNoteFields(req)["verse_text"]; !ok {
+	if _, ok := yearContentFields(req)["verse_text"]; !ok {
 		t.Error("verse_text must still count as evidence for language detection")
 	}
 }
@@ -209,19 +206,19 @@ func TestMonthNoteTranslatableFields_ExcludesVerse(t *testing.T) {
 // The verse the admin types for the other language is not evidence of anything -
 // it is deliberately the opposite language from the rest of the note, so letting
 // it vote would drag detection toward whichever language was typed second.
-func TestMonthNoteFields_IgnoresTheAlternateVerse(t *testing.T) {
-	req := model.UpsertMonthNoteRequest{
+func TestYearContentFields_IgnoresTheAlternateVerse(t *testing.T) {
+	req := model.UpsertYearContentRequest{
 		Theme:        "Walking in Gratitude",
 		VerseText:    "Give thanks in all circumstances; for this is God's will for you.",
 		VerseTextAlt: "Hãy cảm tạ trong mọi hoàn cảnh, vì đây là ý muốn của Đức Chúa Trời cho anh em.",
 	}
-	if _, ok := monthNoteFields(req)["verse_text_alt"]; ok {
+	if _, ok := yearContentFields(req)["verse_text_alt"]; ok {
 		t.Error("verse_text_alt must not be evidence for language detection")
 	}
-	if _, ok := monthNoteTranslatableFields(req)["verse_text_alt"]; ok {
+	if _, ok := yearContentTranslatableFields(req)["verse_text_alt"]; ok {
 		t.Error("verse_text_alt must never be queued - a human wrote it")
 	}
-	if got := resolveSourceLocale(monthNoteFields(req), ""); got != "en" {
+	if got := resolveSourceLocale(yearContentFields(req), ""); got != "en" {
 		t.Errorf("source detected as %q, want \"en\" - the Vietnamese alt verse should not sway it", got)
 	}
 }

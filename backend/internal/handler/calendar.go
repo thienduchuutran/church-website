@@ -65,9 +65,9 @@ func (h *CalendarHandler) GetMonth(w http.ResponseWriter, r *http.Request) {
 //     under the same condition, or hiding private_address would accomplish
 //     nothing - the address would simply arrive by the other route.
 //
-//   - title_source / notes_source, and the month note's content_source,
-//     theme_source, verse_text_source, verse_reference_source and
-//     verse_text_alt: the untranslated authored text, needed only so the admin
+//   - title_source / notes_source, the month note's content_source, and the
+//     year content's theme_source, verse_text_source, verse_reference_source
+//     and verse_text_alt: the untranslated authored text, needed only so the admin
 //     edit form saves the source instead of the machine translation it is
 //     displaying. A public visitor has no use for it, and shipping it would
 //     double the text in every payload. Every *_source field on a model must be
@@ -100,10 +100,12 @@ func stripAdminOnlyFields(resp *model.CalendarMonthResponse, isAdmin bool) {
 	}
 	if resp.MonthNote != nil {
 		resp.MonthNote.ContentSource = nil
-		resp.MonthNote.ThemeSource = nil
-		resp.MonthNote.VerseTextSource = nil
-		resp.MonthNote.VerseReferenceSource = nil
-		resp.MonthNote.VerseTextAlt = nil
+	}
+	if resp.YearContent != nil {
+		resp.YearContent.ThemeSource = nil
+		resp.YearContent.VerseTextSource = nil
+		resp.YearContent.VerseReferenceSource = nil
+		resp.YearContent.VerseTextAlt = nil
 	}
 }
 
@@ -320,6 +322,31 @@ func (h *CalendarHandler) DeletePaletteColor(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// UpsertYearContent handles PUT /api/v1/calendar/years/{year}/content (admin only).
+//
+// Year-scoped, so it is a sibling of the month-note route rather than nested
+// under a month: the theme belongs to the year regardless of which month the
+// admin was looking at when they opened the form.
+func (h *CalendarHandler) UpsertYearContent(w http.ResponseWriter, r *http.Request) {
+	year, err := strconv.Atoi(chi.URLParam(r, "year"))
+	if err != nil || year < 1900 || year > 2200 {
+		writeError(w, http.StatusBadRequest, "invalid year")
+		return
+	}
+	var req model.UpsertYearContentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	userID := middleware.UserIDFromContext(r.Context())
+	content, err := h.svc.UpsertYearContent(r.Context(), year, req, userID)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "failed to save year content")
+		return
+	}
+	writeJSON(w, http.StatusOK, content)
 }
 
 // UpsertMonthNote handles PUT /api/v1/calendar/months/{year}/{month}/note (admin only).

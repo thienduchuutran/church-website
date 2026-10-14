@@ -243,26 +243,25 @@ func TestUpdateCalendarEventRequest_Validate_customValues(t *testing.T) {
 	}
 }
 
-// UpsertMonthNoteRequest.Validate exists to bound what reaches the translation
+// UpsertYearContentRequest.Validate exists to bound what reaches the translation
 // queue and, through it, the AI prompt. A month note is the one admin write
 // with no length ceiling anywhere else in the stack: the columns are `text`,
 // the modal is a textarea, and every non-empty field is enqueued for
 // translation. These cases pin the two properties that matter - a normal month
 // always saves, and no single paste can push an unbounded blob through the
 // worker.
-func TestUpsertMonthNoteRequest_Validate(t *testing.T) {
+func TestUpsertYearContentRequest_Validate(t *testing.T) {
 	cases := []struct {
 		name    string
-		req     UpsertMonthNoteRequest
+		req     UpsertYearContentRequest
 		wantErr bool
 	}{
 		{
 			name: "a fully populated month is valid",
-			req: UpsertMonthNoteRequest{
+			req: UpsertYearContentRequest{
 				Theme:          "Walking in Gratitude",
 				VerseText:      "Give thanks in all circumstances; for this is God's will for you in Christ Jesus.",
 				VerseReference: "1 Thessalonians 5:18",
-				Content:        "Bring guests on the 21st.",
 			},
 			wantErr: false,
 		},
@@ -270,7 +269,7 @@ func TestUpsertMonthNoteRequest_Validate(t *testing.T) {
 		// legal, or there would be no way to undo a theme.
 		{
 			name:    "all fields empty is valid",
-			req:     UpsertMonthNoteRequest{},
+			req:     UpsertYearContentRequest{},
 			wantErr: false,
 		},
 		// Vietnamese is the authoring language for roughly half these notes and
@@ -279,7 +278,7 @@ func TestUpsertMonthNoteRequest_Validate(t *testing.T) {
 		// the length of an English one.
 		{
 			name: "vietnamese theme well under the cap is valid",
-			req: UpsertMonthNoteRequest{
+			req: UpsertYearContentRequest{
 				Theme:          "Bước Đi Trong Lòng Biết Ơn",
 				VerseText:      "Hãy cảm tạ trong mọi hoàn cảnh, vì đây là ý muốn của Đức Chúa Trời cho anh em.",
 				VerseReference: "1 Tê-sa-lô-ni-ca 5:18",
@@ -288,27 +287,22 @@ func TestUpsertMonthNoteRequest_Validate(t *testing.T) {
 		},
 		{
 			name:    "theme past the cap is rejected",
-			req:     UpsertMonthNoteRequest{Theme: strings.Repeat("a", MaxMonthThemeLen+1)},
+			req:     UpsertYearContentRequest{Theme: strings.Repeat("a", MaxYearThemeLen+1)},
 			wantErr: true,
 		},
 		{
 			name:    "theme exactly at the cap is accepted",
-			req:     UpsertMonthNoteRequest{Theme: strings.Repeat("a", MaxMonthThemeLen)},
+			req:     UpsertYearContentRequest{Theme: strings.Repeat("a", MaxYearThemeLen)},
 			wantErr: false,
 		},
 		{
 			name:    "verse text past the cap is rejected",
-			req:     UpsertMonthNoteRequest{VerseText: strings.Repeat("a", MaxMonthVerseLen+1)},
+			req:     UpsertYearContentRequest{VerseText: strings.Repeat("a", MaxYearVerseLen+1)},
 			wantErr: true,
 		},
 		{
 			name:    "verse reference past the cap is rejected",
-			req:     UpsertMonthNoteRequest{VerseReference: strings.Repeat("a", MaxMonthVerseRefLen+1)},
-			wantErr: true,
-		},
-		{
-			name:    "note content past the cap is rejected",
-			req:     UpsertMonthNoteRequest{Content: strings.Repeat("a", MaxMonthNoteLen+1)},
+			req:     UpsertYearContentRequest{VerseReference: strings.Repeat("a", MaxYearVerseRefLen+1)},
 			wantErr: true,
 		},
 		// A multi-byte theme at the rune cap must pass. This is the case a
@@ -316,7 +310,7 @@ func TestUpsertMonthNoteRequest_Validate(t *testing.T) {
 		// separately from the ASCII cap case above.
 		{
 			name:    "multibyte theme at the rune cap is accepted",
-			req:     UpsertMonthNoteRequest{Theme: strings.Repeat("ơ", MaxMonthThemeLen)},
+			req:     UpsertYearContentRequest{Theme: strings.Repeat("ơ", MaxYearThemeLen)},
 			wantErr: false,
 		},
 		// The reference is a single citation, never prose. A newline in it means
@@ -324,12 +318,12 @@ func TestUpsertMonthNoteRequest_Validate(t *testing.T) {
 		// layout the card gives it.
 		{
 			name:    "newline in the verse reference is rejected",
-			req:     UpsertMonthNoteRequest{VerseReference: "1 Thess 5:18\nJohn 3:16"},
+			req:     UpsertYearContentRequest{VerseReference: "1 Thess 5:18\nJohn 3:16"},
 			wantErr: true,
 		},
 		{
 			name:    "newline in the theme is rejected",
-			req:     UpsertMonthNoteRequest{Theme: "Walking\nin Gratitude"},
+			req:     UpsertYearContentRequest{Theme: "Walking\nin Gratitude"},
 			wantErr: true,
 		},
 	}
