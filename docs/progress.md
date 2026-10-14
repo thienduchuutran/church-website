@@ -3,6 +3,77 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-10-14 - The theme and verse belong to the year, not the month
+
+**Why.** Shipped in `000017` keyed `(year, month)`. The owner's correction: the congregation picks
+**one** theme and **one** memory verse for a whole year, and every month carries it. Keying it per
+month meant twelve copies of one fact with nothing in the schema to say they were the same fact -
+and twelve translation jobs for one sentence.
+
+The freeform note stayed monthly. It is logistics ("Family Camp, 71 King Dr", "8:30pm arrival")
+and genuinely differs month to month. Only the three devotional columns moved.
+
+### The migration is the interesting part
+
+Production was not empty: `2026-10` held `theme = 'Priority '` and `verse_reference = 'Matthew
+6:33'`, **and two AI Vietnamese translations** - `Ưu tiên` and `Ma-thi-ơ 6:33` - neither approved
+yet. So `000018` is a data migration, not a schema change.
+
+It re-points those `translations` rows at the new record with `approved_by` untouched, rather than
+deleting and re-enqueueing. Deleting would have thrown away review work in progress and paid for
+the model to redo it. Only the translations belonging to the copied row move; the rest are deleted,
+because the column they describe is being dropped and the orphan sweep would never collect them -
+it matches on the *parent row* being gone, and `calendar_month_notes` survives. Same trap as the
+one in `known-quirks.md` for cleared note text.
+
+Order is load-bearing: create, copy, re-point, **then** drop. The copy reads the columns the drop
+removes.
+
+`'Priority '` is carried across with its trailing space. Silently rewriting authored text during a
+structural migration is not a migration's business; the owner can clear it in the UI.
+
+### A uuid key for a table whose real key is an int
+
+`calendar_year_content` has a uuid primary key with `year UNIQUE`, not `year` as the primary key -
+which is what the plan originally said. `translations.record_id` is a `uuid`, so any row the
+translation engine can point at needs one. `year` still carries the rule; the uuid just makes the
+row addressable by the engine. Caught while writing the migration, not after.
+
+### The registration cost that was deferred, now paid
+
+When `000017` chose to extend `calendar_month_notes` instead of adding a table, the main argument
+was avoiding a second registration in the five places the translation engine knows about a table.
+The grain genuinely changed, so that cost came due: the label `CASE`, the `LEFT JOIN`, and the
+shared `orphanConditions` (which covers both the translations sweep and the pending-jobs sweep -
+one addition, two behaviours). That was the right call then and this is the right call now; it just
+was not free, and it is worth noticing that "we'll pay it later if the grain changes" is exactly
+what happened.
+
+### Two scopes in one form
+
+The modal still opens once and saves once, but now writes two rows. The labels carry the scope -
+`Theme for 2026`, `Memory verse for 2026`, `Note for Oct` - rather than a paragraph explaining it,
+per the no-prose-in-UI rule. The year write goes first: if it fails the note is untouched and the
+admin retries without half their edit committed.
+
+### What did not change
+
+The scripture rule. `verse_text` is still never sent to the model - it appears only in language
+detection, the human-translation path, and its delete. That is the easiest thing to lose while
+moving code between files, so `TestYearContentTranslatableFields_ExcludesVerse` moved with it.
+
+### Files
+
+| Layer | Files |
+|---|---|
+| DB | `migrations/000018_year_theme_verse.{up,down}.sql` |
+| Backend | `model/types.go`, `repository/calendar.go`, `repository/translation.go`, `service/calendar.go`, `handler/calendar.go`, `cmd/server/main.go` |
+| Tests | `model/calendar_types_test.go`, `service/calendar_test.go`, `handler/calendar_test.go` |
+| Frontend | `types.ts`, `lib/calendar.ts`, `MonthThemeCard.tsx`, `CalendarShell.tsx`, `EventModal.tsx`, `messages/{en,vi}.json` |
+| Docs | `api.md`, `agents/database.md`, `agents/backend.md`, `components.md` |
+
+---
+
 ## 2026-10-02 - Bible study chips name the house they are at
 
 **Why.** Congregation members asked that a Friday BBS chip say whose house it is at. The grid

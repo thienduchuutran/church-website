@@ -8,6 +8,81 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
+# SHIPPED 2026-10-14 - Theme and memory verse become yearly, not monthly
+
+**Status:** shipped. Write-up, and the deviations found while building (uuid key, the deferred
+translation-engine registration coming due), are in  (2026-10-14).
+
+The theme and memory verse shipped keyed `(year, month)`. The owner's correction: one theme and
+one verse cover a **whole year**. The freeform note stays monthly - it is logistics, and logistics
+are per-month by nature.
+
+So the grain changes for three columns and nothing else. That is not a tweak: `(year, month)` and
+`year` are different keys, so the data cannot stay on `calendar_month_notes`. Writing it to all
+twelve rows would mean twelve copies to keep in sync and twelve translation jobs for one sentence.
+
+## What is already in production (this is a migration, not a fresh start)
+
+One row has real content, and it has translations attached:
+
+| | English | Vietnamese |
+|---|---|---|
+| `theme` | `Priority ` (note the trailing space) | `Ưu tiên` - AI, **not yet approved** |
+| `verse_reference` | `Matthew 6:33` | `Ma-thi-ơ 6:33` - AI, not yet approved |
+| `verse_text` | the Matthew 6:33 text | unchanged English, correctly never translated |
+
+Stored on `2026-10`. It becomes **2026's** theme. The two Vietnamese rows must travel with it -
+deleting them would throw away work the model already did and that a human is partway through
+reviewing.
+
+## Phase 1 - Database
+
+| File | Change | Why |
+|---|---|---|
+| `backend/migrations/000018_year_theme_verse.up.sql` | Create `calendar_year_content`: `year int primary key`, `theme`/`verse_text`/`verse_reference` `text not null default ''`, `source_locale text not null default 'en'`, `admin_id uuid`, timestamps. | `year` as the primary key *is* the rule - one row per year, enforced by the database rather than by convention. Same `not null default ''` as before, so "unset" stays one representable state and a cleared field cannot lose a `COALESCE` to a stale translation. |
+| same file | Copy forward: for each year, take the most recently updated `calendar_month_notes` row whose theme/verse/reference is non-empty, and insert it as that year's content, carrying `source_locale`. | Non-destructive, and written generally rather than hard-coding the one known row - if a second month gets filled in before this ships, the migration still does something defensible instead of failing or picking arbitrarily. |
+| same file | Re-point translations: `UPDATE translations SET table_name='calendar_year_content', record_id=<new year row id> WHERE table_name='calendar_month_notes' AND field_name IN ('theme','verse_text','verse_reference')`. Same for any `pending` rows in `translation_jobs`. | Preserves `Ưu tiên` and `Ma-thi-ơ 6:33` **with their approval state intact**, instead of deleting them and paying for the model to redo work a human is already reviewing. The UNIQUE on `(record_id, field_name, locale)` cannot collide because the year row is new. |
+| same file | Only then drop `theme`, `verse_text`, `verse_reference` from `calendar_month_notes`. | Order matters - the copy reads those columns. |
+| `...000018_...down.sql` | Re-add the three columns, copy each year's content back onto that year's January row, re-point translations back. | Reversible, and the rollback loses no text. January is an arbitrary but honest choice: the month grain simply has less information than the year grain, so something has to be picked. |
+
+## Phase 2 - Backend
+
+| File | Change | Why |
+|---|---|---|
+| `internal/model/types.go` | New `CalendarYearContent` (+ `*Source` twins, `machine_translated`). Drop the three fields and their twins from `CalendarMonthNote`. New `UpsertYearContentRequest` with the same rune-counted caps and single-line checks, reusing the existing `MaxMonthTheme*` constants renamed to `MaxYear*`. | |
+| `internal/repository/calendar.go` | `GetYearContent(year, locale)` with one `LEFT JOIN translations` per field; `UpsertYearContent`. Strip the three columns back out of `GetMonthNote`/`UpsertMonthNote`. | Same per-field join shape as before - each field is still approved independently. |
+| `internal/repository/translation.go` | Register the new table in **all four** places: the label `CASE` (`'Year theme · ' || year`), the `LEFT JOIN` beneath it, and the orphan-sweep clauses for both `translations` and pending jobs. | This is the registration cost I avoided last time by reusing `calendar_month_notes`. The grain genuinely changed, so it is now owed. Miss the orphan clause and a deleted year leaves suggestions in the review panel forever. |
+| `internal/service/calendar.go` | `GetYearContent` / `UpsertYearContent`, detecting `source_locale` across the three fields and enqueuing `theme` + `verse_reference` only. `verse_text` stays excluded. | The scripture rule is unchanged and must survive this refactor - it is the easiest thing to lose while moving code. |
+| `internal/handler/calendar.go` | Return `year_content` on `GET /calendar` alongside `month_note`; new `PUT /api/v1/calendar/years/{year}/content`. Add its `*Source` fields to `stripAdminOnlyFields`. | One extra read on the month endpoint keeps the frontend at a single request per month view. |
+| `cmd/server/main.go` | Register the new admin route. | |
+| Tests | `model`: validation cases moved to the new request type. `service`: the field-collector tests, including the one proving `verse_text` is never queued. `handler`: extend the strip test for the new `*Source` fields. | TDD rule; the scripture-exclusion test is the one that matters most. |
+
+## Phase 3 - Frontend
+
+| File | Change | Why |
+|---|---|---|
+| `components/features/calendar/types.ts` | `CalendarYearContent`; remove the three fields from `CalendarMonthNote`; `year_content` on the month response. | |
+| `lib/calendar.ts` | `upsertYearContent(year, fields, token)`; `MonthNoteInput` shrinks back to `content` only. | |
+| `components/features/calendar/EventModal.tsx` | `note` mode keeps all four inputs in one form, but labels carry the scope: **"Theme for 2026"**, **"Memory verse for 2026"**, **"Note for October"**. Saving fires both writes. | Two scopes in one sheet needs to be obvious without a paragraph of explanation - the year in the label does that work. One save still means one admin action. |
+| `messages/en.json` / `vi.json` | `Calendar.themeLabel` → "This year's theme" / "Chủ đề năm nay". `verseLabel` unchanged ("Câu gốc"). | |
+| `components/features/calendar/MonthThemeCard.tsx` | Takes `yearContent` instead of `note`. | Rendering is otherwise identical - same card, same place, same ink. |
+| `CalendarShell.tsx` | Hold `yearContent` in state; pass it down. | |
+
+## Verification
+
+- Backend: `go build ./...`, `go test ./internal/...`
+- Frontend: `npm run test:places`, `npm run test:color`, `tsc --noEmit`, `npm run build`
+- **Migration rehearsal in Docker** (as with `000017`): apply all 18 migrations to a fresh Postgres, seed the exact production row *and its two Vietnamese translations*, then assert after `up`: the year row holds `Priority `/Matthew 6:33, both translations point at the new record with `approved_by` unchanged, and the month columns are gone. Then run `down` and assert nothing was lost.
+- Production after deploy: `/en/calendar` and `/vi/calendar` show the theme on **every** month of 2026, and `Ưu tiên` still appears on `/vi` without the worker re-running.
+
+## Open question for the owner
+
+`theme` is `'Priority '` with a trailing space, which the migration will carry across verbatim. I
+would rather not silently trim production text. Trim it as part of the move, or leave it and let
+you fix it in the UI?
+
+---
+
 # SHIPPED 2026-09-15 - Month theme and memory verse on the calendar
 
 **Status:** shipped. Write-up and the decisions taken during the build (the verse is never machine
