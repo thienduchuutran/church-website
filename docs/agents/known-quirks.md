@@ -15,6 +15,37 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Desktop nav dropdowns (News, Account) close mid-drag on a slow hover
+**Date solved:** 2026-10-19
+**Symptom:** Opening the News dropdown (or the signed-in Account menu) by
+hovering, then moving the cursor down toward the two options slowly, made
+the panel disappear before the cursor reached it. Moving quickly worked
+fine - only a slow, deliberate drag reproduced it.
+**Root cause:** The dropdown trigger (`<li>` for News, a `<div>` for
+Account) opens/closes on `onMouseEnter`/`onMouseLeave`. The panel itself
+(`MENU` in `Navbar.tsx`) is `position: absolute` with a `mt-1` gap below
+the trigger. An absolutely positioned child does not extend its parent's
+layout box, so that 4px gap is not part of the trigger's hit-testable
+area - geometrically it belongs to whatever sits behind it (the nav bar),
+not to the trigger or the panel. A fast drag's mouse-move samples skip
+straight from "over the trigger" to "over the panel" without ever
+landing in the gap, so no premature `mouseleave` fires. A slow drag
+samples a point inside the gap, which IS outside the trigger's subtree,
+firing `mouseleave` immediately and closing the panel (`hidden` class ->
+`display: none`) before the cursor physically arrives.
+**Fix:** Don't close on `mouseleave` instantly - schedule the close
+(`HOVER_CLOSE_DELAY_MS = 200`) and cancel it (`cancelScheduledClose`) if
+the pointer re-enters before it fires. Reaching the panel after crossing
+the gap re-fires `mouseenter` on the trigger (panel and trigger share the
+same disclosure subtree), which cancels the pending close in time. The
+same cancel call was added to every other path that changes
+`desktopDropdown` (Escape, click-outside, focus-out, route change, the
+click-to-toggle buttons) so a stale timer from a previous hover can never
+fire after one of those has already changed the open dropdown.
+**Files affected:** `frontend/components/ui/Navbar.tsx`.
+
+---
+
 ## The mobile calendar grid never went edge-to-edge, and its edge columns were quietly cut off
 **Date solved:** 2026-10-19
 **Symptom:** On phones the month grid sat inset from both screen edges instead

@@ -44,6 +44,10 @@ const PILL = 'inline-flex min-h-10 items-center whitespace-nowrap rounded-full p
 const PILL_IDLE = 'text-foreground hover:bg-primary/10 hover:text-primary'
 const PILL_ACTIVE = 'bg-primary text-white'
 const MENU = 'absolute top-full z-50 mt-1 min-w-[11rem] rounded-xl border border-border bg-surface p-1.5 shadow-card'
+// How long a hover-close waits before committing, so a slow diagonal drag
+// from the trigger into the panel survives crossing the `mt-1` gap between
+// them - see disclosureHandlers.
+const HOVER_CLOSE_DELAY_MS = 200
 
 function Chevron() {
   return (
@@ -78,6 +82,19 @@ export default function Navbar() {
   const onAdminRoute = pathname.startsWith('/admin')
 
   const dropdownContainerRefs = useRef<Map<string, HTMLElement>>(new Map())
+  // Pending hover-close timer. One ref is enough: only one desktop dropdown
+  // can be open at a time, so a newly scheduled close always supersedes
+  // whatever the previous trigger queued.
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const cancelScheduledClose = useCallback(() => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current)
+      closeTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => cancelScheduledClose, [cancelScheduledClose])
 
   const setDropdownRef = useCallback((label: string, el: HTMLElement | null) => {
     const map = dropdownContainerRefs.current
@@ -86,29 +103,39 @@ export default function Navbar() {
   }, [])
 
   useEffect(() => {
+    cancelScheduledClose()
     startTransition(() => {
       setDesktopDropdown(null)
       setMobileOpen(false)
     })
-  }, [pathname])
+  }, [pathname, cancelScheduledClose])
 
   useEffect(() => {
     if (!desktopDropdown) return
 
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDesktopDropdown(null)
+      if (e.key === 'Escape') {
+        cancelScheduledClose()
+        setDesktopDropdown(null)
+      }
     }
 
     const onPointerDown = (e: MouseEvent) => {
       const el = dropdownContainerRefs.current.get(desktopDropdown)
       const target = e.target as Node
-      if (el && !el.contains(target)) setDesktopDropdown(null)
+      if (el && !el.contains(target)) {
+        cancelScheduledClose()
+        setDesktopDropdown(null)
+      }
     }
 
     const onFocusIn = (e: FocusEvent) => {
       const el = dropdownContainerRefs.current.get(desktopDropdown)
       const target = e.target as Node
-      if (el && !el.contains(target)) setDesktopDropdown(null)
+      if (el && !el.contains(target)) {
+        cancelScheduledClose()
+        setDesktopDropdown(null)
+      }
     }
 
     document.addEventListener('keydown', onKeyDown)
@@ -119,7 +146,7 @@ export default function Navbar() {
       document.removeEventListener('mousedown', onPointerDown)
       document.removeEventListener('focusin', onFocusIn)
     }
-  }, [desktopDropdown])
+  }, [desktopDropdown, cancelScheduledClose])
 
   // Close mobile menu on Escape
   useEffect(() => {
@@ -134,16 +161,33 @@ export default function Navbar() {
   // Shared hover/blur behaviour for the two desktop disclosures (News and
   // Account). Mouse-leave does not close while keyboard focus is inside, so
   // a user tabbing through the menu is not cut off when the pointer drifts.
+  //
+  // The close on mouse-leave is delayed, not immediate: the panel (`MENU`)
+  // is `position: absolute` with a `mt-1` gap below the trigger, and an
+  // absolutely positioned child doesn't extend its parent's layout box - so
+  // that gap counts as "outside" the trigger. A slow drag from the trigger
+  // down into the panel samples a point inside that gap and fires
+  // mouse-leave before the cursor ever reaches the panel, closing it
+  // mid-drag. Scheduling the close instead gives the cursor time to finish
+  // crossing the gap; reaching the panel re-fires mouse-enter (it's the same
+  // disclosure's subtree) and cancels the pending close.
   const disclosureHandlers = (key: string) => ({
     ref: (el: HTMLElement | null) => setDropdownRef(key, el),
-    onMouseEnter: () => setDesktopDropdown(key),
+    onMouseEnter: () => {
+      cancelScheduledClose()
+      setDesktopDropdown(key)
+    },
     onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
       if (e.currentTarget.contains(document.activeElement)) return
-      setDesktopDropdown(null)
+      cancelScheduledClose()
+      closeTimerRef.current = setTimeout(() => {
+        setDesktopDropdown((cur) => (cur === key ? null : cur))
+      }, HOVER_CLOSE_DELAY_MS)
     },
     onBlur: (e: React.FocusEvent<HTMLElement>) => {
       const next = e.relatedTarget as Node | null
       if (next && e.currentTarget.contains(next)) return
+      cancelScheduledClose()
       setDesktopDropdown(null)
     },
   })
@@ -216,6 +260,7 @@ export default function Navbar() {
                       aria-controls={panelId}
                       className={`${PILL} gap-1 ${isActive ? PILL_ACTIVE : PILL_IDLE}`}
                       onClick={() => {
+                        cancelScheduledClose()
                         setDesktopDropdown((cur) => (cur === item.label ? null : item.label))
                       }}
                     >
@@ -279,6 +324,7 @@ export default function Navbar() {
                       aria-controls={dropdownPanelId(ACCOUNT_MENU)}
                       className={`${PILL} gap-1 ${onAdminRoute ? 'bg-accent text-white' : PILL_IDLE}`}
                       onClick={() => {
+                        cancelScheduledClose()
                         setDesktopDropdown((cur) => (cur === ACCOUNT_MENU ? null : ACCOUNT_MENU))
                       }}
                     >
