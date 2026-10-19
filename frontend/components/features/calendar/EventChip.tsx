@@ -72,9 +72,12 @@ export default function EventChip({ title, icon, color, tooltip, compact = false
         className="flex flex-col items-center justify-center gap-0.5 py-0.5 leading-none"
       >
         <CakeMarker size={36} />
+        {/* ink-on-ground, not a plain colour: this name has no fill behind it,
+            so in dark mode the dark `text` value sits on a near-black page and
+            all but disappears. See the rule in globals.css. */}
         <span
-          className="max-w-full break-words text-center font-display text-[10px] font-bold leading-tight"
-          style={{ color: colors.text }}
+          className="ink-on-ground max-w-full break-words text-center font-display text-[10px] font-bold leading-tight"
+          style={{ '--ink-light': colors.text, '--ink-dark': colors.highlight } as React.CSSProperties}
         >
           {title}
         </span>

@@ -15,6 +15,28 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Category-coloured text is unreadable in dark mode wherever it has no fill behind it
+**Date solved:** 2026-10-19
+**Symptom:** In dark mode the birthday name under its cake was too dim to read - in the grid and again in the info strip's Birthdays column. Reported as "the red names", but it was never specific to red.
+
+**Root cause:** A palette entry is four values, and `text` is deliberately the **dark** one, because almost everything using it supplies its own light `highlight` fill to sit on (a chip, a banner, the day modal's `colors.bg` wash). With a fill, the page behind is irrelevant and dark ink is right in both themes.
+
+The birthday chip is the one chip with *no* fill - a cake with a name under it, painted straight onto the page ground, which flips `#f9f8ff` → `#17101a`. Measured against the dark ground **every** palette colour fails WCAG AA, not just rose: violet 2.63:1, slate 2.46:1, rose 2.97:1, and `black` **1.04:1** - invisible, not merely dim.
+
+The same shape had already bitten twice: `deriveRamp().text` on `MonthThemeCard` (fixed 2026-09-15) and the accent-coloured labels before it. The warning was written into `docs/agents/frontend.md` at the time; the birthday chip was simply never checked against it.
+
+**Fix:** Dark mode takes the **light end of the same ramp** (`highlight`) - same hue, opposite brightness, 12-15:1 on the dark ground for all nine colours. Light mode is untouched.
+
+Done in CSS, not JavaScript: `EventChip` is a server component with no `window.matchMedia`, and a JS swap would render the light-mode colour first and correct itself after hydration. The component passes both values as custom properties and `.ink-on-ground` in `globals.css` picks one under `@media (prefers-color-scheme: dark)`. The PNG export still captures the computed value.
+
+`DayEventsModal` is deliberately **not** changed - its rows sit on `colors.bg`, a light wash in both themes, so dark ink is correct there.
+
+**The rule to carry forward:** `colors.text` and `deriveRamp().text` are *always dark*. Anything painting a category or accent colour directly onto the page ground needs both ends of the ramp. Check for a fill before reaching for `text`.
+
+**Files affected:** `frontend/app/globals.css`, `frontend/components/features/calendar/EventChip.tsx`, `frontend/components/features/calendar/CalendarShell.tsx`
+
+---
+
 ## Desktop nav dropdowns (News, Account) close mid-drag on a slow hover
 **Date solved:** 2026-10-19
 **Symptom:** Opening the News dropdown (or the signed-in Account menu) by

@@ -648,7 +648,14 @@ export default function CalendarShell({
                         className={`flex items-center gap-1 text-[11px] leading-tight rounded px-1 -mx-1 ${isAdmin ? 'cursor-pointer hover:bg-panel' : ''}`}
                       >
                         <CakeMarker size={14} />
-                        <span className="font-display font-semibold" style={{ color: colors.text }}>{e.title}</span>
+                        {/* Same no-fill case as the birthday chip above the
+                            strip - see .ink-on-ground in globals.css. */}
+                        <span
+                          className="ink-on-ground font-display font-semibold"
+                          style={{ '--ink-light': colors.text, '--ink-dark': colors.highlight } as React.CSSProperties}
+                        >
+                          {e.title}
+                        </span>
                         <span className="font-sans text-muted/80">{day}</span>
                       </div>
                     )
