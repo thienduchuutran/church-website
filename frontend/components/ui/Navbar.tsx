@@ -31,7 +31,15 @@ const desktopItems: NavItem[] = [
   { kind: 'link', href: '/resources', label: 'resources' },
   { kind: 'link', href: '/about', label: 'about' },
 ]
-const mobileItems: NavItem[] = [{ kind: 'link', href: '/', label: 'home' }, ...desktopItems]
+// The mobile panel has no room for a nested disclosure, and a hover-driven
+// dropdown doesn't translate to touch anyway - so News is flattened into its
+// two links directly, with no "News" heading grouping them.
+const mobileItems: NavItem[] = [
+  { kind: 'link', href: '/', label: 'home' },
+  ...desktopItems.flatMap((item) =>
+    item.kind === 'dropdown' ? item.children.map((child): NavLink => ({ kind: 'link', ...child })) : [item]
+  ),
+]
 
 const connectHref = '/connect'
 const MOBILE_NAV_ID = 'primary-mobile-nav'
