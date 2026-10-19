@@ -96,9 +96,9 @@ export default function EventChip({ title, icon, color, tooltip, compact = false
       >
         <div className={['flex items-center justify-center min-w-0', hasIcon ? 'gap-1' : ''].join(' ')}>
           {hasIcon && <CalendarIcon iconKey={icon} size={10} color={colors.text} />}
-          <span className="truncate">{title}</span>
+          <span data-export-wrap className="truncate">{title}</span>
         </div>
-        <div className="truncate text-center text-[10px] font-semibold opacity-80">{sub}</div>
+        <div data-export-wrap className="truncate text-center text-[10px] font-semibold opacity-80">{sub}</div>
       </div>
     )
   }
@@ -113,7 +113,10 @@ export default function EventChip({ title, icon, color, tooltip, compact = false
       style={{ backgroundColor: colors.highlight, color: colors.text }}
     >
       {hasIcon && <CalendarIcon iconKey={icon} size={10} color={colors.text} />}
-      <span className="truncate">{title}</span>
+      {/* data-export-wrap: one truncated line on screen (the tooltip and the
+          day modal carry the rest), but the PNG has neither, so the export
+          unclamps this into full wrapped lines - see globals.css. */}
+      <span data-export-wrap className="truncate">{title}</span>
     </div>
   )
 }

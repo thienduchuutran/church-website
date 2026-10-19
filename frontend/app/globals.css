@@ -562,3 +562,21 @@ body {
   flex-direction: column;
   gap: 0.25rem;
 }
+
+/* Calendar PNG export - open chip titles into full lines.
+   On screen a chip title is one truncated line, and that is fine there: the
+   cell is a fixed ~115px box, and the hover tooltip plus the day modal recover
+   the rest. The PNG has neither, so an ellipsis in the image is just lost text
+   for whoever reads it in Discord. During the capture, let those lines wrap to
+   as many rows as the title needs.
+   Cells grow taller as a result, which is the same trade the reveal rule above
+   already makes - a complete image beats a uniformly ruled one, because the
+   image is the only copy the reader gets.
+   Deliberately unlayered: Tailwind's `truncate` lives in @layer utilities, and
+   unlayered rules outrank layered ones no matter the specificity. */
+[data-exporting] [data-export-wrap] {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: break-word;
+}
