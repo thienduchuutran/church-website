@@ -56,14 +56,23 @@ export default function CalendarPageClient({ initialYear, initialMonth }: Calend
   }, [exporting, year, month])
 
   return (
-    <div className="@container mx-auto px-4 py-3 sm:px-6 lg:px-8 flex flex-col items-center">
+    <div className="@container mx-auto px-0 py-3 sm:px-6 lg:px-8 flex flex-col items-center">
       {/*
         Live page is fluid (capped at 1100px on wide screens). The 1100px is
         the printed-calendar aspect ratio (~1100 × 840) and is re-applied
         only at export time by ExportButton, so the snapshot always renders
         at the same canvas size regardless of the viewer's viewport.
+
+        No page gutter on phones (px-0): the side padding visitors see lives on
+        the calendar box below (px-4) instead. One padding instead of two
+        nested ones is what lets the month grid cancel it exactly and run to
+        both screen edges - see the bleed on the slide wrapper in
+        CalendarShell. Text blocks keep the same 16px inset they had before;
+        only the grid reaches the edge. px-4 is deliberately NOT a container
+        variant: export forces this element to 1100px, so an @-variant here
+        would resolve against the phone viewport instead.
       */}
-      <div ref={calendarRef} className="@container bg-surface p-3 w-full max-w-[1100px]">
+      <div ref={calendarRef} className="@container bg-surface px-4 py-3 w-full max-w-[1100px]">
         <CalendarShell
           year={year}
           month={month}
