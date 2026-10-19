@@ -580,3 +580,15 @@ body {
   text-overflow: clip;
   overflow-wrap: break-word;
 }
+
+/* ...and give the multi-day ribbons room to hold those lines. Unlike a chip, a
+   ribbon cannot simply grow: it is absolutely positioned in a fixed-height lane,
+   and each day cell reserves exactly `laneCount * lane height` of top padding to
+   keep its chips clear of the stack. CalendarGrid reads this one variable for
+   both the ribbon's height and that reservation, so raising it here moves them
+   together - a taller lane for the capture, and the padding underneath follows.
+   42px holds three wrapped 11px lines, which covers every title length the
+   church has used; a longer one still clips rather than colliding with a chip. */
+[data-exporting] {
+  --calendar-lane-h: 42px;
+}

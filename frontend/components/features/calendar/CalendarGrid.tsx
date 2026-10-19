@@ -20,8 +20,17 @@ const DAY_LETTERS = ['S', 'M', 'T', 'W', 'T', 'F', 'S']
 // Desktop banner geometry. BANNER_TOP clears the absolute day number; each
 // multi-day ribbon lane is LANE_HEIGHT tall. Cells reserve `laneCount *
 // LANE_HEIGHT` of top padding so single-day chips never sit under a banner.
+//
+// The lane height is emitted as `var(--calendar-lane-h, LANE_HEIGHT)` rather
+// than a plain number in both places that read it - the cell's reserved padding
+// and the ribbon's top/height. A ribbon is absolutely positioned, so its height
+// and the padding that keeps chips clear of it must always agree; routing both
+// through one variable means the PNG export can make lanes taller (to fit a
+// wrapped, un-ellipsized title - see [data-exporting] in globals.css) without
+// the two formulas drifting apart and ribbons landing on top of chips.
 const BANNER_TOP = 24
 const LANE_HEIGHT = 22
+const LANE_H = `var(--calendar-lane-h, ${LANE_HEIGHT}px)`
 
 // An event renders as a banner ribbon when it has an explicit end_date. The end
 // may equal the start (a deliberate one-day banner), so this is >=, not >.
@@ -278,7 +287,7 @@ export default function CalendarGrid({
                 <div
                   key={day}
                   onClick={() => isClickable && onDayClick?.(dateStr)}
-                  style={{ paddingTop: BANNER_TOP + week.laneCount * LANE_HEIGHT }}
+                  style={{ paddingTop: `calc(${BANNER_TOP}px + ${week.laneCount} * ${LANE_H})` }}
                   className={[
                     'group relative border-t border-foreground bg-surface min-h-[115px] px-1.5 pb-1.5 flex flex-col gap-1',
                     di < 6 ? 'border-r border-foreground' : '',
@@ -368,8 +377,8 @@ export default function CalendarGrid({
                 style={{
                   left: `${(b.startCol / 7) * 100}%`,
                   width: `${(b.span / 7) * 100}%`,
-                  top: BANNER_TOP + b.lane * LANE_HEIGHT,
-                  height: LANE_HEIGHT - 3,
+                  top: `calc(${BANNER_TOP}px + ${b.lane} * ${LANE_H})`,
+                  height: `calc(${LANE_H} - 3px)`,
                 }}
               >
                 <EventBanner

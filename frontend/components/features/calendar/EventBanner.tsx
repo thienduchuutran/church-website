@@ -29,7 +29,10 @@ export default function EventBanner({ title, color, roundStart, roundEnd, toolti
       ].join(' ')}
       style={{ backgroundColor: colors.text }}
     >
-      <span className="truncate">{title}</span>
+      {/* data-export-wrap: one clipped line on screen, where the tooltip and
+          the day modal carry the rest - but the PNG has neither, so the export
+          wraps this to full lines inside a taller lane (globals.css). */}
+      <span data-export-wrap className="truncate text-center leading-tight">{title}</span>
     </div>
   )
 }
