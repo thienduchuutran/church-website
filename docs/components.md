@@ -831,7 +831,11 @@ Supplied by `chipSubtitle(e)` in `CalendarGrid`, which returns a name only for a
 
 **It costs 2 rows in the cell budget.** `chipRows` charges a subtitled chip the same as a birthday, because it really is two lines tall. Miss this and `DESKTOP_CELL_BUDGET` under-counts, a busy day's cell grows past its ~115px box, and that week's row ends up taller than the other four in the exported PNG - the exact failure the budget was introduced to prevent. `chipSubtitle` is exported and used by both `chipRows` and the three chip call sites so the cost and the rendering cannot drift apart.
 
-**It renders on mobile too.** A ~53px column clips it to roughly `Hoang Hou…`, which still answers "whose house" better than nothing; `DayEventsModal` carries the full name for the tap-through. The compact variant has no tooltip and the export has none either, which is why the truncated line is shown rather than hidden behind hover.
+**It renders on mobile too.** A ~53px column clips it to roughly `Hoang Hous`, which still answers "whose house" better than nothing; `DayEventsModal` carries the full name for the tap-through. The compact variant has no tooltip and the export has none either, which is why the truncated line is shown rather than hidden behind hover.
+
+**The compact chip cuts, it does not ellipsize.** Both its lines use `overflow-hidden whitespace-nowrap` rather than `truncate`: inside a ~42px content box the `…` costs a character or two of the actual title, and at that size a hard cut already reads as "there is more". Overflowing text stays anchored to the start edge despite the inherited `text-center`, so only the tail is lost. The full (desktop/export) chip still uses `truncate` - it is wider, it has a tooltip, and the PNG is a printed artifact where the ellipsis is the honest signal.
+
+**The PNG export shows titles in full.** The full chip's title and subtitle lines carry `data-export-wrap`. On screen they stay one truncated line - the cell is a fixed ~115px box and the hover tooltip plus `DayEventsModal` recover the rest - but `exportCalendarToPng` sets `data-exporting` on the calendar root, and the unlayered rule in `globals.css` flips those lines to `white-space: normal` so they wrap to as many rows as the title needs. Cells grow taller; that is the same trade the `[data-export-reveal]` rule makes, because the image is the only copy a Discord reader gets. (Unlayered on purpose: Tailwind's `truncate` sits in `@layer utilities`, and unlayered rules outrank layered ones regardless of specificity.)
 
 **Data flow:** pure presentational. `CalendarGrid` maps each **single-day** event to an `<EventChip>` in both its desktop (full) and mobile (`compact`) grids, so the look stays identical and the PNG export (which renders the desktop grid) matches the live page. Multi-day events are rendered as `<EventBanner>` ribbons instead (see below).
 
@@ -851,13 +855,15 @@ The multi-day ribbon used to render an event that spans more than one day across
 **Props**
 | Prop | Type | Default | Description |
 |------|------|---------|-------------|
-| `title` | `string` | required | Event title, centered and truncated within the bar |
+| `title` | `string` | required | Event title, centered and truncated within the bar - except in the PNG export, where it wraps to full lines (see below) |
 | `color` | `string` | required | A named palette key **or** a 6-digit hex, passed through `resolveColor()`. The bar fills with the dark `text` value and writes **white** on it - which is why `deriveRamp` guarantees `text` clears WCAG AA against white, not just against the chip tint |
 | `roundStart` | `boolean` | required | Round + inset the left end (true only on the segment that begins the span) |
 | `roundEnd` | `boolean` | required | Round + inset the right end (true only on the segment that ends the span) |
 | `tooltip` | `string` | `title` | Native hover tooltip (the event's notes) |
 
 **Data flow:** pure presentational. `CalendarGrid` splits events into single-day (`EventChip`) vs multi-day (`end_date > date`). For each week row it computes per-week banner **segments** (column start/span, lane, and whether each end is a true span end) with a greedy lane assignment, then absolutely positions one `<EventBanner>` per segment over the week's columns. `roundStart`/`roundEnd` keep a run that crosses a week boundary reading as continuous. The banner layer is `pointer-events-none` so a click falls through to the day cell (which opens the day-events list, matched by range).
+
+**The export widens the lane rather than clipping the title.** A ribbon cannot just grow the way a chip can: it is absolutely positioned in a fixed-height lane, and every day cell reserves exactly `laneCount * lane height` of top padding to keep its chips clear of the stack. So `CalendarGrid` emits that height as `var(--calendar-lane-h, 22px)` in **both** places that read it - the cell's `paddingTop` and the ribbon's `top`/`height` - and `globals.css` raises the variable to `42px` under `[data-exporting]`. Both formulas move together, so a taller ribbon never lands on a chip. 42px holds three wrapped 11px lines; a longer title clips instead of colliding. The title span carries `data-export-wrap` like the chip's.
 
 **Client component:** no (renders inside the client `CalendarGrid`)
 
