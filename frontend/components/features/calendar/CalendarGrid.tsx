@@ -401,9 +401,11 @@ export default function CalendarGrid({
           spacing alone would be a one-off tune; nesting + the week rule keeps
           the relationship true no matter how the spacing is edited later.
 
-          Edge-to-edge: -mx-3 breaks the grid out of the export wrapper's p-3
-          so cells use the full available width on mobile. */}
-      <div className="block @3xl:hidden -mx-3 border-b border-border">
+          Edge-to-edge: the bleed lives on the slide wrapper in CalendarShell,
+          which is the element that clips (overflow-hidden); a negative margin
+          here sat inside that clip and got cut off instead of widening
+          anything. So this just fills whatever width it is handed. */}
+      <div className="block @3xl:hidden border-b border-border">
         <div className="grid grid-cols-7">
           {DAY_LETTERS.map((letter, i) => (
             <div

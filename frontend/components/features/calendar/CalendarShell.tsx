@@ -592,8 +592,17 @@ export default function CalendarShell({
           onEdit={() => { setEditingNote(true); setModalOpen(true) }}
         />
 
-        {/* Calendar grid - direction-aware slide on month change */}
-        <div className="relative overflow-hidden">
+        {/* Calendar grid - direction-aware slide on month change.
+
+            Full-bleed on phones (-mx-4 cancels the calendar box's px-4) so the
+            month grid runs edge to edge like Google Calendar's app and every
+            column gets the widest possible chip. The bleed has to be on THIS
+            element, not on the grid inside it: overflow-hidden clips at this
+            box, so a negative margin further in was simply cut off. Reset at
+            @3xl - the desktop grid is a framed editorial block, and the PNG
+            export forces 1100px (switching this container to @3xl) and expects
+            the padding to be there. */}
+        <div className="relative overflow-hidden -mx-4 @3xl:mx-0">
           <AnimatePresence mode="wait" initial={false} custom={direction}>
             <motion.div
               key={`${year}-${month}`}
