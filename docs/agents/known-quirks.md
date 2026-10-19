@@ -15,6 +15,48 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## The mobile calendar grid never went edge-to-edge, and its edge columns were quietly cut off
+**Date solved:** 2026-10-19
+**Symptom:** On phones the month grid sat inset from both screen edges instead
+of running full-bleed (*tràn viền*) the way Google Calendar's app does, even
+though `CalendarGrid`'s mobile block carried a `-mx-3` whose stated job was to
+break it out of the wrapper's padding. The Sunday and Saturday columns also
+rendered visibly narrower than the middle five.
+**Root cause:** Two separate things.
+1. The bleed was escaping only ONE of two nested paddings - the page shell had
+   `px-4` and the calendar box inside it had `p-3`, so `-mx-3` cancelled 12px
+   and left 16px.
+2. Worse, `-mx-3` sat *inside* `CalendarShell`'s month-slide viewport, which is
+   `relative overflow-hidden`. A negative margin on a child of an
+   `overflow-hidden` element does not widen anything - the element gets wider,
+   then the parent clips the overhang at its own padding box. Measured at a
+   375px client width: the grid box ran 16 -> 359.2 while the clip box ran
+   28 -> 347.2, so 12px was shaved off each edge column (49px cells rendering
+   37px visible at the two ends).
+**Fix:** One padding instead of two nested ones, and the bleed moved onto the
+element that clips.
+- `CalendarPageClient`: page shell drops its phone gutter (`px-4` -> `px-0`,
+  `sm:`/`lg:` gutters untouched); the calendar box takes it instead
+  (`p-3` -> `px-4 py-3`). Deliberately NOT a container variant - export forces
+  that element to 1100px, so an `@`-variant there would resolve against the
+  phone viewport.
+- `CalendarShell`: the slide viewport becomes
+  `relative overflow-hidden -mx-4 @3xl:mx-0` - it is the clipping box, so the
+  bleed has to live here. `@3xl` resets it for the framed desktop grid and for
+  the PNG export (which forces 1100px, switching that container to `@3xl`).
+- `CalendarGrid`: mobile block drops its own `-mx-3`; it now just fills the
+  width it is handed.
+Result at 390px: grid spans the full client width from x=0, cells 49px -> 53.6px
+(+9%), and the two edge columns stop being clipped. Desktop and export are
+unchanged (slide wrapper still inset by the box's padding).
+**Rule of thumb:** a full-bleed negative margin must be applied to the nearest
+`overflow-hidden` ancestor, not to something inside it.
+**Files affected:** `frontend/app/[locale]/calendar/CalendarPageClient.tsx`,
+`frontend/components/features/calendar/CalendarShell.tsx`,
+`frontend/components/features/calendar/CalendarGrid.tsx`.
+
+---
+
 ## The Locations strip shows two rows for what is obviously one address
 **Date solved:** 2026-08-01
 **Symptom:** After migration `000014`, the calendar footer prints the same address twice - once
