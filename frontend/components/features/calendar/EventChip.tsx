@@ -44,14 +44,21 @@ export default function EventChip({ title, icon, color, tooltip, compact = false
       <div
         // The tooltip is useless on touch and absent from the export, so the
         // compact chip carries the subtitle rather than relying on either. A
-        // ~53px column clips it to about "Hoang Hou…", which still answers
+        // ~53px column clips it to about "Hoang Hous", which still answers
         // "whose house" better than nothing - and the day modal has it in full.
         className="mx-0.5 rounded-[3px] px-1 py-[1px] text-center font-display text-[10px] font-bold leading-tight"
         style={{ backgroundColor: colors.highlight, color: colors.text }}
       >
-        <div className="truncate">{title}</div>
+        {/* Cut the text off mid-word rather than ellipsizing it (overflow +
+            nowrap, no text-overflow). In a ~42px content box the ellipsis
+            itself costs a character or two of the actual title, and at this
+            size a hard cut already reads as "there is more" - the day sheet
+            has the full text either way. Overflowing text stays anchored to
+            the start edge despite the inherited text-center, so only the tail
+            is lost. The desktop/export chip still ellipsizes. */}
+        <div className="overflow-hidden whitespace-nowrap">{title}</div>
         {sub && (
-          <div className="truncate text-[9px] font-semibold opacity-75">{sub}</div>
+          <div className="overflow-hidden whitespace-nowrap text-[9px] font-semibold opacity-75">{sub}</div>
         )}
       </div>
     )
