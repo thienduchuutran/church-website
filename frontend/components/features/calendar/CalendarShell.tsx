@@ -649,10 +649,10 @@ export default function CalendarShell({
                       >
                         <CakeMarker size={14} />
                         {/* Same no-fill case as the birthday chip above the
-                            strip - see .ink-on-ground in globals.css. */}
+                            strip - see .birthday-name in globals.css. */}
                         <span
-                          className="ink-on-ground font-display font-semibold"
-                          style={{ '--ink-light': colors.text, '--ink-dark': colors.highlight } as React.CSSProperties}
+                          className="birthday-name font-display font-semibold"
+                          style={{ '--ink-light': colors.text } as React.CSSProperties}
                         >
                           {e.title}
                         </span>

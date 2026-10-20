@@ -841,7 +841,7 @@ Supplied by `chipSubtitle(e)` in `CalendarGrid`, which returns a name only for a
 
 **Birthday special case:** when `icon === 'cake'` the full (non-compact) variant renders a standalone layout - a large `<CakeMarker>` (the local Apple cake image) with the name beneath it and **no** highlighter pill - mirroring how the cake simply sits in the day box on the paper calendars.
 
-Because it has no pill, the name is the one chip text painted straight onto the page ground, so it carries `.ink-on-ground` and passes `--ink-light` / `--ink-dark` instead of a flat `color`. Dark mode takes the palette's light `highlight` end; `colors.text` alone is 1.04:1 on the dark page for a black-coloured birthday. Same treatment on the info strip's Birthdays column. See `docs/agents/known-quirks.md`.
+Because it has no pill, the name is the one chip text painted straight onto the page ground, so it carries `.birthday-name` and passes `--ink-light` instead of a flat `color`. Light mode keeps the event's colour; **dark mode uses one warm gold** (`--birthday-ink`) for every birthday, because `colors.text` is 1.04:1 on the dark page for a black-coloured birthday and a per-event tint made birthdays harder to spot than one consistent colour. Same treatment on the info strip's Birthdays column. See `docs/agents/known-quirks.md`.
 
 **No-icon case:** when `icon === 'none'` the chip drops both the icon **and** the flex gap. `CalendarIcon` already renders nothing for `'none'`, but a leftover `gap-1` would push the title off-centre inside the pill.
 

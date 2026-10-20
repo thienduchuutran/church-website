@@ -25,9 +25,11 @@ The birthday chip is the one chip with *no* fill - a cake with a name under it, 
 
 The same shape had already bitten twice: `deriveRamp().text` on `MonthThemeCard` (fixed 2026-09-15) and the accent-coloured labels before it. The warning was written into `docs/agents/frontend.md` at the time; the birthday chip was simply never checked against it.
 
-**Fix:** Dark mode takes the **light end of the same ramp** (`highlight`) - same hue, opposite brightness, 12-15:1 on the dark ground for all nine colours. Light mode is untouched.
+**Fix:** Light mode keeps the event's own colour, which reads fine there (rose 5.96:1 on the near-white page). **Dark mode uses one warm gold** (`--birthday-ink: #FCD34D`, 12.94:1) for every birthday regardless of the event's colour - it carries the candle warmth the cake already suggests and makes birthdays recognisable at a glance among the other chips.
 
-Done in CSS, not JavaScript: `EventChip` is a server component with no `window.matchMedia`, and a JS swap would render the light-mode colour first and correct itself after hydration. The component passes both values as custom properties and `.ink-on-ground` in `globals.css` picks one under `@media (prefers-color-scheme: dark)`. The PNG export still captures the computed value.
+The owner chose the fixed gold over a derived per-event tint. The trade, taken deliberately: an admin's per-event colour stops showing on the name in dark mode. That colour was decorative here rather than categorical - nothing reads meaning off a birthday's hue the way it does off an event type.
+
+Done in CSS, not JavaScript: `EventChip` is a server component with no `window.matchMedia`, and a JS swap would render the light-mode colour first and correct itself after hydration. The component passes the light-mode colour as `--ink-light` and `.birthday-name` in `globals.css` swaps to the gold under `@media (prefers-color-scheme: dark)`. The PNG export still captures the computed value.
 
 `DayEventsModal` is deliberately **not** changed - its rows sit on `colors.bg`, a light wash in both themes, so dark ink is correct there.
 

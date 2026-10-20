@@ -66,6 +66,9 @@
   /* Matches the page-transition curve so all site motion shares one ease. */
   --ease-card: cubic-bezier(0.22, 1, 0.36, 1);
   /* The logo's gradient, rose into magenta, as a horizontal rule. */
+  /* Birthday names in dark mode - see .birthday-name. Amber rather than a
+     palette hue, so every birthday reads the same whatever colour it is set to. */
+  --birthday-ink: #FCD34D;
   --brand-gradient: linear-gradient(90deg, var(--secondary), var(--primary));
 
   /* ─── Dark-field values ───
@@ -545,28 +548,34 @@ body {
   }
 }
 
-/* Category-coloured text painted straight onto the page, with no fill of its
-   own behind it: the birthday name under its cake, in the grid and in the info
-   strip below it.
+/* The birthday name under its cake - in the grid cell, and again in the info
+   strip's Birthdays column.
 
-   Every other use of a category colour sits on `highlight`, a light tint the
-   component supplies itself, so dark `text` reads fine in either theme. These
-   two have no such fill - they take the page ground, which flips from #f9f8ff
-   to #17101a - and every palette colour fails WCAG AA there: rose 2.97:1,
-   violet 2.63:1, and black an invisible 1.04:1.
+   It is the one chip text with no fill of its own behind it. Every other use of
+   a category colour sits on `highlight`, a light tint the component supplies
+   itself, so the dark `text` value reads fine in either theme. This one takes
+   the page ground, which flips from #f9f8ff to #17101a, and against the dark
+   ground every palette colour fails WCAG AA - rose 2.97:1, violet 2.63:1, and
+   black an invisible 1.04:1.
 
-   So dark mode takes the light end of the same ramp instead. Same hue, opposite
-   brightness, 12-15:1 on the dark ground for all nine. Done with custom
-   properties rather than JS because EventChip is a server component - this way
-   there is no hydration flash and the PNG export captures the computed value.
-   See MonthThemeCard.useAccentInk, which solves the same problem for the accent
-   and is the reason this one was predictable. */
-.ink-on-ground {
+   Light mode keeps the event's own colour, which reads fine there (rose is
+   5.96:1 on the near-white page). Dark mode uses one warm gold for every
+   birthday regardless of the event's colour: it carries the candle warmth the
+   cake already suggests, makes birthdays recognisable at a glance among the
+   other chips, and clears 12.94:1. The trade is that an admin's per-event
+   colour stops showing on the name in dark mode - accepted deliberately, since
+   the colour was decorative here rather than categorical.
+
+   Done with a custom property rather than JS because EventChip is a server
+   component: no hydration flash, and the PNG export captures the computed
+   value. See MonthThemeCard.useAccentInk, which solves the related accent case
+   the other way (there the hue carries meaning, so it keeps it). */
+.birthday-name {
   color: var(--ink-light);
 }
 @media (prefers-color-scheme: dark) {
-  .ink-on-ground {
-    color: var(--ink-dark);
+  .birthday-name {
+    color: var(--birthday-ink);
   }
 }
 
