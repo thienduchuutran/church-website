@@ -573,8 +573,18 @@ body {
 .birthday-name {
   color: var(--ink-light);
 }
+/* Two branches, mirroring how the colour tokens above are defined, and for the
+   same reason. next-themes writes an explicit .light or .dark class onto the
+   root once JS runs - INCLUDING when the visitor's choice is "system" - so a
+   bare `@media (prefers-color-scheme: dark)` rule never matches in a live
+   browser. The class is what actually carries dark mode; the media query is
+   only the pre-hydration / no-JS fallback. A rule with just the media query
+   looks right, compiles, deploys, and does nothing. */
+.dark .birthday-name {
+  color: var(--birthday-ink);
+}
 @media (prefers-color-scheme: dark) {
-  .birthday-name {
+  :root:not(.light):not(.dark) .birthday-name {
     color: var(--birthday-ink);
   }
 }

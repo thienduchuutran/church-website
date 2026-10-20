@@ -29,7 +29,19 @@ The same shape had already bitten twice: `deriveRamp().text` on `MonthThemeCard`
 
 The owner chose the fixed gold over a derived per-event tint. The trade, taken deliberately: an admin's per-event colour stops showing on the name in dark mode. That colour was decorative here rather than categorical - nothing reads meaning off a birthday's hue the way it does off an event type.
 
-Done in CSS, not JavaScript: `EventChip` is a server component with no `window.matchMedia`, and a JS swap would render the light-mode colour first and correct itself after hydration. The component passes the light-mode colour as `--ink-light` and `.birthday-name` in `globals.css` swaps to the gold under `@media (prefers-color-scheme: dark)`. The PNG export still captures the computed value.
+Done in CSS, not JavaScript: `EventChip` is a server component with no `window.matchMedia`, and a JS swap would render the light-mode colour first and correct itself after hydration. The component passes the light-mode colour as `--ink-light` and `.birthday-name` in `globals.css` swaps to the gold. The PNG export still captures the computed value.
+
+**The trap inside the fix, which cost a deploy:** the first version used only `@media (prefers-color-scheme: dark)`, and did nothing at all in a real browser. This project uses **next-themes**, which writes an explicit `.light` or `.dark` class onto the root once JS runs - *including* when the visitor's choice is "system". So the media query only matches pre-hydration or with JS disabled; `.dark` is what actually carries dark mode. A dark-mode rule written with just the media query compiles, deploys, verifies green in the bundle, and has no effect. **Always pair the two**, exactly as the colour tokens at the top of `globals.css` do:
+
+```css
+.thing            { color: var(--light-value); }
+.dark .thing      { color: var(--dark-value); }
+@media (prefers-color-scheme: dark) {
+  :root:not(.light):not(.dark) .thing { color: var(--dark-value); }
+}
+```
+
+Components reading the theme in JS must use `useTheme().resolvedTheme` from next-themes for the same reason - a raw `matchMedia('(prefers-color-scheme: dark)')` listener ignores the toggle. `MonthThemeCard.useAccentInk` does this correctly.
 
 `DayEventsModal` is deliberately **not** changed - its rows sit on `colors.bg`, a light wash in both themes, so dark ink is correct there.
 
