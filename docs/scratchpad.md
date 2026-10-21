@@ -8,6 +8,97 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
+# PLAN (awaiting approval) 2026-10-21 - Make the month view feel like Google Calendar's
+
+**Goal.** On a phone, moving between months should feel like sliding a physical sheet: the next
+month is already there, already populated, and nothing ever greys out or ignores a touch.
+
+**Why it does not feel that way today** (all read from the code, 2026-10-21):
+
+1. Every month is fetched when it is viewed and forgotten when it is left
+   (`CalendarShell.tsx` `fetchMonth` on `[year, month]`; `api.ts` sends `cache: 'no-store'`; the
+   Go handler sets no cache headers). Swiping Oct -> Nov -> Oct is three round-trips. Measured on
+   production: 8.7 KB, ~270 ms each.
+2. `AnimatePresence mode="wait"` runs *old page out, blank, new page in*. The next month does not
+   exist until the current one has left, so a drag can never show it arriving.
+3. While `loading`, the whole shell is `opacity-40 pointer-events-none` (`CalendarShell.tsx:372`) -
+   headline, arrows and grid alike - although the day numbers are pure date math and were never
+   waiting on anything. Input is ignored for the whole window.
+4. Hidden by (3): `fetchMonth` does not clear `events` on a month change and `CalendarGrid` keys
+   chips by **day number only** (`e.date.split('-')[2]`, no month check), so during the loading
+   window the new month's grid renders the *old* month's chips, dimmed. Visible on a slow link.
+
+Google's principle: the screen renders from a local cache that is the source of truth for the
+screen; the server's job is to keep that cache fresh. We imitate the principle (in-memory month
+cache + neighbour prefetch), not the mechanism (a synced local database - overkill for ~25
+events/month).
+
+Phases are in dependency order. Each is one commit and reversible alone. No backend, no schema.
+
+---
+
+## Phase 1 - Month cache + neighbour prefetch (prerequisite for 2 and 3)
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/lib/use-month-cache.ts` (new) | `useMonthCache(accessToken, locale)` over a module-level `Map<string, CalendarMonthResponse>` keyed `${year}-${month}-${locale}-${admin ? 'admin' : 'public'}`. Returns `{ read(y,m), load(y,m), prefetch(y,m), invalidate(y?,m?) }`. `load` returns the cached entry immediately and revalidates in the background (stale-while-revalidate); `prefetch` fetches only if absent; both reuse the existing `getMonth`. | Locale is a different payload; admin responses carry `private_address`/`_source` fields a public one must never show, so admin-ness is in the key rather than cleared by hand. Module-level so the cache survives the shell remounting; the locale switch is a hard navigation, so it does not leak across languages. |
+| `frontend/components/features/calendar/CalendarShell.tsx` | `events`/`monthNote`/`yearContent`/`monthSettings` become *derived* from `read(year, month)` instead of four `useState`s set after a fetch. `fetchMonth` becomes `load`. After the current month resolves, `prefetch(prev)` and `prefetch(next)`. The three write paths that call `fetchMonth` (`:347` after save, `:642` Retry, and the delete path) call `invalidate(year, month)` then `load`. Keep `requestSeq` semantics inside the hook. | Deriving from the cache is what fixes bug (4) for good: the grid can only ever read the entry for the month it is showing. Prefetching neighbours is what makes a swipe land on populated data. Invalidation on writes keeps an admin's own edits visible immediately. |
+| `docs/components.md`, `docs/agents/frontend.md` (lib listing), `docs/agents/known-quirks.md` + `AGENTS.md` routing row | Document the key shape, the SWR behaviour, and bug (4) as a solved quirk. | Project rules; the cache key is the one non-obvious decision. |
+
+**End-to-end:** open `/calendar` -> `load(Oct)` (network, ~270 ms) -> render -> `prefetch(Sep)`,
+`prefetch(Nov)` -> swipe to Nov -> `read(Nov)` is a cache hit -> chips present at first paint ->
+background revalidate -> `prefetch(Dec)`. Back to Oct -> hit, instant.
+
+**Security:** none new. Admin and public payloads cannot cross because they never share a key.
+
+**Estimate:** ~1.5 h.
+
+---
+
+## Phase 2 - Three-page track on touch devices (the "seamless")
+
+| File | Change | Why |
+|---|---|---|
+| `CalendarShell.tsx` | On coarse pointers, replace the `AnimatePresence mode="wait"` page with a **track**: a `motion.div` 300% wide holding three `CalendarGrid`s (prev, current, next), resting at `x = -W`. The existing `drag="x"` moves the track. On release, `handleSwipeEnd` picks a target: `-2W` (next), `0` (prev) or `-W` (snap back), animates there with a velocity-aware spring, then **on settle** steps the month and jumps the track back to `-W` with no animation. Because the new "current" page is the one already sitting in the middle, the jump is invisible - the classic carousel re-centre. Arrows on mobile drive the same animation. | This is ingredient one of Google's feel: the neighbour is *visibly coming in beside the current page while the finger moves*. One mechanism serves swipe and arrows, so they cannot drift apart. Pages read from the phase 1 cache, so neighbours are populated, never blank. |
+| `CalendarShell.tsx` | Container height follows the **current** page: measure the middle page (`ResizeObserver`) and animate the overflow-hidden wrapper's `height` on settle. | Months have 5 or 6 week rows (~92 px apart on mobile). Without this, the wrapper would take the tallest neighbour's height and the info strip below would jump. Google sidesteps it with fixed row heights; we animate instead so the paper-calendar rows keep their size. |
+| `CalendarShell.tsx` | Desktop (`@3xl` / fine pointer) keeps today's single page and slide. Neighbour pages render **only** on coarse pointers. | The PNG export captures the calendar root; three months in the DOM would land in the image. Keeping desktop single-page also keeps the export path byte-identical. |
+| `CalendarGrid.tsx` | No logic change; confirm it is cheap to mount three times (it is: one `useMemo` over ~25 events). | Three instances must not cost a frame. |
+| `docs/components.md` | The track: rest position, re-centre trick, height follow, why desktop differs. | The re-centre is the kind of thing that looks like a bug to the next reader. |
+
+**Decisions made here unless overruled:** spring on release (`type: 'spring'`, stiffness ~300,
+damping ~30, velocity from the drag); headline and info strip update on settle, not mid-drag
+(a mid-drag crossfade is polish for later); distance/velocity thresholds from the current code
+stay.
+
+**Risks:** height animation and re-centre must not flicker - verify with the CDP touch harness
+from the swipe work, which already measures mid-drag transforms. Reduced-motion users keep the
+crossfade with no track movement on release.
+
+**Estimate:** ~3 h.
+
+---
+
+## Phase 3 - Nothing blocks the grid
+
+| File | Change | Why |
+|---|---|---|
+| `CalendarShell.tsx:372` | Remove `opacity-40 pointer-events-none` from the shell root. `loading` no longer dims or disables anything. | The day numbers never needed the server; disabling the arrows and the swipe while a 270 ms request runs is the window the owner asked about. With phases 1-2, `loading` is true only for a cold month that is not a neighbour. |
+| `CalendarGrid.tsx` | The chip containers (desktop cell chips, mobile `day-chips`) get a mount fade-in (`animate-in`-style opacity transition, ~150 ms). | Chips arriving after the grid should slide into place, not pop. Nothing else changes because the grid is already populated from date math. |
+| `CalendarShell.tsx` | Keep the error banner. No spinner on the grid; if any indicator is wanted, a 2 px progress bar under the headline (`data-export-hide`). | Google's pattern - a thin bar, never a greyed grid. Optional; start without it. |
+| `docs/components.md` | The loading contract: what waits (chips, strip, accent) and what never does (grid, arrows, swipe). | So the fade is not reintroduced "for safety" later. |
+
+**Depends on phase 1:** removing the fade without the month-keyed cache would *expose* bug (4).
+
+**Estimate:** ~45 min.
+
+---
+
+**Total:** ~5 h across three commits. Phase 1 alone makes revisits instant; phase 2 is where it
+becomes Google; phase 3 removes the last blocking moment. After phase 2 lands, a real thumb on a
+phone should tune the spring and thresholds - those are judged by feel, not by harness.
+
+---
+
 # SHIPPED 2026-10-14 - Theme and memory verse become yearly, not monthly
 
 **Status:** shipped. Write-up, and the deviations found while building (uuid key, the deferred
