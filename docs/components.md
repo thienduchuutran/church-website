@@ -619,6 +619,43 @@ The block builder for prose pages. Lets an admin add, remove and reorder page se
 
 ---
 
+## `CalendarShell` - where the month's data comes from
+The shell no longer holds `events` / `month_note` / `year_content` / `month_settings` in state. It reads them from a shared month cache, and the grid can only ever show the entry for the month it is on.
+
+**Files:** `lib/month-cache.ts` (pure store, `npm run test:month-cache`), `lib/use-month-cache.ts` (the hook), `CalendarShell.tsx` (consumer)
+
+| Rule | Why |
+|---|---|
+| One module-level `MonthCache` for the tab; the shell calls `read(year, month)` during render | Revisiting a month is instant, and the shell remounting (slide, modal) does not throw the data away. The locale switch is a hard navigation, so nothing leaks across languages. |
+| Key = `year-month-locale-admin` | Vietnamese is a different payload. An admin's payload carries `private_address` and the `_source` fields a public viewer must never see; keeping admin-ness in the key means the two cannot cross. An admin may read the **public** entry as a stand-in while the admin copy loads (a strict subset, so nothing leaks); the reverse never happens. |
+| `load` is stale-while-revalidate; `invalidateAll` marks stale, never deletes | Nothing on screen ever goes blank while a fresher copy is on its way. After any write, every month is marked stale (a repeating series or multi-day span changes months the admin is not looking at) and the current one reloads; the rest refetch on their next prefetch. |
+| After the current month resolves, `prefetch(prev)` and `prefetch(next)` | A swipe lands on a populated page. Prefetch skips anything fresh or in flight and swallows failures - a neighbour that fails to warm is nobody's problem until they go there. |
+| `loading` is true only when `read()` is `null` at load time | A cold month - one nothing cached can stand in for. After the first visit that is almost never. |
+| The accent picker `patch`es `month_settings` into the entry | Saved colour on screen without a round-trip and without a loading window; patching a month that was never loaded is a no-op, not a phantom empty month. |
+| Subscription is via `useSyncExternalStore` on a version number | Every `read` in a render is consistent with the snapshot React took for that render; the store only changes from promise resolutions and event handlers, never mid-render. |
+
+Verified against production data with every API answer held for 3s: November (prefetched), October (revisited) and December (prefetched as November's neighbour) each mounted with their chips on the same tick, with the revalidation request still pending.
+
+**The loading contract.** Nothing dims and nothing is disabled while a month loads. The grid (day numbers, rows, today marker) is date math and paints at once; the arrows and the swipe keep working through a fetch. What waits is the chip layer, the info strip and the accent - and on a cold month a 2px bar (`animate-nav-progress`, `data-export-hide`) runs along the grid's top edge until the data lands, then the chips settle in with `animate-chips-in` (mounted-on-arrival, suppressed under `[data-exporting]` and `prefers-reduced-motion`). The old shell-wide `opacity-40 pointer-events-none` fade is gone on purpose: it turned a 270ms request into a dead grid and was hiding the stale-chip bug above. Do not reintroduce it "for safety".
+
+---
+
+## `CalendarShell` - the three-page month track (phones)
+On touch devices the grid is not one page that leaves and another that arrives; it is a track three pages wide - previous, current, next - resting with the current month in view. Dragging moves the track, so the neighbour is physically arriving beside the current month while the finger is down, which is the thing a page transition cannot do and the reason Google Calendar's month view feels like sliding a sheet.
+
+| Rule | Why |
+|---|---|
+| `motion.div` track, `w-[300%]`, pages `w-1/3`, `x` is a `MotionValue` resting at `-W` | `W` is the slide wrapper's width, measured in a layout effect with a `ResizeObserver` (rotation re-centres). `drag="x"` moves the track; `dragConstraints` stop a drag running past the neighbour; `dragMomentum` is off because the release is ours. |
+| Release: spring to `-2W` (next), `0` (previous) or `-W` (snap back), inheriting the drag's velocity; the arrows call the same `slideTrack` | One mechanism for swipe and arrows, so they cannot drift apart. Commit thresholds are the swipe's (25% of width or 500px/s). |
+| On settle: `flushSync` the month step, then `trackX.jump(-W)` | The page that was the neighbour is now the current one, sitting exactly where the jump puts it, so the re-centre is invisible. `flushSync` makes React commit the re-ordered pages in the same frame as the jump; without it one frame shows the wrong page. The step is skipped if a finger interrupted the spring before it arrived. |
+| Pages read from the month cache and wear their own month's colours | Neighbours are populated because phase 1 prefetched them; each page's header tint is its month's saved accent or static theme, so the month arriving beside you already looks like itself. Only the middle page takes taps. |
+| The wrapper's height follows the **current** page (callback ref + `ResizeObserver`, CSS height transition) | Months have 5 or 6 week rows; without this the wrapper would take the tallest neighbour's height and the info strip below would jump. |
+| Desktop keeps the single page and its 48px slide; neighbours carry `data-export-hide` and `[data-exporting]` rules flatten the track | The PNG captures the calendar root. An admin exporting from a phone still has the track mounted: the filter drops the neighbours and the CSS removes the translate and restores full width and natural height, so the PNG is the same single month as from a desktop. |
+
+Verified with genuine CDP touch against production data: mid-drag the next page's left edge was inside the viewport (`238px` of 390) while the finger was still down; swipe, snap-back, flick and arrow all settled at `-W` with the right month in the middle; the wrapper height followed the current page (`497 <-> 501`); the export flattening produced `transform: none` and a single full-width page; no console errors.
+
+---
+
 ## `CalendarShell` - swipe to change month
 On touch devices the month grid is draggable: pull it sideways and it follows the finger, let go and it either turns the page or springs back. Same gesture as Google Calendar's month view. The arrows are unchanged and remain the only way on desktop.
 

@@ -15,6 +15,30 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## The month grid briefly showed the previous month's chips on the new month's day numbers
+**Date solved:** 2026-10-21
+**Symptom:** Arrow or swipe from October to November and, for the length of the
+fetch, November's grid carried October's chips on the matching day numbers -
+dimmed to 40% by the loading fade, which is why it went unnoticed. On a slow
+connection it was plainly visible.
+**Root cause:** `fetchMonth` never cleared `events` on a month change - the old
+array stayed in state until the new response replaced it - and `CalendarGrid`
+keys chips by **day number only** (`parseInt(e.date.split('-')[2])`, no month
+check), so October's "Oct 3" chip rendered in November's "3" cell. The
+shell-wide `opacity-40 pointer-events-none` fade was masking it, not fixing it.
+**Fix:** The shell no longer holds month data in state. It derives it from the
+month cache (`lib/month-cache.ts`, `lib/use-month-cache.ts`) via
+`read(year, month)`, so the grid can only ever receive the entry for the month
+it is showing - a different month's events are structurally unreachable. The
+same change makes revisited months instant and prefetches the neighbours.
+**Rule of thumb:** data that is keyed by one dimension on screen (the month)
+must be looked up by that dimension, not left in state across changes of it.
+**Files affected:** `frontend/components/features/calendar/CalendarShell.tsx`,
+`frontend/lib/month-cache.ts`, `frontend/lib/use-month-cache.ts`,
+`frontend/lib/__tests__/month-cache.test.ts`.
+
+---
+
 ## Category-coloured text is unreadable in dark mode wherever it has no fill behind it
 **Date solved:** 2026-10-19
 **Symptom:** In dark mode the birthday name under its cake was too dim to read - in the grid and again in the info strip's Birthdays column. Reported as "the red names", but it was never specific to red.

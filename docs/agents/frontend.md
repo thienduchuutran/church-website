@@ -98,6 +98,8 @@ frontend/
 │   ├── auth.tsx                        ← AuthProvider/useAuth: session, isAdmin, loading, plus a display-only `hint` from sessionStorage so the navbar draws the right account control on the first paint after a language-switch reload
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
 │   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale; event-type + palette CRUD)
+│   ├── month-cache.ts                  ← MonthCache: the calendar's stale-while-revalidate month store, keyed year-month-locale-admin; pure, `npm run test:month-cache`
+│   ├── use-month-cache.ts              ← React hook over one shared MonthCache (read/load/prefetch/patch/invalidateAll); CalendarShell derives its month data from it
 │   ├── connect-summary.ts              ← getConnectSummary(locale): service line + address from the Connect page sections; "TODO..." placeholders count as unset. Feeds the hero and SiteFooter
 │   ├── color.ts                        ← Custom-color math: deriveRamp/contrastRatio/normalizeHexInput. Expands one admin hex into the 4-value ramp the calendar paints with, guaranteeing WCAG AA on BOTH contrast pairs (see below)
 │   ├── discord.ts                      ← Discord link API (getDiscordStatus / getDiscordLinkUrl)

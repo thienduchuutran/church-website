@@ -8,7 +8,9 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
-# PLAN (awaiting approval) 2026-10-21 - Make the month view feel like Google Calendar's
+# BUILT 2026-10-21 (awaiting push) - Make the month view feel like Google Calendar's
+
+**Status:** all three phases built and verified against production data with CDP touch; write-ups in `docs/components.md`. Deviations from the plan below: none of substance - the only addition was flattening the track for an admin exporting from a phone, which the plan's "desktop keeps a single page" line did not cover.
 
 **Goal.** On a phone, moving between months should feel like sliding a physical sheet: the next
 month is already there, already populated, and nothing ever greys out or ignores a touch.
