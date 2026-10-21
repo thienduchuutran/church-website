@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
-import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
+import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useReducedMotion } from 'motion/react'
 import { useLocale } from 'next-intl'
 import { CaretLeft, CaretRight, Plus, Palette, DownloadSimple } from '@phosphor-icons/react'
 import { upsertMonthSettings } from '@/lib/calendar'
@@ -229,16 +229,26 @@ export default function CalendarShell({
     setPageHeight(node.offsetHeight)
     currentPageObserver.current = ro
   }, [])
-  // Where the current pointer went down, so the click guard below can tell a
-  // tap from the click a browser synthesizes when a finger lifts after a drag.
-  // Measured from the pointer itself rather than tracked as a "dragging" flag
-  // set at drag start and cleared at drag end: the browser can end a touch
-  // with pointercancel (it decided to scroll, for instance), motion fires no
-  // onDragEnd for that, and a flag would stay stuck and eat the next real tap.
-  const pointerDownXRef = useRef<number | null>(null)
-  // Below this, finger movement is a tap with wobble; above it, a drag whose
-  // lift must not open the day sheet underneath.
-  const TAP_SLOP_PX = 10
+  // Tap-vs-swipe arbitration for the day cells. A firm finger that lands and
+  // rolls a few pixels still produces a browser click - the browser's own tap
+  // slop is ~10px - so comparing positions alone cannot tell a tap from the
+  // start of a swipe: the page would visibly move under the finger and the
+  // day sheet would open anyway. Two stronger signals, both reset at every
+  // pointerdown so nothing can stick across a pointercancel:
+  //   - the track moved under the finger (motion's drag started), or
+  //   - the pointer travelled more than TAP_SLOP_PX on either axis.
+  // Either one means "that was a swipe", and the click a finger-up can
+  // synthesize is swallowed before it reaches a day cell. A click while the
+  // track is still settling from the last swipe is swallowed too.
+  const gestureRef = useRef({ x: 0, y: 0, moved: 0, dragged: false })
+  const TAP_SLOP_PX = 8
+  // The track's drag is started by hand from the wrapper's pointerdown with
+  // TAP_SLOP_PX as the distance threshold, instead of motion's own listener
+  // and its 3px default. That gives the gesture a dead zone: for the first 8px
+  // nothing moves, so a firm finger that rolls a little lifts as a clean tap;
+  // from 8px on the page is moving under the finger and the lift is a swipe.
+  // The same slop iOS and Android use to tell the two apart.
+  const trackDrag = useDragControls()
 
   // Slide the track one page in `dir` (+1 next, -1 previous), then step the
   // month and re-centre. Both the swipe release and the arrows come through
@@ -769,10 +779,17 @@ export default function CalendarShell({
             coarsePointer ? 'transition-[height] duration-200 ease-out' : '',
           ].join(' ')}
           style={coarsePointer && pageHeight ? { height: pageHeight } : undefined}
-          onPointerDownCapture={(e) => { pointerDownXRef.current = e.clientX }}
+          onPointerDownCapture={(e) => {
+            gestureRef.current = { x: e.clientX, y: e.clientY, moved: 0, dragged: false }
+            if (coarsePointer) trackDrag.start(e, { distanceThreshold: TAP_SLOP_PX })
+          }}
+          onPointerMoveCapture={(e) => {
+            const g = gestureRef.current
+            g.moved = Math.max(g.moved, Math.abs(e.clientX - g.x), Math.abs(e.clientY - g.y))
+          }}
           onClickCapture={(e) => {
-            const downX = pointerDownXRef.current
-            if (downX !== null && Math.abs(e.clientX - downX) > TAP_SLOP_PX) {
+            const g = gestureRef.current
+            if (g.dragged || g.moved > TAP_SLOP_PX || settlingRef.current) {
               e.stopPropagation()
               e.preventDefault()
             }
@@ -798,12 +815,20 @@ export default function CalendarShell({
             <motion.div
               data-month-track
               className="flex items-start w-[300%]"
-              style={{ x: trackX }}
+              // touch-action is ours to declare now that the drag is started by
+              // hand (dragListener={false} means motion no longer sets it).
+              // Without pan-y the browser treats a horizontal touch as a pan it
+              // owns and fires pointercancel on the first move - the drag
+              // starts, then dies. pan-y keeps vertical page scrolling native
+              // and leaves horizontal movement to the track.
+              style={{ x: trackX, touchAction: 'pan-y' }}
               drag="x"
+              dragListener={false}
+              dragControls={trackDrag}
               dragConstraints={{ left: -2 * pageWidth, right: 0 }}
               dragElastic={0.15}
               dragMomentum={false}
-              onDragStart={() => { settlingRef.current = false }}
+              onDragStart={() => { settlingRef.current = false; gestureRef.current.dragged = true }}
               onDragEnd={(_, info) => handleTrackDragEnd(info.offset.x, info.velocity.x)}
             >
               {([-1, 0, 1] as const).map((delta) => {
