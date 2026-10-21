@@ -313,16 +313,23 @@ export default function CalendarGrid({
                       the mobile grid and the PNG export. Capped to the cell's
                       row budget; the remainder collapses into the "+N more" line
                       below so the cell height stays uniform in the export. */}
-                  {visibleChips.map((e) => (
-                    <EventChip
-                      key={e.id}
-                      title={e.title}
-                      subtitle={chipSubtitle(e)}
-                      icon={e.icon}
-                      color={e.color}
-                      tooltip={e.notes ?? e.title}
-                    />
-                  ))}
+                  {/* Wrapped and conditional so the container mounts when the
+                      month's data lands and animate-chips-in runs exactly then -
+                      the grid itself was already painted from date math. */}
+                  {visibleChips.length > 0 && (
+                    <div className="flex flex-col gap-1 animate-chips-in">
+                      {visibleChips.map((e) => (
+                        <EventChip
+                          key={e.id}
+                          title={e.title}
+                          subtitle={chipSubtitle(e)}
+                          icon={e.icon}
+                          color={e.color}
+                          tooltip={e.notes ?? e.title}
+                        />
+                      ))}
+                    </div>
+                  )}
 
                   {/* Overflow indicator - LIVE ONLY. data-export-hide drops it
                       from the PNG (the filter in exportCalendarToPng), because a
@@ -480,7 +487,7 @@ export default function CalendarGrid({
                       Sits directly under its own date number - no mt-auto - so
                       the tighter gap is always the one to the owning day. */}
                   {visibleEvents.length > 0 && (
-                    <div className="flex flex-col gap-[3px] min-w-0">
+                    <div className="flex flex-col gap-[3px] min-w-0 animate-chips-in">
                       {visibleEvents.map((e) => (
                         <EventChip key={e.id} title={e.title} subtitle={chipSubtitle(e)} icon={e.icon} color={e.color} compact />
                       ))}

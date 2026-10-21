@@ -589,6 +589,27 @@ body {
   }
 }
 
+/* Calendar chips arriving after the grid. The grid is date math and paints at
+   once; the chips come from the month cache (instantly, if the month was
+   prefetched) or from the network. Either way they settle in rather than pop.
+   The container only renders once there are chips, so a month that loads cold
+   animates once when its data lands and never again. The export must not
+   capture a half-faded chip: [data-export-reveal] chips become visible at
+   capture time and would otherwise restart this. */
+@keyframes chips-in {
+  from { opacity: 0; transform: translateY(2px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.animate-chips-in {
+  animation: chips-in 180ms ease-out both;
+}
+[data-exporting] .animate-chips-in {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-chips-in { animation: none; }
+}
+
 /* Calendar PNG export - reveal per-day overflow events.
    The live desktop grid caps how many events a day cell shows and collapses the
    rest behind a clickable "+N more" (opens DayEventsModal). A PNG has no click

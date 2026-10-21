@@ -452,7 +452,13 @@ export default function CalendarShell({
 
   return (
     <>
-      <div className={`transition-opacity duration-200 ${loading ? 'opacity-40 pointer-events-none' : 'opacity-100'}`}>
+      {/* Nothing here dims or disables while a month loads. The day numbers
+          are date math and never waited on the server; the arrows and the
+          swipe must keep working through a fetch (the old pointer-events-none
+          turned a 270ms request into a dead grid, and masked a stale-chip bug
+          besides - see known-quirks). Loading shows as the thin bar inside the
+          slide wrapper, never as a greyed-out calendar. */}
+      <div>
 
         {/* Editorial masthead. Mobile stacks: row 1 = headline (full width),
             row 2 = Today (left) and nav arrows (right). Desktop is one row:
@@ -772,6 +778,14 @@ export default function CalendarShell({
             }
           }}
         >
+          {/* Cold-month indicator - a 2px bar, the way Google shows loading.
+              With the month cache this appears for a first-ever visit to a
+              month and almost never after; the chips arrive, the bar goes. */}
+          {loading && (
+            <div data-export-hide aria-hidden="true" className="absolute inset-x-0 top-0 z-10 h-0.5 overflow-hidden">
+              <div className="animate-nav-progress h-full w-full origin-left" style={{ backgroundColor: activeAccent }} />
+            </div>
+          )}
           {coarsePointer ? (
             /* Phones: the three-page track (see the comment at trackX). drag="x"
                moves the whole track with the finger - motion sets
