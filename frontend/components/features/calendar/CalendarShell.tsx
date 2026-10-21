@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useLocale } from 'next-intl'
 import { CaretLeft, CaretRight, Plus, Palette, DownloadSimple } from '@phosphor-icons/react'
-import { getMonth, upsertMonthSettings } from '@/lib/calendar'
+import { upsertMonthSettings } from '@/lib/calendar'
 import { groupEventsByPlace } from '@/lib/places'
-import { CalendarMonthResponse, CalendarEvent, CalendarMonthNote, CalendarYearContent, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP, resolveColor } from './types'
+import { useMonthCache } from '@/lib/use-month-cache'
+import { shiftMonth } from '@/lib/month-cache'
+import { CalendarEvent, CalendarMonthSettings, MONTH_THEMES, COLOR_MAP, resolveColor } from './types'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
 import CalendarGrid from './CalendarGrid'
 import CakeMarker from './CakeMarker'
@@ -110,10 +112,18 @@ export default function CalendarShell({
   onExport,
   exporting,
 }: CalendarShellProps) {
-  const [events, setEvents] = useState<CalendarEvent[]>([])
-  const [monthNote, setMonthNote] = useState<CalendarMonthNote | null>(null)
-  const [yearContent, setYearContent] = useState<CalendarYearContent | null>(null)
-  const [monthSettings, setMonthSettings] = useState<CalendarMonthSettings | null>(null)
+  // Month data is read from the shared cache rather than held in state: the
+  // grid can then only ever show the entry for the month it is on, revisited
+  // months render instantly, and the neighbours are warmed for the swipe.
+  // `loading` is true only for a cold month - one nothing cached can stand in
+  // for - which after the first visit means almost never.
+  const locale = useLocale()
+  const monthCache = useMonthCache(accessToken, locale)
+  const current = monthCache.read(year, month)
+  const events = current?.events ?? []
+  const monthNote = current?.month_note ?? null
+  const yearContent = current?.year_content ?? null
+  const monthSettings = current?.month_settings ?? null
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -220,8 +230,8 @@ export default function CalendarShell({
   // title_source/notes_source alongside the translated title/notes, and
   // EventModal pre-fills from those. Without that pair, saving an event while
   // viewing Vietnamese would overwrite the canonical English source with a
-  // machine translation.
-  const locale = useLocale()
+  // machine translation. (`locale` itself is declared up with the month cache,
+  // which reads it first.)
 
   // Stamps every in-flight request so a slow earlier response can't overwrite a
   // newer one. Overlapping calls are normal here - fast arrow clicks fire one
@@ -231,16 +241,20 @@ export default function CalendarShell({
 
   const fetchMonth = useCallback(async (y: number, m: number) => {
     const seq = ++requestSeq.current
-    setLoading(true)
+    // Only a cold month waits. Anything already cached (even stale, even the
+    // public copy standing in for an admin) stays on screen while this
+    // revalidates behind it.
+    if (!monthCache.read(y, m)) setLoading(true)
     setError(null)
     try {
-      const data: CalendarMonthResponse = await getMonth(y, m, accessToken, locale)
+      await monthCache.load(y, m)
       if (seq !== requestSeq.current) return
-      setEvents(data.events ?? [])
-      setMonthNote(data.month_note ?? null)
-      setYearContent(data.year_content ?? null)
-      setMonthSettings(data.month_settings ?? null)
       setLiveAccent(null)
+      // Warm both neighbours so the next swipe lands on a populated page.
+      const prev = shiftMonth(y, m, -1)
+      const next = shiftMonth(y, m, 1)
+      void monthCache.prefetch(prev.year, prev.month)
+      void monthCache.prefetch(next.year, next.month)
     } catch {
       if (seq !== requestSeq.current) return
       setError("Couldn't load calendar. Please try again.")
@@ -249,7 +263,7 @@ export default function CalendarShell({
       // would un-dim the grid while the real fetch is still running.
       if (seq === requestSeq.current) setLoading(false)
     }
-  }, [accessToken, locale])
+  }, [monthCache])
 
   // Persist the accent for the currently-viewed month. The picker awaits the
   // returned promise so it can show its own inline error if the PUT fails.
@@ -258,7 +272,7 @@ export default function CalendarShell({
     setSavingAccent(true)
     try {
       const saved: CalendarMonthSettings = await upsertMonthSettings(year, month, hex, accessToken)
-      setMonthSettings(saved)
+      monthCache.patch(year, month, { month_settings: saved })
       setLiveAccent(null)
       setAccentSaved(true)
       window.setTimeout(() => setAccentSaved(false), 2500)
@@ -342,8 +356,11 @@ export default function CalendarShell({
 
   function handleEventSaved() {
     // Modal plays its own exit animation, so we don't unmount it here -
-    // just clear return-to-list state and refresh the month data.
+    // just clear return-to-list state and refresh the month data. Every
+    // cached month is marked stale, not just this one: a repeating series or
+    // a multi-day span changes months the admin is not looking at.
     setReturnToListDate(null)
+    monthCache.invalidateAll()
     fetchMonth(year, month)
   }
 

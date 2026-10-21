@@ -11,7 +11,8 @@
     "start": "next start",
     "lint": "eslint",
     "test:color": "node --experimental-strip-types --test lib/__tests__/color.test.ts",
-    "test:places": "node --experimental-strip-types --test lib/__tests__/places.test.ts"
+    "test:places": "node --experimental-strip-types --test lib/__tests__/places.test.ts",
+    "test:month-cache": "node --experimental-strip-types --test lib/__tests__/month-cache.test.ts"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
