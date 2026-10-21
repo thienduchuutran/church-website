@@ -15,6 +15,35 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## A firm, slightly rolling touch on the month grid opened the day sheet instead of swiping
+**Date solved:** 2026-10-21
+**Symptom:** On a phone, starting a swipe with a heavy thumb - the finger lands
+and rolls 5-8px before lifting - opened the day sheet (or, for an admin, the
+create-event modal) for whatever day was underneath, even though the grid had
+visibly moved under the finger.
+**Root cause:** Two layers. The browser synthesizes a click for any touch
+that stays inside its own tap slop (~10px), and the click guard only compared
+the click's X to the pointerdown X with a 10px allowance, so an 8px roll that
+had already started motion's drag (3px default threshold) and moved the track
+5px still passed as a tap. Reproduced on production with CDP touch: an 8px
+roll moved the track 5px and opened the sheet.
+**Fix:** The guard now swallows a click when the drag started, when the
+pointer travelled more than 8px on either axis, or while the track is
+settling - all reset at every pointerdown. And the drag itself has a dead
+zone: the track uses `dragListener={false}` and the wrapper starts the drag
+with `trackDrag.start(e, { distanceThreshold: TAP_SLOP_PX })`, so nothing
+moves for the first 8px (the platform's own tap slop) and a lift inside it is
+a clean tap.
+**Trap found on the way:** with `dragListener={false}` motion no longer sets
+`touch-action` on the element. Every drag then died on its first move - the
+browser claimed the horizontal touch as a pan and fired `pointercancel`. The
+track now declares `touch-action: pan-y` itself. If a motion drag ever
+"starts then snaps back instantly" on touch, check the computed touch-action
+before anything else.
+**Files affected:** `frontend/components/features/calendar/CalendarShell.tsx`.
+
+---
+
 ## The month grid briefly showed the previous month's chips on the new month's day numbers
 **Date solved:** 2026-10-21
 **Symptom:** Arrow or swipe from October to November and, for the length of the
