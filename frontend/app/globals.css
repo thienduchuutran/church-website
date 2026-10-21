@@ -636,3 +636,19 @@ body {
 [data-exporting] {
   --calendar-lane-h: 42px;
 }
+
+/* Calendar PNG export - flatten the phone's three-page month track. An admin
+   exporting from a phone still has the track mounted. The neighbour pages are
+   dropped by the data-export-hide filter; these rules put the one page left
+   where a single page would be - no translate, full width, natural height -
+   so the PNG is the same single month it is from a desktop. */
+[data-exporting] [data-month-track] {
+  transform: none !important;
+  width: 100% !important;
+}
+[data-exporting] [data-month-page] {
+  width: 100% !important;
+}
+[data-exporting] [data-month-track-wrap] {
+  height: auto !important;
+}

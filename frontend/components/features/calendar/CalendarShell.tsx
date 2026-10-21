@@ -1,7 +1,8 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
+import { AnimatePresence, animate, motion, useMotionValue, useReducedMotion } from 'motion/react'
 import { useLocale } from 'next-intl'
 import { CaretLeft, CaretRight, Plus, Palette, DownloadSimple } from '@phosphor-icons/react'
 import { upsertMonthSettings } from '@/lib/calendar'
@@ -39,18 +40,16 @@ const LETTER_BOUNCE: { y: string; r: number }[] = [
   { y: '-0.02em', r: -1.5 },
 ]
 
-// Direction-aware slide variants. `dir` is +1 (forward in time) or -1 (back).
-// New month enters from the side it's traveling toward; old month exits the
-// opposite side. `distance` is how far it travels: the arrows use a subtle 48px
-// so the motion stays a hint, not a flourish, while a finger swipe uses the
-// grid's full width so the page the visitor threw keeps going off-screen
-// instead of sliding back toward centre as it fades.
+// Direction-aware slide variants for the desktop arrows. `dir` is +1 (forward
+// in time) or -1 (back). New month enters from the side it's traveling toward;
+// old month exits the opposite side. Subtle distance (48px) keeps the motion
+// as a hint, not a flourish. Phones do not use these: they get the three-page
+// track below, where the neighbour is physically beside the current month.
 const SLIDE_DISTANCE = 48
-interface SlideCustom { dir: number; distance: number }
 const slideVariants = {
-  enter: ({ dir, distance }: SlideCustom) => ({ x: dir * distance, opacity: 0 }),
+  enter: (dir: number) => ({ x: dir * SLIDE_DISTANCE, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit: ({ dir, distance }: SlideCustom) => ({ x: -dir * distance, opacity: 0 }),
+  exit: (dir: number) => ({ x: -dir * SLIDE_DISTANCE, opacity: 0 }),
 }
 
 // Swipe-to-change-month, phones only. A drag commits when the finger has
@@ -59,6 +58,9 @@ const slideVariants = {
 // springs back while a quick flick still turns the page.
 const SWIPE_COMMIT_FRACTION = 0.25
 const SWIPE_COMMIT_VELOCITY = 500
+// Release physics for the track: a spring that inherits the drag's velocity,
+// so a flick settles quickly and a gentle release settles gently.
+const TRACK_SPRING = { type: 'spring' as const, stiffness: 300, damping: 32 }
 
 // True on devices with no hover (phones, tablets). The grid is draggable only
 // there: on a desktop a mouse drag across the month would fight text selection
@@ -165,27 +167,68 @@ export default function CalendarShell({
   const direction =
     monthPosition === prevPositionRef.current ? 0 : monthPosition > prevPositionRef.current ? 1 : -1
 
-  // Set by a committed swipe right before it steps the month, so the render
-  // that starts the transition can read it; every other way of changing the
-  // month (arrows, Today, the picker) finds it null and gets the subtle default.
-  const swipeDistanceRef = useRef<number | null>(null)
-  // The last real navigation, held across the re-renders that happen mid-
-  // transition (fetchMonth toggles `loading` almost immediately). `direction`
-  // itself drops back to 0 on those renders, so the entering month - which
-  // under mode="wait" only mounts after the exit finishes - needs this stable
-  // copy rather than the live value.
-  const lastSlideRef = useRef<SlideCustom>({ dir: 1, distance: SLIDE_DISTANCE })
-  if (direction !== 0) {
-    lastSlideRef.current = { dir: direction, distance: swipeDistanceRef.current ?? SLIDE_DISTANCE }
-  }
-  const slideCustom = lastSlideRef.current
+  // The last real navigation direction, held across the re-renders that
+  // happen mid-transition (fetchMonth toggles `loading` almost immediately).
+  // `direction` itself drops back to 0 on those renders, so the entering month
+  // - which under mode="wait" only mounts after the exit finishes - needs this
+  // stable copy rather than the live value.
+  const lastDirRef = useRef(1)
+  if (direction !== 0) lastDirRef.current = direction
+  const slideDir = lastDirRef.current
   useEffect(() => {
     prevPositionRef.current = monthPosition
-    swipeDistanceRef.current = null
   }, [monthPosition])
 
   const coarsePointer = useCoarsePointer()
   const slideWrapRef = useRef<HTMLDivElement>(null)
+
+  // ---- Phone month track ---------------------------------------------------
+  // Three pages (previous, current, next) side by side in a track three times
+  // the grid's width, resting with the current month in view. Dragging moves
+  // the track, so the neighbour is physically arriving beside the current
+  // month while the finger moves - the one thing a page transition cannot do.
+  // On release the track springs to the nearest page; once it lands on a
+  // neighbour, the month steps and the track jumps back to rest in the same
+  // frame. The page that was the neighbour is now the current one, sitting
+  // exactly where the jump puts it, so nothing visibly moves. Pages read from
+  // the month cache, which has already warmed both neighbours.
+  const trackX = useMotionValue(0)
+  const [pageWidth, setPageWidth] = useState(0)
+  const pageWidthRef = useRef(0)
+  const settlingRef = useRef(false)
+  useLayoutEffect(() => {
+    if (!coarsePointer) return
+    const el = slideWrapRef.current
+    if (!el) return
+    const measure = () => {
+      const w = el.clientWidth
+      pageWidthRef.current = w
+      setPageWidth(w)
+      // Re-centre on resize (rotation), but never yank the track out from
+      // under an in-flight settle.
+      if (!settlingRef.current) trackX.jump(-w)
+    }
+    measure()
+    const ro = new ResizeObserver(measure)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [coarsePointer, trackX])
+
+  // The wrapper follows the CURRENT page's height, not the tallest neighbour's
+  // (months have 5 or 6 week rows), so the info strip below never jumps for a
+  // month the visitor is not on. Callback ref because the current page is a
+  // different element after every step.
+  const [pageHeight, setPageHeight] = useState<number | undefined>(undefined)
+  const currentPageObserver = useRef<ResizeObserver | null>(null)
+  const currentPageRef = useCallback((node: HTMLDivElement | null) => {
+    currentPageObserver.current?.disconnect()
+    currentPageObserver.current = null
+    if (!node) return
+    const ro = new ResizeObserver(() => setPageHeight(node.offsetHeight))
+    ro.observe(node)
+    setPageHeight(node.offsetHeight)
+    currentPageObserver.current = ro
+  }, [])
   // Where the current pointer went down, so the click guard below can tell a
   // tap from the click a browser synthesizes when a finger lifts after a drag.
   // Measured from the pointer itself rather than tracked as a "dragging" flag
@@ -197,17 +240,40 @@ export default function CalendarShell({
   // lift must not open the day sheet underneath.
   const TAP_SLOP_PX = 10
 
+  // Slide the track one page in `dir` (+1 next, -1 previous), then step the
+  // month and re-centre. Both the swipe release and the arrows come through
+  // here on phones, so the two cannot drift apart.
+  function slideTrack(dir: 1 | -1, velocity = 0) {
+    const w = pageWidthRef.current
+    if (!w || settlingRef.current) return
+    settlingRef.current = true
+    const target = dir === 1 ? -2 * w : 0
+    const transition = reduceMotion ? { duration: 0 } : { ...TRACK_SPRING, velocity }
+    animate(trackX, target, transition).then(() => {
+      // A finger grabbing the track mid-flight stops this animation; the step
+      // must only happen if the page actually arrived.
+      if (Math.abs(trackX.get() - target) > 1) { settlingRef.current = false; return }
+      // flushSync so React commits the re-ordered pages in the same frame as
+      // the jump below - otherwise one frame would show the wrong page.
+      flushSync(() => { if (dir === 1) nextMonth(); else prevMonth() })
+      trackX.jump(-w)
+      settlingRef.current = false
+    })
+  }
+
   // Finger-up after a horizontal drag. Commit on distance or speed, in the
   // direction of travel (dragging left pulls the next month in from the right,
-  // like turning a page); anything less snaps back via dragSnapToOrigin.
-  function handleSwipeEnd(offsetX: number, velocityX: number) {
-    const width = slideWrapRef.current?.clientWidth ?? 0
-    const far = width > 0 && Math.abs(offsetX) > width * SWIPE_COMMIT_FRACTION
+  // like turning a page); anything less springs back to the current page.
+  function handleTrackDragEnd(offsetX: number, velocityX: number) {
+    const w = pageWidthRef.current
+    const far = w > 0 && Math.abs(offsetX) > w * SWIPE_COMMIT_FRACTION
     const fast = Math.abs(velocityX) > SWIPE_COMMIT_VELOCITY
-    if (!far && !fast) return
-    swipeDistanceRef.current = width || SLIDE_DISTANCE
-    if (offsetX < 0) nextMonth()
-    else prevMonth()
+    if (far || fast) {
+      const dir: 1 | -1 = far ? (offsetX < 0 ? 1 : -1) : (velocityX < 0 ? 1 : -1)
+      slideTrack(dir, velocityX)
+    } else {
+      animate(trackX, -w, reduceMotion ? { duration: 0 } : { ...TRACK_SPRING, velocity: velocityX })
+    }
   }
 
   const theme = MONTH_THEMES[month]
@@ -543,7 +609,7 @@ export default function CalendarShell({
               Saturday cells the way a fixed bottom-right FAB would. */}
           <div data-export-hide className="[grid-area:nav] justify-self-end flex items-center gap-1.5 @xl:gap-2 shrink-0">
             <button
-              onClick={prevMonth}
+              onClick={() => (coarsePointer ? slideTrack(-1) : prevMonth())}
               aria-label={`Previous month - ${prevMonthName}`}
               title={prevMonthName}
               className="w-12 h-12 flex items-center justify-center rounded-full border-2 border-foreground bg-surface text-foreground hover:bg-foreground hover:text-background active:scale-95 transition-all duration-200"
@@ -551,7 +617,7 @@ export default function CalendarShell({
               <CaretLeft size={20} weight="bold" />
             </button>
             <button
-              onClick={nextMonth}
+              onClick={() => (coarsePointer ? slideTrack(1) : nextMonth())}
               aria-label={`Next month - ${nextMonthName}`}
               title={nextMonthName}
               className="w-12 h-12 flex items-center justify-center rounded-full border-2 border-foreground bg-surface text-foreground hover:bg-foreground hover:text-background active:scale-95 transition-all duration-200"
@@ -691,7 +757,12 @@ export default function CalendarShell({
             the padding to be there. */}
         <div
           ref={slideWrapRef}
-          className="relative overflow-hidden -mx-4 @3xl:mx-0"
+          data-month-track-wrap
+          className={[
+            'relative overflow-hidden -mx-4 @3xl:mx-0',
+            coarsePointer ? 'transition-[height] duration-200 ease-out' : '',
+          ].join(' ')}
+          style={coarsePointer && pageHeight ? { height: pageHeight } : undefined}
           onPointerDownCapture={(e) => { pointerDownXRef.current = e.clientX }}
           onClickCapture={(e) => {
             const downX = pointerDownXRef.current
@@ -701,35 +772,79 @@ export default function CalendarShell({
             }
           }}
         >
-          {/* Swipe to change month on touch devices - the same Google Calendar
-              gesture as the full-bleed grid. drag="x" lets the page follow the
-              finger (motion sets touch-action: pan-y, so vertical scrolling is
-              untouched); dragSnapToOrigin springs it back unless handleSwipeEnd
-              commits, in which case the key changes and the exit variant
-              carries the page the rest of the way off-screen. */}
-          <AnimatePresence mode="wait" initial={false} custom={slideCustom}>
+          {coarsePointer ? (
+            /* Phones: the three-page track (see the comment at trackX). drag="x"
+               moves the whole track with the finger - motion sets
+               touch-action: pan-y, so vertical scrolling is untouched - and
+               the constraints stop a drag running past the neighbour. Only the
+               middle page takes taps; the neighbours are visible mid-drag and
+               nothing else. Neighbours carry data-export-hide and the
+               [data-exporting] rules in globals.css flatten the track, so an
+               admin exporting from a phone still gets a single-month PNG. */
             <motion.div
-              key={`${year}-${month}`}
-              custom={slideCustom}
-              variants={reduceMotion ? reducedMotionVariants : slideVariants}
-              initial="enter"
-              animate="center"
-              exit="exit"
-              transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
-              drag={coarsePointer ? 'x' : false}
-              dragSnapToOrigin
-              onDragEnd={(_, info) => handleSwipeEnd(info.offset.x, info.velocity.x)}
+              data-month-track
+              className="flex items-start w-[300%]"
+              style={{ x: trackX }}
+              drag="x"
+              dragConstraints={{ left: -2 * pageWidth, right: 0 }}
+              dragElastic={0.15}
+              dragMomentum={false}
+              onDragStart={() => { settlingRef.current = false }}
+              onDragEnd={(_, info) => handleTrackDragEnd(info.offset.x, info.velocity.x)}
             >
-              <CalendarGrid
-                year={year}
-                month={month}
-                events={events}
-                onDayClick={handleDayClick}
-                isAdmin={isAdmin}
-                theme={activeTheme}
-              />
+              {([-1, 0, 1] as const).map((delta) => {
+                const page = shiftMonth(year, month, delta)
+                const data = monthCache.read(page.year, page.month)
+                const base = MONTH_THEMES[page.month]
+                // Each page wears its own month's colours - the current one
+                // including the live accent preview, a neighbour its saved
+                // accent or the static theme - so the month arriving beside
+                // you already looks like itself.
+                const accent = data?.month_settings?.accent_color ?? base.header
+                const pageTheme = delta === 0 ? activeTheme : { ...base, header: accent, title: accent }
+                return (
+                  <div
+                    key={`${page.year}-${page.month}`}
+                    ref={delta === 0 ? currentPageRef : undefined}
+                    data-month-page
+                    data-export-hide={delta !== 0 ? '' : undefined}
+                    className="w-1/3 shrink-0"
+                  >
+                    <CalendarGrid
+                      year={page.year}
+                      month={page.month}
+                      events={data?.events ?? []}
+                      onDayClick={delta === 0 ? handleDayClick : undefined}
+                      isAdmin={isAdmin}
+                      theme={pageTheme}
+                    />
+                  </div>
+                )
+              })}
             </motion.div>
-          </AnimatePresence>
+          ) : (
+            /* Desktop: one page, direction-aware slide on month change. */
+            <AnimatePresence mode="wait" initial={false} custom={slideDir}>
+              <motion.div
+                key={`${year}-${month}`}
+                custom={slideDir}
+                variants={reduceMotion ? reducedMotionVariants : slideVariants}
+                initial="enter"
+                animate="center"
+                exit="exit"
+                transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+              >
+                <CalendarGrid
+                  year={year}
+                  month={month}
+                  events={events}
+                  onDayClick={handleDayClick}
+                  isAdmin={isAdmin}
+                  theme={activeTheme}
+                />
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
 
         {/* Info strip below grid - compact 3 columns */}
