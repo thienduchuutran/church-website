@@ -39,12 +39,40 @@ const LETTER_BOUNCE: { y: string; r: number }[] = [
 
 // Direction-aware slide variants. `dir` is +1 (forward in time) or -1 (back).
 // New month enters from the side it's traveling toward; old month exits the
-// opposite side. Subtle distance (48px) keeps the motion as a hint, not a flourish.
+// opposite side. `distance` is how far it travels: the arrows use a subtle 48px
+// so the motion stays a hint, not a flourish, while a finger swipe uses the
+// grid's full width so the page the visitor threw keeps going off-screen
+// instead of sliding back toward centre as it fades.
 const SLIDE_DISTANCE = 48
+interface SlideCustom { dir: number; distance: number }
 const slideVariants = {
-  enter: (dir: number) => ({ x: dir * SLIDE_DISTANCE, opacity: 0 }),
+  enter: ({ dir, distance }: SlideCustom) => ({ x: dir * distance, opacity: 0 }),
   center: { x: 0, opacity: 1 },
-  exit: (dir: number) => ({ x: -dir * SLIDE_DISTANCE, opacity: 0 }),
+  exit: ({ dir, distance }: SlideCustom) => ({ x: -dir * distance, opacity: 0 }),
+}
+
+// Swipe-to-change-month, phones only. A drag commits when the finger has
+// travelled this fraction of the grid's width OR let go faster than this
+// (px/s) - the two signals Google Calendar reads, so a hesitant half-drag
+// springs back while a quick flick still turns the page.
+const SWIPE_COMMIT_FRACTION = 0.25
+const SWIPE_COMMIT_VELOCITY = 500
+
+// True on devices with no hover (phones, tablets). The grid is draggable only
+// there: on a desktop a mouse drag across the month would fight text selection
+// and the cells' own clicks, and the arrows already do the job. Starts false so
+// the server render and the first client paint agree, then flips after mount.
+// Local to the shell until a second consumer wants it in lib/.
+function useCoarsePointer(): boolean {
+  const [coarse, setCoarse] = useState(false)
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: none)')
+    const update = () => setCoarse(mq.matches)
+    update()
+    mq.addEventListener('change', update)
+    return () => mq.removeEventListener('change', update)
+  }, [])
+  return coarse
 }
 // Reduced-motion users get a pure crossfade - no translation.
 const reducedMotionVariants = {
@@ -126,9 +154,51 @@ export default function CalendarShell({
   const prevPositionRef = useRef(monthPosition)
   const direction =
     monthPosition === prevPositionRef.current ? 0 : monthPosition > prevPositionRef.current ? 1 : -1
+
+  // Set by a committed swipe right before it steps the month, so the render
+  // that starts the transition can read it; every other way of changing the
+  // month (arrows, Today, the picker) finds it null and gets the subtle default.
+  const swipeDistanceRef = useRef<number | null>(null)
+  // The last real navigation, held across the re-renders that happen mid-
+  // transition (fetchMonth toggles `loading` almost immediately). `direction`
+  // itself drops back to 0 on those renders, so the entering month - which
+  // under mode="wait" only mounts after the exit finishes - needs this stable
+  // copy rather than the live value.
+  const lastSlideRef = useRef<SlideCustom>({ dir: 1, distance: SLIDE_DISTANCE })
+  if (direction !== 0) {
+    lastSlideRef.current = { dir: direction, distance: swipeDistanceRef.current ?? SLIDE_DISTANCE }
+  }
+  const slideCustom = lastSlideRef.current
   useEffect(() => {
     prevPositionRef.current = monthPosition
+    swipeDistanceRef.current = null
   }, [monthPosition])
+
+  const coarsePointer = useCoarsePointer()
+  const slideWrapRef = useRef<HTMLDivElement>(null)
+  // Where the current pointer went down, so the click guard below can tell a
+  // tap from the click a browser synthesizes when a finger lifts after a drag.
+  // Measured from the pointer itself rather than tracked as a "dragging" flag
+  // set at drag start and cleared at drag end: the browser can end a touch
+  // with pointercancel (it decided to scroll, for instance), motion fires no
+  // onDragEnd for that, and a flag would stay stuck and eat the next real tap.
+  const pointerDownXRef = useRef<number | null>(null)
+  // Below this, finger movement is a tap with wobble; above it, a drag whose
+  // lift must not open the day sheet underneath.
+  const TAP_SLOP_PX = 10
+
+  // Finger-up after a horizontal drag. Commit on distance or speed, in the
+  // direction of travel (dragging left pulls the next month in from the right,
+  // like turning a page); anything less snaps back via dragSnapToOrigin.
+  function handleSwipeEnd(offsetX: number, velocityX: number) {
+    const width = slideWrapRef.current?.clientWidth ?? 0
+    const far = width > 0 && Math.abs(offsetX) > width * SWIPE_COMMIT_FRACTION
+    const fast = Math.abs(velocityX) > SWIPE_COMMIT_VELOCITY
+    if (!far && !fast) return
+    swipeDistanceRef.current = width || SLIDE_DISTANCE
+    if (offsetX < 0) nextMonth()
+    else prevMonth()
+  }
 
   const theme = MONTH_THEMES[month]
   const monthName = MONTH_NAMES[month - 1]
@@ -602,16 +672,36 @@ export default function CalendarShell({
             @3xl - the desktop grid is a framed editorial block, and the PNG
             export forces 1100px (switching this container to @3xl) and expects
             the padding to be there. */}
-        <div className="relative overflow-hidden -mx-4 @3xl:mx-0">
-          <AnimatePresence mode="wait" initial={false} custom={direction}>
+        <div
+          ref={slideWrapRef}
+          className="relative overflow-hidden -mx-4 @3xl:mx-0"
+          onPointerDownCapture={(e) => { pointerDownXRef.current = e.clientX }}
+          onClickCapture={(e) => {
+            const downX = pointerDownXRef.current
+            if (downX !== null && Math.abs(e.clientX - downX) > TAP_SLOP_PX) {
+              e.stopPropagation()
+              e.preventDefault()
+            }
+          }}
+        >
+          {/* Swipe to change month on touch devices - the same Google Calendar
+              gesture as the full-bleed grid. drag="x" lets the page follow the
+              finger (motion sets touch-action: pan-y, so vertical scrolling is
+              untouched); dragSnapToOrigin springs it back unless handleSwipeEnd
+              commits, in which case the key changes and the exit variant
+              carries the page the rest of the way off-screen. */}
+          <AnimatePresence mode="wait" initial={false} custom={slideCustom}>
             <motion.div
               key={`${year}-${month}`}
-              custom={direction}
+              custom={slideCustom}
               variants={reduceMotion ? reducedMotionVariants : slideVariants}
               initial="enter"
               animate="center"
               exit="exit"
               transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
+              drag={coarsePointer ? 'x' : false}
+              dragSnapToOrigin
+              onDragEnd={(_, info) => handleSwipeEnd(info.offset.x, info.velocity.x)}
             >
               <CalendarGrid
                 year={year}

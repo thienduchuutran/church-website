@@ -450,7 +450,12 @@ export default function CalendarGrid({
                   aria-label={`${day} - ${dayEvents.length} event${dayEvents.length === 1 ? '' : 's'}`}
                   className={[
                     'min-h-[92px] pt-1.5 pb-2 flex flex-col items-stretch gap-1 bg-surface text-left',
-                    isClickable ? 'active:bg-panel transition-colors' : 'cursor-default',
+                    // disabled:pointer-events-none - browsers do not reliably
+                    // deliver pointer events through a disabled button, and
+                    // most days are one. Letting the touch fall through to the
+                    // week row means the month swipe (CalendarShell) starts no
+                    // matter which day the finger lands on.
+                    isClickable ? 'active:bg-panel transition-colors' : 'cursor-default disabled:pointer-events-none',
                   ].join(' ')}
                 >
                   {/* Fixed-height number band so the today circle does not push
