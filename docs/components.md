@@ -619,6 +619,27 @@ The block builder for prose pages. Lets an admin add, remove and reorder page se
 
 ---
 
+## `CalendarShell` - swipe to change month
+On touch devices the month grid is draggable: pull it sideways and it follows the finger, let go and it either turns the page or springs back. Same gesture as Google Calendar's month view. The arrows are unchanged and remain the only way on desktop.
+
+**File:** `components/features/calendar/CalendarShell.tsx` (the slide wrapper around `CalendarGrid`)
+
+| Rule | Why |
+|---|---|
+| `drag="x"` + `dragSnapToOrigin` on the existing `motion.div` | The grid already lives in a direction-aware enter/exit animation; the swipe is that animation with a finger on it, not a second system. motion sets `touch-action: pan-y` for a horizontal drag, which is what keeps vertical page scrolling alive. |
+| Commit when the drag passes **25% of the grid's width** or lets go faster than **500px/s**; otherwise snap back | The two signals Google reads: a hesitant half-drag is not a decision, a quick flick is. Both constants sit at the top of the file. |
+| Swipe left = next month | Dragging left pulls the next page in from the right - turning a page. Routed through the same `prevMonth`/`nextMonth` the arrows use, so URL mirroring, fetching and direction detection are untouched. |
+| Variants take `{ dir, distance }`; a swipe sets `distance` to the grid's width, the arrows keep 48px | The page a visitor threw should keep going off-screen. With the arrow's 48px, the exiting page would slide *back* toward centre while fading. `lastSlideRef` holds the value across the `loading` re-renders mid-transition, because `direction` itself drops to 0 on those and the entering page (which under `mode="wait"` mounts only after the exit) would otherwise read a stale value. |
+| Enabled only when `(hover: none)` matches (`useCoarsePointer`) | A mouse drag across the desktop grid would fight text selection and the cells' own clicks. Starts `false` so server and first client paint agree. Local to the shell until a second consumer wants it in `lib/`. |
+| Click guard compares the click's `clientX` with where the pointer went down (`TAP_SLOP_PX = 10`) | Lifting a finger after a drag can synthesize a click on the day cell underneath, which would open its sheet. Measured from the pointer rather than a "dragging" flag because the browser can end a touch with `pointercancel`, motion fires no `onDragEnd` for that, and a flag would stay stuck and eat the next real tap. |
+| Empty day cells are `disabled:pointer-events-none` (in `CalendarGrid`) | Browsers do not reliably deliver pointer events through a disabled button, and most days are one. The touch falls through to the week row, so the swipe starts wherever the finger lands. |
+
+**Known limit, inherited:** while a month is loading the shell root is `pointer-events-none` (the existing fade), so a swipe during that window is ignored - exactly as an arrow tap is. On production the window is ~200ms.
+
+Verified with genuine CDP touch streams against the dev server: long swipes commit in both directions and follow the finger mid-drag, a sub-threshold drag snaps back, a 75px flick commits on velocity, a vertical touch scrolls the page without changing the month, and a plain tap after drags still clicks through.
+
+---
+
 ## `CalendarShell` - the Locations strip
 The full-width row under the calendar's three info columns, listing where the month's events happen.
 
