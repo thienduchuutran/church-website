@@ -79,6 +79,7 @@ cd backend && go run ./cmd/server
 | Next.js frontend: pages, components, lib, styling         | `docs/agents/frontend.md`              |
 | Google login, Supabase Auth, JWT, admin whitelist         | `docs/agents/auth.md`                  |
 | Discord webhooks, channel mapping, webhook payload format | `docs/agents/discord.md`               |
+| A Discord post shows an admin's @handle instead of their name, server nickname vs display name, `DISCORD_GUILD_ID`, `guilds.members.read`, Re-link | `docs/agents/known-quirks.md` ("Admin posts land in Discord under their @handle") + `docs/agents/discord.md` -> "The name ladder". **The member lookup is best-effort - never let it fail the link** |
 | Translation engine, `?locale=` query param, `machine_translated` field, AI prompt edits | `docs/agents/backend.md` → "Translation engine" + `docs/agents/database.md` → "Translation tables" |
 | Fine-tuning, training data capture, `fine_tuning_examples`, export script, local model plans | `docs/FINE_TUNING_PLAN.md` + `docs/agents/backend.md` → "Fine-tuning data capture" |
 | Frontend i18n, next-intl routing, language switcher, `[locale]` segment, message JSON files | `docs/agents/frontend.md` → "i18n routing (next-intl)" |

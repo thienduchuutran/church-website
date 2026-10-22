@@ -15,6 +15,24 @@ This file is auto-maintained. When a non-obvious bug is solved, document it here
 
 -->
 
+## Admin posts land in Discord under their @handle instead of the name everyone knows
+**Date solved:** 2026-10-21
+**Symptom:** A newly linked admin ("Nghi" in the server) tested a post and it appeared in Discord
+as `sarahbearaht`. The link flow had "succeeded" and the admin card showed the same handle.
+**Root cause:** The OAuth flow used scope `identify` and stored `global_name` with a fallback to
+`username`. `global_name` is the *account* Display Name, which many people never set. "Nghi" was a
+**server nickname**, a per-server field that `GET /users/@me` cannot return at all. So the code
+fell through to the handle exactly as written. Telling every future admin to go set an account
+Display Name does not scale, and it still would not match a server nickname.
+**Fix:** The consent URL now asks for `identify guilds.members.read`. `discord.ResolveIdentity`
+fetches the profile, then (only when `DISCORD_GUILD_ID` is set) the admin's own member record in
+that server, and lays nickname/server-avatar over the account values. Ladder: nickname -> Display
+Name -> handle. Not a member or any Discord error = keep the account identity and still link.
+Already-linked admins must click **Re-link** once; the stored name only refreshes in the callback.
+**Files affected:** `backend/internal/discord/oauth.go` (+ `_test.go`),
+`backend/internal/handler/discord_oauth.go`, `backend/.env.example`, `docs/agents/discord.md`,
+`docs/agents/deployment.md`. Render needs `DISCORD_GUILD_ID` set or nothing changes.
+
 ## A firm, slightly rolling touch on the month grid opened the day sheet instead of swiping
 **Date solved:** 2026-10-21
 **Symptom:** On a phone, starting a swipe with a heavy thumb - the finger lands

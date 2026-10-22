@@ -68,6 +68,7 @@ DISCORD_OAUTH_CLIENT_ID=
 DISCORD_OAUTH_CLIENT_SECRET=
 DISCORD_OAUTH_REDIRECT_URI=
 DISCORD_OAUTH_STATE_SECRET
+DISCORD_GUILD_ID              <VGOMNE server id>   (nickname lookup on link; blank = account names only)
 DISCORD_PROXY_BASE            https://discord-webhook-proxy.<subdomain>.workers.dev
 DISCORD_PROXY_SECRET          <shared key, matches the Worker's PROXY_KEY>   [Secret]
 ```

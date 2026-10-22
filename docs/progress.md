@@ -3,6 +3,32 @@
 ## Project Context
 church-website: a Next.js frontend on Vercel + Go backend on Render + Supabase (Postgres + Auth) + Cloudflare R2 (file storage). Fully serverless, $0/month operating cost.
 
+## 2026-10-21 - Discord posts carry the admin's server nickname, not their @handle
+
+**Why.** The second admin linked Discord and her first post went out as `sarahbearaht`. In the
+server she is `Nghi`, but that is a per-server nickname and the `identify` scope only ever sees the
+account: @handle and an optional account Display Name she never set. The code's ladder
+(display name, then handle) worked as written and still produced the wrong answer. The owner's
+call: more admins are coming and none of them should have to edit Discord settings before the
+site works. Fix it once in the link flow.
+
+**What changed.** The consent URL asks for `identify guilds.members.read`. After the profile
+fetch, `discord.ResolveIdentity` reads the admin's own member record in the server named by
+`DISCORD_GUILD_ID` and lays nickname and server avatar over the account values. The member step is
+best-effort by contract: not in the server, or any Discord error, keeps the account identity and
+the link still succeeds. Blank `DISCORD_GUILD_ID` skips the step, so local dev is unchanged.
+No schema change; the same two `admins` columns hold the resolved values.
+
+**Ops.** Render needs `DISCORD_GUILD_ID`. Every already-linked admin clicks Re-link once.
+Discord's consent screen gains one line ("Read your member info in servers you're in"); the scope
+is read-only and limited to the admin's own record.
+
+### Files
+- `backend/internal/discord/oauth.go` - scopes, `FetchMember`, `ResolveIdentity`, `applyMember`, 3-rung `preferredName`, `guildAvatarURL`, `GuildID`; API base is a var so tests can fake Discord
+- `backend/internal/discord/oauth_test.go` - ladder, member fetch (200 / null fields / 404 / 5xx), resolve fallbacks, scope in the authorize URL
+- `backend/internal/handler/discord_oauth.go` - callback calls `ResolveIdentity`
+- `backend/.env.example`, `docs/agents/deployment.md`, `docs/agents/discord.md`, `docs/agents/known-quirks.md`, `AGENTS.md`
+
 ## 2026-10-14 - The theme and verse belong to the year, not the month
 
 **Why.** Shipped in `000017` keyed `(year, month)`. The owner's correction: the congregation picks
