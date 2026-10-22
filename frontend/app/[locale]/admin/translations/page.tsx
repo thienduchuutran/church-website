@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAuth } from '@/lib/auth'
 import {
   approveTranslation,
@@ -57,6 +57,25 @@ export default function AdminTranslationsPage() {
   const [orphanBusy, setOrphanBusy] = useState(false)
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+
+  // Sentinel just above the sticky tab row. Previous/Next scroll here so the
+  // reviewer starts each page at its top instead of being left at the bottom
+  // while cards of a different height swap in under the cursor. It is a plain
+  // element, not the sticky row itself: a stuck element reports its stuck
+  // position to scrollIntoView, so scrolling to it would barely move.
+  const listTopRef = useRef<HTMLDivElement>(null)
+
+  // Called from the pager buttons only - never from an effect on `page`. Approve,
+  // retranslate and dismiss all refetch the list and must leave the reviewer
+  // exactly where they are; only an explicit page turn should move the view.
+  function goToPage(next: number) {
+    setPage(next)
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    listTopRef.current?.scrollIntoView({
+      behavior: reduceMotion ? 'auto' : 'smooth',
+      block: 'start',
+    })
+  }
 
   // Group the flat per-field rows into per-record "documents" so a post's title
   // and body are reviewed together. Pagination stays row-based on the backend;
@@ -263,8 +282,14 @@ export default function AdminTranslationsPage() {
         </button>
       </div>
 
-      {/* Filter tabs */}
-      <div className="mb-6 flex flex-wrap gap-1 border-b border-border">
+      {/* Scroll anchor for page turns. scroll-mt-20 clears the 4rem navbar
+          with 1rem to spare, so the tab row lands just below it, unstuck. */}
+      <div ref={listTopRef} aria-hidden="true" className="scroll-mt-20" />
+
+      {/* Filter tabs. Sticky under the navbar (top-16 = its h-16) so the
+          filter stays reachable however long the list runs. z-30 sits above
+          the cards but below the navbar's z-50 dropdowns. */}
+      <div className="sticky top-16 z-30 mb-6 flex flex-wrap gap-1 border-b border-border bg-background">
         {TABS.map(({ value, label }) => {
           const active = tab === value
           return (
@@ -328,7 +353,10 @@ export default function AdminTranslationsPage() {
           </p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div
+          className={`space-y-4 transition-opacity ${listLoading ? 'pointer-events-none opacity-50' : ''}`}
+          aria-busy={listLoading}
+        >
           {groups.map((group) => (
             <TranslationReviewRecord
               key={group.key}
@@ -342,12 +370,15 @@ export default function AdminTranslationsPage() {
         </div>
       )}
 
-      {/* Pagination */}
+      {/* Pagination. Sticky to the bottom of the viewport so the buttons
+          never move, whatever the height of the page's cards. The -mx/px pair
+          lets the bar's background run the full content width over cards
+          scrolling beneath it. */}
       {totalPages > 1 && (
-        <div className="mt-8 flex items-center justify-between">
+        <div className="sticky bottom-0 z-30 -mx-4 mt-8 flex items-center justify-between border-t border-border bg-background px-4 py-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8">
           <button
             type="button"
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
+            onClick={() => goToPage(Math.max(0, page - 1))}
             disabled={page === 0 || listLoading}
             className="inline-flex h-10 items-center rounded-lg border border-border bg-surface px-4 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 disabled:opacity-40 disabled:hover:bg-surface disabled:hover:border-border"
           >
@@ -358,7 +389,7 @@ export default function AdminTranslationsPage() {
           </span>
           <button
             type="button"
-            onClick={() => setPage((p) => (p + 1 < totalPages ? p + 1 : p))}
+            onClick={() => goToPage(page + 1 < totalPages ? page + 1 : page)}
             disabled={page + 1 >= totalPages || listLoading}
             className="inline-flex h-10 items-center rounded-lg border border-border bg-surface px-4 font-display text-sm font-medium text-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 disabled:opacity-40 disabled:hover:bg-surface disabled:hover:border-border"
           >

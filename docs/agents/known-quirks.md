@@ -604,3 +604,41 @@ canonical schema.
 **Files affected:** none (production schema only). Reference:
 `backend/internal/service/posts.go`, `backend/internal/middleware/auth.go`,
 `backend/migrations/000001_initial_schema.up.sql`.
+
+## Translation review pager jumped under the cursor on Next/Previous
+**Date solved:** 2026-10-22
+**Symptom:** On `/admin/translations`, scroll to the bottom and click Next or
+Previous. The Previous/Next bar leaps up or drops out of view, so a second
+click lands on the wrong thing or nothing.
+**Root cause:** The old twenty record cards stay rendered while the next page
+fetches (deliberate - no flash of empty space), then the new cards replace
+them in one render. Every card has a different height because post bodies
+differ, so the document gets taller or shorter in one step. With the scroll
+pinned to the bottom the browser clamps it, and the bar that was under the
+cursor moves. The content can never have a fixed height, so "fix the height"
+is the wrong frame - the fix is to stop the reader's viewport from depending
+on it.
+**Fix (all in `frontend/app/[locale]/admin/translations/page.tsx`):**
+- The Previous/Next bar is `sticky bottom-0` and the tab row is `sticky
+  top-16` (the navbar is `h-16`), so both stay on screen whatever the list
+  height. The page stays the only scroll container - a nested scroll panel
+  was considered and rejected because phones handle inner scroll areas
+  badly and it would show about one card at a time.
+- `goToPage()` sets the page **and** scrolls a sentinel `<div>` above the tab
+  row into view, honouring `prefers-reduced-motion`. It is called from the
+  two pager buttons only. **Never move this into an effect on `page`** -
+  approve, retranslate and dismiss all call `load()` and must leave the
+  reviewer where they are; only an explicit page turn may move the view.
+- The scroll target is a plain sentinel, **not the sticky tab row**. A stuck
+  sticky element reports its stuck position to `scrollIntoView`, so
+  targeting it scrolls almost nowhere. The sentinel carries `scroll-mt-20`
+  (navbar 4rem + 1rem) so the tab row lands just below the navbar, unstuck.
+- The list wrapper gets `opacity-50 pointer-events-none` while loading, so the
+  swap reads as deliberate and nobody approves a card that is about to be
+  replaced.
+**Verified:** in a same-DOM harness at 1280px and 375px - after Next the
+document shrank from 5859px to 2180px with zero change in scroll position,
+tab row or pager placement, and no horizontal overflow from the bar's
+negative margins. The signed-in page itself needs a Google admin session,
+so confirm on the live page after deploy.
+**Files affected:** `frontend/app/[locale]/admin/translations/page.tsx`.
