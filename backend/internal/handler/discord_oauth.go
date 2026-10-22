@@ -107,9 +107,9 @@ func (h *DiscordOAuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := discord.FetchUser(r.Context(), token)
+	user, err := discord.ResolveIdentity(r.Context(), token)
 	if err != nil {
-		log.Printf("discord callback: fetch user: %v", err)
+		log.Printf("discord callback: resolve identity: %v", err)
 		h.redirect(w, r, "error")
 		return
 	}
