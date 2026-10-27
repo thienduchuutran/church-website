@@ -3,6 +3,13 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
+  /* Native-control palette for <select> option lists, date/time pickers and
+     scrollbars. The browser draws those, not our CSS, so a dark theme that
+     only recolours our own tokens leaves them light - a dark-mode <select>
+     then opens a white option list with the inherited near-white ink on it.
+     Flipped to dark in .dark and in the media fallback below. */
+  color-scheme: light;
+
   /* ─── VGOMNE logo palette ───
      Five brand values: deep magenta, its darker hover, rose, mid magenta,
      lavender. Everything else on the site is one of those mixed with white
@@ -106,6 +113,7 @@
    than repeating literals, so this and the --*-dark block above are the only
    place dark values are ever written. */
 .dark {
+  color-scheme: dark;
   --background: var(--background-dark);
   --foreground: var(--foreground-dark);
   --primary: var(--primary-dark);
@@ -166,6 +174,7 @@
    this only matches before that class lands, or when JS is unavailable. */
 @media (prefers-color-scheme: dark) {
   :root:not(.light):not(.dark) {
+    color-scheme: dark;
     --background: var(--background-dark);
     --foreground: var(--foreground-dark);
     --primary: var(--primary-dark);

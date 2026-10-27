@@ -642,3 +642,18 @@ tab row or pager placement, and no horizontal overflow from the bar's
 negative margins. The signed-in page itself needs a Google admin session,
 so confirm on the live page after deploy.
 **Files affected:** `frontend/app/[locale]/admin/translations/page.tsx`.
+
+## The post body editor showed white text on a white field in dark mode
+
+**Symptom:** In dark mode, typing into the body editor (post composer, page block editor, the Vietnamese body on the translation review page) produced near-invisible text: white ink on a white box. Reported as "text inputs are white on white", but the plain `<input>` and `<textarea>` fields were fine - only the Tiptap `RichBodyEditor` was affected.
+
+**Root cause:** Every ordinary input in the tree is styled with Tailwind tokens (`bg-surface text-foreground` or `bg-background text-foreground`), so both ends flip together with the theme. The editor is styled by a CSS module instead, and `.editorWrapper` in `RichBodyEditor.module.css` had `background: #fff` while `.editorContent` painted its ink with `var(--foreground)`. In light mode `--surface` *is* `#ffffff`, so the literal was invisible as a mistake. In dark mode `--foreground` becomes `#f6eef4` and the literal stayed white. Same stylesheet, same pattern, four more places: inline `code` and the slash-menu icon had a fixed warm-grey fill under inherited ink, the placeholder was a fixed `#9a8a7a`, and the mobile format sheet was `#fff` with a `#d1cdc8` handle.
+
+**Fix:** All of them now read tokens - `var(--surface)`, `var(--border)`, `var(--muted)`, and `color-mix(in srgb, var(--panel) 70%, var(--surface))` for the code fills. Light mode renders the wrapper and sheet identically because `--surface` resolves to the same white there; the code fill shifts from warm grey to the site's lavender, which is the palette the rest of the page already uses.
+
+**Second thing fixed in the same pass:** the site never declared `color-scheme`, so browser-drawn controls (a `<select>`'s option list, the date and time pickers in `EventModal`, scrollbars) were always drawn light. In dark mode a `<select>` opened a white option list with the inherited near-white ink on it, and the picker icons were black on a dark field. `globals.css` now sets `color-scheme: light` on `:root` and `color-scheme: dark` in both the `.dark` block and the `prefers-color-scheme` fallback (paired, as the birthday-name entry above requires).
+
+**The rule to carry forward:** a hex literal in a CSS module is a dark-mode bug waiting for the theme to flip. `docs/agents/frontend.md` already forbids hex literals in components; the same applies to `*.module.css`. The only literals still allowed in `RichBodyEditor.module.css` are the ones that set *both* colour and background for a surface that is dark in both themes (the `pre` block and the bubble toolbar). Grep for `#fff` and light `#f…` fills before shipping any new module stylesheet.
+
+**Verified:** by reading the computed cascade - the admin editor sits behind a Google admin session, so confirm on the live page after deploy by toggling the theme on `/admin/translations` and opening a body field.
+**Files affected:** `frontend/components/editor/RichBodyEditor.module.css`, `frontend/app/globals.css`.

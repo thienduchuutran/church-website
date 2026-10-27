@@ -20,7 +20,11 @@
 .editorWrapper {
   border: 1.5px solid var(--border);
   border-radius: 10px;
-  background: #fff;
+  /* The surface token, never a literal white: .editorContent paints its ink
+     with var(--foreground), which flips to near-white in dark mode. A fixed
+     #fff here left white text on a white field once the theme switched.
+     --surface is #ffffff in light mode, so nothing moves there. */
+  background: var(--surface);
   position: relative;
   transition: border-color 0.2s, box-shadow 0.2s;
   /* CRITICAL: never overflow:hidden or menus clip */
@@ -292,7 +296,9 @@
 }
 :global(.tiptap) code,
 :global(.rich-content) code {
-  background: #f2ede8;
+  /* Panel tint rather than a fixed warm grey, so inline code keeps a fill the
+     inherited ink can be read on in both themes. */
+  background: color-mix(in srgb, var(--panel) 70%, var(--surface));
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 13px;
@@ -322,7 +328,7 @@
 /* Placeholder */
 :global(.tiptap) p.is-editor-empty:first-child::before {
   content: attr(data-placeholder);
-  color: #9a8a7a;
+  color: var(--muted);
   pointer-events: none;
   float: left;
   height: 0;
@@ -534,7 +540,7 @@
   width: 28px;
   height: 28px;
   border-radius: 6px;
-  background: #f2ede8;
+  background: color-mix(in srgb, var(--panel) 70%, var(--surface));
   font-size: 12px;
   font-weight: 700;
   color: var(--foreground);
@@ -570,7 +576,7 @@
   right: 0;
   z-index: 1000;
   border-radius: 16px 16px 0 0;
-  background: #fff;
+  background: var(--surface);
   box-shadow: 0 -4px 32px rgba(0,0,0,0.2);
   overflow: hidden;
   padding-bottom: env(safe-area-inset-bottom);
@@ -579,7 +585,7 @@
   width: 36px;
   height: 4px;
   border-radius: 2px;
-  background: #d1cdc8;
+  background: var(--border);
   margin: 10px auto 0;
 }
 
