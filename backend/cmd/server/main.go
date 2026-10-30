@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata" // Alpine image ships no zoneinfo; analytics needs America/New_York
 
 	"github.com/go-chi/chi/v5"
 	chiMiddleware "github.com/go-chi/chi/v5/middleware"
@@ -19,6 +20,7 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	"github.com/joho/godotenv"
 
+	"github.com/thienduchuutran/church-website/backend/internal/analytics"
 	"github.com/thienduchuutran/church-website/backend/internal/handler"
 	appMiddleware "github.com/thienduchuutran/church-website/backend/internal/middleware"
 	"github.com/thienduchuutran/church-website/backend/internal/repository"
@@ -152,11 +154,19 @@ func main() {
 		log.Fatalf("failed to fetch Supabase JWKS: %v", err)
 	}
 
+	// Per-route latency and status buckets for the analytics dashboard. Built
+	// before the router so it can be mounted as middleware, handed to the
+	// rollup worker below so the buckets reach the database once an hour.
+	// /api/v1/health is skipped: the keep-warm pinger would otherwise be the
+	// busiest route on the chart.
+	requestStats := appMiddleware.NewRequestStats("/api/v1/health")
+
 	router := chi.NewRouter()
 	router.Use(chiMiddleware.RequestID)
 	router.Use(chiMiddleware.RealIP)
 	router.Use(chiMiddleware.Logger)
 	router.Use(chiMiddleware.Recoverer)
+	router.Use(requestStats.Middleware)
 	router.Use(appMiddleware.CORS(os.Getenv("FRONTEND_ORIGIN")))
 
 	healthHandler := handler.NewHealthHandler()
@@ -172,10 +182,41 @@ func main() {
 	var adminTranslationsHandler *handler.AdminTranslationsHandler
 	var assistantHandler *handler.AssistantHandler
 	var discordOAuthHandler *handler.DiscordOAuthHandler
+	var analyticsHandler *handler.AnalyticsHandler
 	var adminRepo *repository.AdminRepository
 	if dbPool != nil {
 		adminRepo = repository.NewAdminRepository(dbPool)
 		postRepo := repository.NewPostRepository(dbPool)
+
+		// Analytics. The salt secret is what makes visitor hashes
+		// non-reproducible by anyone holding an IP list; without it the
+		// pipeline still runs (local dev) but logs loudly. The time zone is
+		// the congregation's, so a "day" in analytics_daily ends at midnight
+		// in Saugus rather than at 8pm.
+		analyticsSalt := os.Getenv("ANALYTICS_SALT_SECRET")
+		if analyticsSalt == "" {
+			log.Println("warning: ANALYTICS_SALT_SECRET not set - visitor hashes are not salted (fine locally, set it on Render)")
+		}
+		tzName := os.Getenv("ANALYTICS_TIMEZONE")
+		if tzName == "" {
+			tzName = "America/New_York"
+		}
+		analyticsLoc, err := time.LoadLocation(tzName)
+		if err != nil {
+			log.Printf("warning: ANALYTICS_TIMEZONE %q invalid (%v) - falling back to UTC", tzName, err)
+			analyticsLoc = time.UTC
+		}
+		analyticsSvc := service.NewAnalyticsService(repository.NewAnalyticsRepository(dbPool), analyticsSalt, analyticsLoc)
+		analyticsHandler = handler.NewAnalyticsHandler(analyticsSvc)
+		rollupInterval := 10 * time.Minute
+		if raw := os.Getenv("ANALYTICS_ROLLUP_INTERVAL"); raw != "" {
+			if secs, err := strconv.Atoi(raw); err == nil && secs > 0 {
+				rollupInterval = time.Duration(secs) * time.Second
+			}
+		}
+		analyticsRollup := analytics.NewRollup(analyticsSvc, requestStats, rollupInterval)
+		analyticsRollup.Start(ctx)
+		defer analyticsRollup.Stop()
 
 		// The gallery repo is needed in two places: by GalleryService for uploads
 		// and by PostService to hydrate posts with their images on read. We build
@@ -481,6 +522,30 @@ func main() {
 		//     etc. No login required — same philosophy as reactions.
 		if assistantHandler != nil {
 			r.Post("/assistant/chat", assistantHandler.Chat)
+		}
+
+		// Analytics:
+		//   PUBLIC (no auth, intentional): POST /analytics/events
+		//     The in-page tracker beacons anonymous usage events for every
+		//     visitor, signed in or not. Same philosophy as reactions: an
+		//     anonymous write, rate-limited per IP, with a strict allow-list
+		//     on what it may contain (see handler.validateEvent). Do NOT move
+		//     it into the RequireAdmin group - a tracker that only counts
+		//     admins counts nobody.
+		//   ADMIN-ONLY: every GET under /admin/analytics - the dashboard is
+		//     a leadership-facing view, not public content.
+		if analyticsHandler != nil {
+			r.Post("/analytics/events", analyticsHandler.Ingest)
+
+			r.Group(func(r chi.Router) {
+				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))
+				r.Get("/admin/analytics/overview", analyticsHandler.Overview)
+				r.Get("/admin/analytics/timeseries", analyticsHandler.Timeseries)
+				r.Get("/admin/analytics/breakdown", analyticsHandler.Breakdown)
+				r.Get("/admin/analytics/content", analyticsHandler.Content)
+				r.Get("/admin/analytics/pipeline", analyticsHandler.Pipeline)
+				r.Get("/admin/analytics/requests", analyticsHandler.Requests)
+			})
 		}
 	})
 

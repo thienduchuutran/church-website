@@ -1122,3 +1122,167 @@ type AssistantChatResponse struct {
 	Answer  string            `json:"answer"`
 	Sources []AssistantSource `json:"sources"`
 }
+
+// ---------------------------------------------------------------------------
+// Analytics (migration 000019). See docs/agents/backend.md -> "Analytics".
+// ---------------------------------------------------------------------------
+
+// AnalyticsEventIn is one client-reported event inside a POST
+// /api/v1/analytics/events batch. OccurredAt is the browser clock in Unix
+// milliseconds; the service clamps it to "recent" so a wrong clock cannot
+// write rows into last year.
+type AnalyticsEventIn struct {
+	Name       string         `json:"name"`
+	Path       string         `json:"path"`
+	Locale     string         `json:"locale"`
+	SessionID  string         `json:"session_id"`
+	OccurredAt int64          `json:"occurred_at"`
+	Referrer   string         `json:"referrer,omitempty"`
+	DurationMs *int           `json:"duration_ms,omitempty"`
+	Returning  bool           `json:"returning"`
+	Props      map[string]any `json:"props,omitempty"`
+}
+
+// AnalyticsBatch is the request body of POST /api/v1/analytics/events.
+// IsAdmin is set by the tracker when the signed-in visitor is an admin so the
+// service can drop the batch - the owner editing posts is not a visitor.
+type AnalyticsBatch struct {
+	IsAdmin bool               `json:"is_admin"`
+	Events  []AnalyticsEventIn `json:"events"`
+}
+
+// AnalyticsEvent is the server-side row written to analytics_events. It never
+// carries the IP or raw user agent: VisitorHash and Device are what survive.
+type AnalyticsEvent struct {
+	OccurredAt   time.Time
+	VisitorHash  string
+	SessionID    string
+	Name         string
+	Path         string
+	Locale       string
+	ReferrerHost *string
+	Device       string
+	DurationMs   *int
+	Returning    bool
+	Props        map[string]any
+}
+
+// AnalyticsTotals is one period's headline numbers. Visitors is the sum of
+// daily unique visitors over the period (the hash rotates daily, so a person
+// seen on three days counts three times - the same convention Plausible uses).
+type AnalyticsTotals struct {
+	Visitors             int     `json:"visitors"`
+	AvgDailyVisitors     float64 `json:"avg_daily_visitors"`
+	PeakDailyVisitors    int     `json:"peak_daily_visitors"`
+	PeakDay              string  `json:"peak_day,omitempty"`
+	Sessions             int     `json:"sessions"`
+	Pageviews            int     `json:"pageviews"`
+	MedianSessionSeconds int     `json:"median_session_seconds"`
+	ReturnRate           float64 `json:"return_rate"`
+	ViShare              float64 `json:"vi_share"`
+	PagesPerSession      float64 `json:"pages_per_session"`
+}
+
+// AnalyticsOverview is the response of GET /admin/analytics/overview. Previous
+// covers the period of the same length immediately before From, so the
+// dashboard can print a delta without a second request.
+type AnalyticsOverview struct {
+	From     string          `json:"from"`
+	To       string          `json:"to"`
+	Current  AnalyticsTotals `json:"current"`
+	Previous AnalyticsTotals `json:"previous"`
+}
+
+// AnalyticsPoint is one bucket of a time series. Day is the bucket's first
+// day (YYYY-MM-DD) for both day and week buckets.
+type AnalyticsPoint struct {
+	Day   string  `json:"day"`
+	Value float64 `json:"value"`
+}
+
+// AnalyticsBreakdownRow is one row of a top-N table; Share is 0..1 of the
+// column total over the whole range, not just the returned rows.
+type AnalyticsBreakdownRow struct {
+	Dimension string  `json:"dimension"`
+	Value     float64 `json:"value"`
+	Share     float64 `json:"share"`
+}
+
+// ContentStat answers "did anyone read it" for one post.
+type ContentStat struct {
+	PostID      string    `json:"post_id"`
+	Title       string    `json:"title"`
+	Type        string    `json:"type"`
+	PublishedAt time.Time `json:"published_at"`
+	Reads       int       `json:"reads"`
+	Reactions   int       `json:"reactions"`
+}
+
+// PipelineStats measures the translation pipeline and content velocity over
+// a range. ApprovedUnedited is the quality number: an approval that kept the
+// AI text verbatim (is_ai_generated stayed true).
+type PipelineStats struct {
+	TranslationsProduced int  `json:"translations_produced"`
+	ApprovedUnedited     int  `json:"approved_unedited"`
+	ApprovedEdited       int  `json:"approved_edited"`
+	PendingReview        int  `json:"pending_review"`
+	MedianLeadSeconds    *int `json:"median_lead_seconds"`
+	PostsPublished       int  `json:"posts_published"`
+	ReactionsAdded       int  `json:"reactions_added"`
+	FineTuningPairs      int  `json:"fine_tuning_pairs"`
+}
+
+// RouteStat is one backend route's traffic over a range, aggregated from the
+// hourly analytics_request_stats rows. P95Ms is the worst hourly p95 in the
+// range (an upper bound, not a true range-wide percentile) and P50Ms the
+// request-weighted mean of hourly medians.
+type RouteStat struct {
+	Route     string  `json:"route"`
+	Count     int     `json:"count"`
+	Errors5xx int     `json:"errors_5xx"`
+	Errors4xx int     `json:"errors_4xx"`
+	ErrorRate float64 `json:"error_rate"`
+	P50Ms     int     `json:"p50_ms"`
+	P95Ms     int     `json:"p95_ms"`
+}
+
+// RequestBucket is one completed (hour, route pattern, status class) row of
+// backend request stats, produced by the logger middleware and persisted by
+// the analytics rollup worker.
+type RequestBucket struct {
+	Hour        time.Time
+	Route       string
+	StatusClass string
+	Count       int
+	P50Ms       int
+	P95Ms       int
+}
+
+// AnalyticsEventNames is the allow-list for POST /api/v1/analytics/events.
+// Anything else is a 400: the ingest endpoint is public, and an open-ended
+// event name would let anyone write arbitrary strings into the tables.
+var AnalyticsEventNames = map[string]bool{
+	"page_view":           true,
+	"page_leave":          true,
+	"post_read":           true,
+	"locale_switch":       true,
+	"calendar_month_view": true,
+	"calendar_event_open": true,
+	"gallery_album_open":  true,
+	"reaction_add":        true,
+	"outbound_click":      true,
+}
+
+// AnalyticsPropKeys is the allow-list for the props object on an event. Keys
+// outside it are rejected rather than dropped so a tracker bug is loud.
+var AnalyticsPropKeys = map[string]bool{
+	"post_id":  true,
+	"event_id": true,
+	"album_id": true,
+	"from":     true,
+	"to":       true,
+	"month":    true,
+	"host":     true,
+	"emoji":    true,
+	"tag":      true,
+}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/thienduchuutran/church-website/backend/internal/model"
@@ -20,12 +19,9 @@ type AssistantService struct {
 	repo  *repository.AssistantRepository
 	groq  *GroqClient
 
-	// Simple per-IP rate limiter: maps IP → last request timestamps.
-	// Protects against abuse and Groq API exhaustion.
-	rateMu    sync.Mutex
-	rateMap   map[string][]time.Time
-	rateLimit int           // max requests per window
-	rateWindow time.Duration // rolling window
+	// Per-IP rate limiter shared with the analytics ingest endpoint (see
+	// ratelimit.go). Protects against abuse and Groq API exhaustion.
+	limiter *IPRateLimiter
 }
 
 // NewAssistantService creates a new assistant service wired to the database and Groq.
@@ -33,9 +29,7 @@ func NewAssistantService(repo *repository.AssistantRepository, groq *GroqClient)
 	return &AssistantService{
 		repo:       repo,
 		groq:       groq,
-		rateMap:    make(map[string][]time.Time),
-		rateLimit:  10,
-		rateWindow: 1 * time.Minute,
+		limiter: NewIPRateLimiter(10, 1*time.Minute),
 	}
 }
 
@@ -142,29 +136,9 @@ func (s *AssistantService) Chat(ctx context.Context, req model.AssistantChatRequ
 }
 
 // CheckRateLimit returns true if the given IP has exceeded the rate limit.
+// Kept as the handler-facing name; the mechanics live in IPRateLimiter.
 func (s *AssistantService) CheckRateLimit(ip string) bool {
-	s.rateMu.Lock()
-	defer s.rateMu.Unlock()
-
-	now := time.Now()
-	cutoff := now.Add(-s.rateWindow)
-
-	// Prune expired entries.
-	timestamps := s.rateMap[ip]
-	valid := timestamps[:0]
-	for _, t := range timestamps {
-		if t.After(cutoff) {
-			valid = append(valid, t)
-		}
-	}
-
-	if len(valid) >= s.rateLimit {
-		s.rateMap[ip] = valid
-		return true // rate limited
-	}
-
-	s.rateMap[ip] = append(valid, now)
-	return false
+	return !s.limiter.Allow(ip)
 }
 
 func buildSystemPrompt(contextSnippets []string) string {
