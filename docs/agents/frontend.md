@@ -34,7 +34,8 @@ frontend/
 │           ├── page.tsx                ← Admin dashboard (lists all posts, edit/delete, edit pages, link to translation review)
 │           ├── [section]/page.tsx      ← Post creation form per section
 │           ├── pages/[slug]/page.tsx   ← Auth gate + dispatch: about → PageBlockEditor, connect → SectionsEditor (same file)
-│           └── translations/page.tsx   ← AI translation review panel (Phase 5)
+│           ├── translations/page.tsx   ← AI translation review panel (Phase 5)
+│           └── analytics/page.tsx      ← Admin analytics dashboard: one date range, KPI tiles, en/vi trend, hour heatmap, breakdowns, content + pipeline tables
 ├── i18n/
 │   ├── routing.ts                      ← defineRouting() + createNavigation() - locale list, default, locale-aware Link/useRouter/usePathname
 │   └── request.ts                      ← getRequestConfig - resolves locale + lazy-imports messages JSON
@@ -79,6 +80,18 @@ frontend/
 │           ├── EventArchiveButton.tsx   ← Admin "Move to Past/Upcoming" toggle on event cards
 │           ├── PageBlockEditor.tsx      ← Block builder for prose pages: add/remove/reorder sections + lite rich text
 │           └── PostFormFields.tsx       ← Presentational inputs shared by Create/Edit
+│       ├── analytics/
+│       │   ├── TrackerMount.tsx        ← The one client island that drives page_view/page_leave; mounted once in layout.tsx
+│       │   ├── ReadTracker.tsx         ← Invisible sentinel inside PostCard: post_read after 2 s on screen
+│       │   ├── DateRangePicker.tsx     ← Preset pills + custom dates; the single filter row above every chart
+│       │   ├── StatTile.tsx            ← Label / value / delta vs previous period
+│       │   ├── TrendChart.tsx          ← Recharts area chart, <= 2 series, table twin behind a toggle
+│       │   ├── HourHeatmap.tsx         ← Day-of-week x hour grid, one-hue ramp (--viz-1), table twin
+│       │   ├── BreakdownTable.tsx      ← Top-N rows with share bar
+│       │   ├── ContentTable.tsx        ← Per-post reads + reactions
+│       │   ├── PipelinePanel.tsx       ← Translation quality + content velocity
+│       │   ├── RequestsTable.tsx       ← Backend p50/p95/error rate per route
+│       │   └── format.ts               ← compact/percent/duration/date helpers shared by the above
 │       └── assistant/
 │           ├── ChatBox.tsx             ← Floating AI assistant widget
 │           ├── ChatMessage.tsx         ← Renders user/assistant chat bubbles
@@ -95,6 +108,8 @@ frontend/
 │       └── toolbar/                     ← PersistentToolbar (variant-aware), BubbleToolbar (full only)
 ├── lib/
 │   ├── api.ts                          ← Generic fetch wrappers (apiGet/Post/Patch/Delete)
+│   ├── analytics.ts                    ← Cookie-free tracker: Tracker class (queue, batch, retry+persist, session id, returning flag, visible-time) + browser shell (getTracker/track/flushNow). `npm run test:analytics`
+│   ├── analytics-api.ts                ← Typed wrappers for GET /admin/analytics/* + DateRange presets
 │   ├── auth.tsx                        ← AuthProvider/useAuth: session, isAdmin, loading, plus a display-only `hint` from sessionStorage so the navbar draws the right account control on the first paint after a language-switch reload
 │   ├── auth.tsx                        ← Supabase auth context + useAuth hook
 │   ├── calendar.ts                     ← Calendar API service (getMonth takes optional locale; event-type + palette CRUD)
@@ -358,6 +373,7 @@ For local development, `frontend/.env.local` (gitignored):
 NEXT_PUBLIC_SUPABASE_URL=https://<ref>.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=...                              # safe to expose, RLS enforces permissions
 NEXT_PUBLIC_API_URL=http://localhost:8080                      # local Go backend
+NEXT_PUBLIC_ANALYTICS_DISABLED=1                               # optional: silence the first-party tracker while developing
 ```
 
 For production, the same three vars live in **Vercel dashboard → Settings → Environment Variables** with the production values:
@@ -366,6 +382,20 @@ NEXT_PUBLIC_API_URL=https://church-website-ff5w.onrender.com   # Render-hosted G
 ```
 
 Never put the Supabase service role key in the frontend. Never.
+
+---
+
+## Analytics tracking (first-party, cookie-free)
+
+`lib/analytics.ts` + `components/features/analytics/TrackerMount.tsx`. Backend side and the privacy model: `docs/agents/backend.md` -> "Analytics". Rules that matter when touching the frontend:
+
+- **Never set a cookie or store an identifier for analytics.** The only things in storage are a session id in `sessionStorage` (renewed after 30 idle minutes), a last-visit date in `localStorage` (what the `returning` flag is computed from), and a retry queue of failed batches. The reactions fingerprint in `localStorage` is deliberately NOT reused - a stable per-browser id is a tracking cookie in all but name.
+- **Adding an event** = one `track('<name>', props)` call at an existing handler, with the name and prop keys already in the server allow-lists (`backend/internal/model/types.go` `AnalyticsEventNames` / `AnalyticsPropKeys`). Anything else is a silent 400 and the batch is dropped. Current calls: `ReadTracker` (post_read), `CalendarShell` (calendar_month_view on arrows/swipe/Today, calendar_event_open when a day with events is tapped), `AlbumGrid` (gallery_album_open), `ReactionBar` (reaction_add), `LanguageSwitcher` (locale_switch, followed by `flushNow()` because the switch is a hard navigation).
+- **Duration is visible time only** (`visibilitychange`), so a backgrounded phone tab does not inflate session length.
+- **Failed batches persist and retry** with backoff (5 s doubling to 60 s), which is what survives Render's cold start. The `pagehide` flush is best-effort and NOT persisted - re-sending it next visit would double count.
+- **Admin sessions are tagged** (`is_admin` on the batch, from `useAuth`) and the server discards them, so editing posts never counts as a visit.
+- `NEXT_PUBLIC_ANALYTICS_DISABLED=1` turns the tracker into a no-op (local dev).
+- Chart colors are the `--viz-1` / `--viz-2` tokens in `globals.css`, validated with the dataviz palette checker in both modes (light: plum `#8e1d5f` + violet `#6250d6`; dark: `#d55181` + `#9085e9`). Do not paint chart marks with `--primary`/`--accent` directly - the dark steps of those were never checked as a pair.
 
 ---
 

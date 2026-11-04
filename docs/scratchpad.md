@@ -8,6 +8,196 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
+# BUILT 2026-10-28 (awaiting push) - First-party analytics with an admin dashboard
+
+**Status:** all four phases built and verified locally (see `docs/progress.md` 2026-10-28 for the verification list and the deviations: types co-located in `lib/analytics-api.ts`, a sixth `/requests` read, `post_read` via a 2 s on-screen sentinel, Discord deliveries dropped for lack of a log). Original plan text follows unchanged. Earlier status: plan only. Owner approved the metric list 2026-10-28 and dropped the assistant-questions metric. Vendor fork resolved in chat on 2026-10-21: build our own
+pipeline, keep Vercel Web Analytics beside it as the independent cross-check.
+
+**Goal.** Know who uses the site and how, in numbers that two audiences can act on. The owner
+needs defensible figures for a resume and for pitching church leaders. Admins need a plain
+view of "did people read what we posted" inside `/admin`, with no second login.
+
+**Why first-party and not a vendor dashboard** (decided 2026-10-21). A vendor counts page URLs.
+The numbers that matter here are product-specific: which language a visitor reads in, whether
+an event was opened before Sunday, how often the Gemini translation shipped unedited. Only our
+own tables know those. Vercel Web Analytics stays on as a reference so our visitor counts can be
+checked against someone else's.
+
+**Design constraints read from the code and docs (2026-10-27):**
+
+1. Render free tier cold-starts in ~50 s after 15 idle minutes (`deployment.md`). A beacon
+   fired during a cold start is lost unless the client queues and retries it.
+2. The backend already has a per-IP in-memory rate limiter, but it is private to
+   `service/assistant.go` (lines 23-37, 144-161). It should be extracted, not copied.
+3. `middleware/logger.go` is a passthrough placeholder. Any latency or error-rate metric needs
+   it to become real.
+4. The public-read contract (`backend.md` "Auth contract") allows anonymous writes when they
+   are rate-limited per fingerprint or IP - reactions are the precedent. The ingest endpoint
+   follows that precedent; the read endpoints go in the `RequireAdmin` group.
+5. `ReactionBar.tsx` already stores a random UUID in `localStorage` (`church_reaction_fp`).
+   We will not reuse it for analytics: a stable per-browser id is a tracking cookie in all but
+   name. Analytics uses a server-side hash with a daily salt instead (see Phase 2).
+6. No chart library is installed (`frontend/package.json`). Recharts is proposed; see open
+   questions.
+7. Supabase free tier is 500 MB. Expected raw volume is a few thousand rows a month at
+   roughly 300 bytes each, so the raw table is a non-issue for years. Retention is still
+   designed in so it never becomes one.
+
+---
+
+## Phase 1 - Database
+
+| File | Change | Why |
+|---|---|---|
+| `backend/migrations/000019_analytics.up.sql` | New table `analytics_events`: `id bigserial PK`, `occurred_at timestamptz NOT NULL`, `visitor_hash text NOT NULL`, `session_id text NOT NULL`, `event_name text NOT NULL`, `path text NOT NULL`, `locale text NOT NULL`, `referrer_host text`, `device text NOT NULL` (`phone`/`tablet`/`desktop`), `duration_ms integer`, `props jsonb NOT NULL DEFAULT '{}'`. Indexes: `(occurred_at)`, `(event_name, occurred_at)`, `(path, occurred_at)`. | Append-only raw log. Every number on the dashboard is derivable from this table, so a wrong rollup can always be recomputed. `visitor_hash` is the salted daily hash, never an IP. `props` holds per-event extras (post id, calendar month, switch-from locale) without a schema change per event type. |
+| same file | New table `analytics_daily`: `day date`, `metric text`, `dimension text NOT NULL DEFAULT ''`, `value numeric NOT NULL`, PK `(day, metric, dimension)`. | Pre-aggregated rows the dashboard reads. A year of charts is then a few hundred rows, not a scan over the raw table on every admin page load. `dimension` is `''` for totals and e.g. `vi` / `/events/{id}` for breakdowns. |
+| same file | New table `analytics_request_stats`: `hour timestamptz`, `route text`, `status_class text` (`2xx`/`4xx`/`5xx`), `count integer`, `p50_ms integer`, `p95_ms integer`, PK `(hour, route, status_class)`. | Operational metrics from the Go logger middleware, bucketed per hour per chi route pattern (`/posts/{id}`, not the real id). Gives error rate and p95 latency without a paid APM. |
+| `backend/migrations/000019_analytics.down.sql` | Drop the three tables. | Reversible, as every migration here is. |
+
+Retention rule (enforced by the rollup worker in Phase 2): raw `analytics_events` older than 400 days
+are deleted after the day has been rolled up. `analytics_daily` is kept forever. 400 rather than 365
+so a year-over-year comparison always has both ends.
+
+---
+
+## Phase 2 - Backend
+
+Order inside the phase follows AGENTS.md: test, types, repository, service, handler, route.
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/handler/analytics_test.go` | **Written first.** Mock `analyticsService`. Tests: ingest accepts a valid batch (202), rejects more than 20 events (400), rejects unknown `event_name` (400), rejects body over 16 KB (413), returns 429 when the limiter says so, strips query strings from `path`; overview/timeseries/breakdown return the mock's data; invalid `from`/`to` gives 400. | TDD rule. The ingest endpoint is public, so its validation is the security boundary and must be pinned by tests before it exists. |
+| `backend/internal/model/types.go` | `AnalyticsEventIn` (client payload), `AnalyticsOverview`, `AnalyticsPoint` (`day`, `value`), `AnalyticsBreakdownRow` (`dimension`, `value`, `share`), `ContentStat` (post id, title, type, reads, median duration, reactions), `PipelineStats` (translation counts and lead time). | Declares the shapes before logic. The dashboard's TypeScript types in Phase 4 mirror these one-to-one. |
+| `backend/internal/service/ratelimit.go` | Extract the per-IP sliding-window limiter out of `assistant.go` into `type IPRateLimiter` with `Allow(ip) bool`, configurable `limit` and `window`. `assistant.go` switches to it. Add `ratelimit_test.go`. | Two private copies of a limiter drift. One shared type, two instances (assistant: 10/min, analytics: 60/min per IP). |
+| `backend/internal/repository/analytics.go` | `InsertEvents(ctx, []AnalyticsEvent)` via one multi-row `INSERT`. `RollupDay(ctx, day)` runs the aggregate queries and upserts into `analytics_daily`. `PruneBefore(ctx, cutoff)`. Reads: `GetDailySeries(metric, dimension, from, to)`, `GetBreakdown(metric, from, to, limit)`, `GetContentStats(from, to)` (joins `analytics_events` on `props->>'post_id'` to `posts`), `GetPipelineStats(from, to)` (counts from `translations`, `translation_jobs`, `fine_tuning_examples`). | Raw SQL only. One multi-row insert per batch keeps the session-pooler connection count flat under a burst. |
+| `backend/internal/service/analytics.go` | `Ingest(ctx, ip, ua, events)`: drop bot user agents (a short list plus `HeadlessChrome`), normalise `path` (strip query, collapse UUID segments to `{id}` and keep the real id in `props.post_id`), compute `visitor_hash = sha256(ANALYTICS_SALT_SECRET + today + ip + ua)`, classify `device` from the UA, clamp `duration_ms` to 0..6 h, drop events tagged `is_admin`. Read methods: `Overview(from, to)` = uniques, sessions, pageviews, median session duration, return rate, vi share, all from `analytics_daily`. `Content`, `Pipeline` delegate to the repository. | This is where privacy is enforced: the IP never reaches the repository. The daily salt means the same browser is one visitor within a day and unlinkable across days, which is what lets us count uniques without a consent banner. Return rate therefore cannot come from the hash; it comes from a `returning` boolean the client sends (see Phase 3), so the server still never holds anything linkable. |
+| `backend/internal/analytics/rollup.go` | Background worker modelled on `translation/worker.go`: ticks every 10 min, rolls up today and yesterday (yesterday catches late beacons), prunes raw rows past retention once a day. Also flushes the logger's in-memory request buckets into `analytics_request_stats` every hour. | Same ticker + `sync.Once` + cancel shape the codebase already understands. Re-rolling yesterday makes the job idempotent, so a crash mid-run costs nothing. |
+| `backend/internal/middleware/logger.go` | Replace the placeholder: wrap `ResponseWriter` to capture status, time the request, bucket by `chi.RouteContext(r.Context()).RoutePattern()` into a mutex-guarded in-memory map; expose `Snapshot()` for the rollup worker. Skip `/api/v1/health` (the cron-job.org pinger would otherwise dominate). | The only way to get p95 latency and error rate without paying for an APM. Route *pattern* keeps cardinality to about 30 keys. |
+| `backend/internal/handler/analytics.go` | `Ingest` (parse, validate, call service, 202 with empty body), `Overview`, `Timeseries` (`?metric&from&to&bucket=day|week`), `Breakdown` (`?dimension=path|locale|device|referrer`), `Content`, `Pipeline`. | Three responsibilities only: parse, validate, call. |
+| `backend/cmd/server/main.go` | Public: `POST /api/v1/analytics/events` wrapped in `http.MaxBytesReader(16 KB)`. Admin group: `GET /api/v1/admin/analytics/{overview,timeseries,breakdown,content,pipeline}`. Start the rollup worker next to the translation worker. Read `ANALYTICS_SALT_SECRET` from env. | Ingest is public on purpose - the route comment says so, like the reactions and Discord callback comments do. Reads are admin-only because they are a leadership-facing view. |
+| `backend/.env.example`, Render env | `ANALYTICS_SALT_SECRET` (random 32 bytes). | Without a secret in the hash, anyone with the day and an IP list could reproduce visitor hashes. |
+
+Allow-listed `event_name` values (anything else gives 400): `page_view`, `page_leave` (carries
+`duration_ms`), `post_read` (`props.post_id`, fired when half the post body has been scrolled),
+`locale_switch` (`props.from`, `props.to`), `calendar_month_view` (`props.month`),
+`calendar_event_open`, `gallery_album_open`, `reaction_add`, `outbound_click`
+(`props.host`). Admin sessions send `props.is_admin = true` and the service drops them, so the
+owner editing posts never counts as a visitor.
+
+---
+
+## Phase 3 - Frontend tracking
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/lib/analytics.ts` | `track(name, props?)`: pushes to an in-memory queue; flushes with `navigator.sendBeacon` (fallback `fetch` with `keepalive`) every 5 s, at 20 events, and on `pagehide`. Failed batches persist to `localStorage` (`vgomne_analytics_queue`, capped at 200 events) and retry on next load. Session id in `sessionStorage`, renewed after 30 min idle. `localStorage` keeps only a last-visit date (`vgomne_last_visit`, no identifier); each `page_view` carries `returning: true` when that date is within the previous 30 days but not today. Page duration measured from `visibilitychange`: only visible time counts. Disabled when `NEXT_PUBLIC_ANALYTICS_DISABLED=1` (local dev). Unit tests in `lib/__tests__/analytics.test.ts`. | The queue-and-retry is what survives Render's cold start (constraint 1). Visible-time-only duration keeps mobile Safari's background tabs from inflating session length. No cookie is ever set. |
+| `frontend/components/features/analytics/TrackerMount.tsx` | `"use client"` island. Subscribes to `usePathname()` to fire `page_view` on every route change and `page_leave` for the previous one; reads `useAuth().isAdmin` to tag admin sessions. Renders nothing. | A client island in a server layout is the established pattern here (see `frontend.md`). The tracker needs browser APIs, the layout does not. |
+| `frontend/app/[locale]/layout.tsx` | Mount `<TrackerMount />` and `<Analytics />` from `@vercel/analytics/next`. | One place, every page, both locales. Vercel Analytics is the cross-check; it costs one line. |
+| Post detail component, `calendar/CalendarShell.tsx`, gallery album view, `posts/ReactionBar.tsx`, the language switcher in `Navbar.tsx` | One `track(...)` call each for the allow-listed events above. | These are the product-specific numbers no vendor can produce. Each call is one line at an existing event handler. |
+| `frontend/package.json` | Add `@vercel/analytics`. | Cross-check only; removable later without touching our pipeline. |
+| `frontend/messages/en.json`, `vi.json` | One footer sentence under a `privacy` namespace: anonymous, cookie-free usage statistics are collected. | Honest with the congregation; the no-mixed-language rule means both files change together. |
+
+---
+
+## Phase 4 - Dashboard
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/lib/analytics-api.ts` | Typed `apiGet` wrappers for the five admin endpoints plus a `DateRange` helper (`7d`, `30d`, `90d`, `12m`, custom). | Keeps fetch shapes in one file; components stay dumb. |
+| `frontend/lib/types.ts` | TS mirrors of the Phase 2 model types. | Single source of truth for response shapes on the client. |
+| `frontend/app/[locale]/admin/analytics/page.tsx` | Admin-gated page (same guard as `admin/[section]/page.tsx`). Layout below. | Admins get the same view the owner does; it is also the screen to show church leaders. |
+| `frontend/components/features/analytics/StatTile.tsx` | Big number, label, delta vs the previous period, optional sparkline. | Reused six times on the overview row. |
+| `frontend/components/features/analytics/TrendChart.tsx` | Line/area chart (Recharts) of a daily or weekly series, two series max (e.g. en vs vi). | Visitors over time is the one chart everyone asks for first. |
+| `frontend/components/features/analytics/BreakdownTable.tsx` | Dimension, count, share bar. | Top pages, locale split, devices, referrers all share this shape. |
+| `frontend/components/features/analytics/ContentTable.tsx` | Per-post row: title, type, reads, median read time, reactions, published date. | Answers the admin's real question: did anyone read it. |
+| `frontend/components/features/analytics/PipelinePanel.tsx` | Translations produced / approved unedited / edited / median lead time; Discord deliveries. | The AI-pipeline quality numbers. |
+| `frontend/components/features/analytics/DateRangePicker.tsx` | Preset pills + custom range, uses existing design tokens (Baloo 2 / Nunito, plum/mauve). | Shared by every panel on the page. |
+| `frontend/components/ui/Navbar.tsx` | Add "Analytics" to the admin dropdown next to Translations. | Discoverable without a URL. |
+| `frontend/package.json` | Add `recharts`. | Mature, SSR-safe with `"use client"`, themeable via CSS variables so dark mode works. |
+| `frontend/messages/en.json`, `vi.json` | `admin.analytics.*` namespace for every label. | No mixed-language UI. |
+
+### What the admin page looks like
+
+```
+Analytics                                [ 7d ] [ 30d ] [ 90d ] [ 12m ] [ custom ]
+
++----------+ +----------+ +----------+ +----------+ +----------+ +----------+
+| Visitors | | Sessions | | Median   | | Return   | | Read in  | | Pages /  |
+|   312    | |   540    | | session  | | rate     | | Vietnam. | | session  |
+|  +18%    | |  +11%    | | 2m 40s   | |   46%    | |   58%    | |   3.1    |
++----------+ +----------+ +----------+ +----------+ +----------+ +----------+
+
+Visitors per day  (en ---  vi ---)                 Day of week x hour heatmap
+(weekly Sunday spikes visible)                     (Sunday morning glows)
+
+Top pages              | Devices        | Referrers
+/events/{id}  184 ###  | phone    71%   | direct        62%
+/calendar     120 ##   | desktop  24%   | facebook.com  21%
+/             110 ##   | tablet    5%   | google        12%
+
+Content                                           Translation pipeline
+Title            Type   Reads  Med. read  Reacts   Produced 48 . approved unedited 41 (85%)
+Thanksgiving ... event   184    1m 50s      23      median publish-to-approved 3h 12m
+Oct playlist    playl.    97    0m 40s       9      Discord sends 52
+```
+
+### End-to-end flow
+
+```
+visitor opens /vi/events/abc
+  -> TrackerMount fires page_view {path:/events/{id}, locale:vi, props.post_id:abc}
+  -> lib/analytics.ts queues it; on pagehide fires page_leave {duration_ms}
+  -> sendBeacon POST /api/v1/analytics/events  (batch, <=20 events, <=16 KB)
+      (if Render is cold: beacon fails -> localStorage queue -> retried next visit)
+  -> handler validates -> service drops bots/admins, hashes IP+UA+daily salt, normalises path
+  -> repository INSERT ... analytics_events
+  -> rollup worker (10 min) -> analytics_daily rows for today/yesterday
+  -> logger middleware -> hourly flush -> analytics_request_stats
+  -> admin opens /admin/analytics -> GET /api/v1/admin/analytics/* (RequireAdmin)
+  -> StatTiles, TrendChart, tables
+  -> Vercel Analytics counts the same page view independently; owner compares monthly
+```
+
+### Security callouts
+
+- **New public write surface.** Mitigations: 60 req/min/IP via the shared limiter, 16 KB body
+  cap, 20 events per batch, allow-listed event names, `props` capped at 1 KB with whitelisted
+  keys, `path` normalised server-side so a hostile client cannot write arbitrary strings into
+  the top-pages table.
+- **No PII stored.** No IP, no raw UA, no user id, no cookie. `visitor_hash` is one-way and
+  rotates daily. Nothing here requires a consent banner under the usual reading of GDPR/ePrivacy
+  (Plausible's published rationale), and the footer sentence says what is collected anyway.
+- **Admin reads stay admin.** All five read endpoints sit inside `RequireAdmin`. Nothing moves
+  out of the public group.
+- **Secret.** `ANALYTICS_SALT_SECRET` in Render, never in code; rotate it and visitor hashes
+  simply restart - no data to migrate.
+- **Logger cardinality.** Bucketing by route pattern, not URL, bounds the in-memory map; a
+  scanner hitting random paths lands in one `404` bucket.
+
+### Scope estimate
+
+| Phase | Rough time |
+|---|---|
+| 1 Database | 1 h |
+| 2 Backend (tests first, limiter extraction, logger, worker, 6 endpoints) | 1.5 days |
+| 3 Frontend tracking (queue + retry + tests, island, 8 track calls, Vercel) | 1 day |
+| 4 Dashboard (7 components, page, nav, i18n) | 1.5 days |
+| Docs (`api.md`, `components.md`, `backend.md`, `frontend.md`, `database.md`, `progress.md`) | 0.5 day |
+
+### Open questions for the owner
+
+1. **Recharts vs hand-rolled SVG.** Recharts is about 100 KB gzipped on the admin route only
+   (public pages unaffected). Hand-rolled is lighter and matches the house style more exactly
+   but costs about a day more. Proposal: Recharts.
+2. **Keep Vercel Analytics on indefinitely**, or switch it off after three months of agreement?
+   Proposal: keep it; it is free and the ongoing comparison is itself a claim.
+3. **Retention.** 400 days of raw rows proposed. Longer is harmless on volume; shorter weakens
+   the year-over-year chart.
+4. **Service-time correlation.** If the owner provides service times, the heatmap can mark
+   them so "readers spike 2 h before service" becomes a sentence, not an inference.
+
+---
+
 # BUILT 2026-10-21 (awaiting push) - Make the month view feel like Google Calendar's
 
 **Status:** all three phases built and verified against production data with CDP touch; write-ups in `docs/components.md`. Deviations from the plan below: none of substance - the only addition was flattening the track for an admin exporting from a phone, which the plan's "desktop keeps a single page" line did not cover.

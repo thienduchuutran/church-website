@@ -963,3 +963,17 @@ deliberate: a member should be greeted every year rather than every fourth.
 Occurrences are derived from the original start date rather than stepped from
 the previous one so a fallback never drifts; `service/recurrence.go` has a test
 for exactly that.
+
+## 2026-10-28 - First-party analytics + admin dashboard (migration `000019`)
+
+**What.** Cookie-free usage analytics owned by the site, plus `/admin/analytics`. Decided 2026-10-21 against vendor-only: a vendor counts page URLs, and the numbers that matter here (share of readers in Vietnamese, event views before Sunday, how often Gemini's translation shipped unedited) only our own tables know. Vercel Web Analytics stays mounted as the independent cross-check of the visitor count. Plan, metric catalogue and the owner's edits (assistant-questions metric dropped) are in `docs/scratchpad.md`.
+
+**Shape.** Browser tracker (`frontend/lib/analytics.ts`, pure `Tracker` class with 13 node tests) → public `POST /api/v1/analytics/events` (batched, 16 KB, 60/min/IP, allow-listed names and prop keys) → `service.AnalyticsService` (the privacy boundary: daily-salted visitor hash, bot and admin batches discarded, path normalised) → `analytics_events` → `analytics.Rollup` worker every 10 min → `analytics_daily` → six admin GETs → the dashboard. The old no-op `RequestLogger` became `middleware.RequestStats`, so p50/p95 and error rate per route come for free. The assistant's private rate limiter was extracted into `service.IPRateLimiter` and shared.
+
+**Privacy decisions worth restating.** No IP, no raw user agent, no cookie, no stable browser id (the reactions fingerprint is deliberately not reused). The hash includes the local calendar day, so "visitors" over a range is the **sum of daily uniques**, and the return rate comes from a client-side last-visit date, not from the hash. Admin sessions are tagged on the batch and dropped server-side. A one-sentence footer line in both locales says statistics are collected.
+
+**Deviations from the plan.** Response types live in `lib/analytics-api.ts` next to the fetchers rather than in `lib/types.ts`. A sixth read endpoint (`/requests`) exists because the logger buckets needed a home on the page. `post_read` fires from an `IntersectionObserver` sentinel (two seconds on screen) rather than a scroll-depth check, because posts are read in-feed, not on a detail page. "Discord deliveries" was dropped from the pipeline panel: there is no delivery log to count, and a posts-created proxy would have been dishonest.
+
+**Verified.** `go test ./...` green (handler, service, middleware, limiter, model); `npm run test:analytics` 13/13; `tsc --noEmit` clean; end-to-end against the local Postgres: ingest 202, bot UA dropped, unknown name 400, unauthenticated admin read 401, rollup rows inspected by hand (hour bucket `3-10` = Wednesday 10am local). Two bugs found and fixed on that run are in `known-quirks.md` (`returning` reserved word; pgx argument count).
+
+**Not done / owner's call.** `ANALYTICS_SALT_SECRET` must be added on Render before deploy; Vercel Web Analytics must be enabled in the Vercel project; the heatmap has no service-time marker until the owner provides service times.

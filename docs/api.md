@@ -334,6 +334,42 @@ Ask the AI assistant a question. Powered by the Groq API (llama-3.3-70b-versatil
 
 ---
 
+### `POST /api/v1/analytics/events`
+First-party, cookie-free usage analytics ingest. **Public on purpose** - every visitor is anonymous. The in-page tracker (`frontend/lib/analytics.ts`) batches events and sends them here; the server never stores an IP or raw user agent (see `docs/agents/backend.md` -> "Analytics").
+
+Rate limit: 60 batches per minute per IP. Body cap: 16 KB. At most 20 events per batch.
+
+**Request body**
+```json
+{
+  "is_admin": false,
+  "events": [
+    {
+      "name": "page_view",
+      "path": "/vi/events?x=1",
+      "locale": "vi",
+      "session_id": "2f1c...",
+      "occurred_at": 1761660000000,
+      "referrer": "https://m.facebook.com",
+      "returning": true,
+      "props": { "post_id": "uuid" }
+    }
+  ]
+}
+```
+* `name` must be one of `page_view`, `page_leave` (carries `duration_ms`), `post_read`, `locale_switch`, `calendar_month_view`, `calendar_event_open`, `gallery_album_open`, `reaction_add`, `outbound_click`.
+* `path` must be a relative path (<= 300 chars); the server strips the query string and the locale prefix and collapses UUID segments to `{id}`.
+* `locale` is `en` or `vi`; `session_id` is 8-64 chars; `occurred_at` is Unix ms (clamped to the last 7 days).
+* `props` keys are limited to `post_id`, `event_id`, `album_id`, `from`, `to`, `month`, `host`, `emoji`, `tag`; values are strings (<= 120 chars), numbers or booleans.
+* `is_admin: true` makes the server discard the whole batch (admins are not visitors). Bot user agents are discarded the same way.
+
+**Response `202`** - empty body (also for discarded admin/bot batches)
+**Response `400`** - invalid JSON, empty or oversized batch, unknown event name, bad locale/path/session id, non-whitelisted prop
+**Response `413`** - body over 16 KB
+**Response `429`** - rate limit exceeded
+
+---
+
 ## Admin endpoints (JWT required)
 
 All admin routes require a valid Supabase JWT in the `Authorization: Bearer <token>` header, and the token's email must exist in the `admins` table.
@@ -978,3 +1014,60 @@ Swatches are a **picker convenience only**. An event stores its color by value, 
 3. Register the route in `backend/cmd/server/main.go`. Public routes go outside the `RequireAdmin` group.
 4. **Update this file** (`docs/api.md`) with the new endpoint, request/response shape, and any new model types.
 5. Update `docs/agents/backend.md` route table.
+
+---
+
+## Admin analytics (JWT required)
+
+All six reads take the same optional range: `?from=YYYY-MM-DD&to=YYYY-MM-DD` (inclusive calendar days in the site's time zone, default the last 30 days, max 400 days). `400` on a reversed, unparseable or too-long range.
+
+### `GET /api/v1/admin/analytics/overview`
+Headline tiles for the range and for the equally long period just before it.
+```json
+{
+  "from": "2026-10-01", "to": "2026-10-30",
+  "current":  { "visitors": 312, "avg_daily_visitors": 10.4, "peak_daily_visitors": 41, "peak_day": "2026-10-25",
+                "sessions": 540, "pageviews": 1670, "median_session_seconds": 160,
+                "return_rate": 0.46, "vi_share": 0.58, "pages_per_session": 3.1 },
+  "previous": { "...": "same shape" }
+}
+```
+* `visitors` is the **sum of daily unique visitors** (the visitor hash rotates daily, so one person seen on three days counts three times - the Plausible convention).
+* `return_rate` = sessions whose first page view carried the client's `returning` flag / sessions. `vi_share` = sessions in Vietnamese / sessions.
+
+### `GET /api/v1/admin/analytics/timeseries?metric=&dimension=&bucket=day|week`
+One point per day (or ISO week, Monday-start) with gaps filled with zeros. `metric` is one of `visitors`, `visitors_locale`, `sessions`, `sessions_locale`, `pageviews`, `returning_sessions`, `events`, `session_seconds_median`, `post_reads`; `dimension` narrows a dimensioned metric (e.g. `visitors_locale` + `vi`).
+```json
+{ "metric": "visitors_locale", "dimension": "vi", "bucket": "day", "from": "...", "to": "...",
+  "points": [ { "day": "2026-10-01", "value": 12 } ] }
+```
+
+### `GET /api/v1/admin/analytics/breakdown?dimension=&limit=`
+Top rows for a dimension with each row's share of the range total. `dimension` is one of `path`, `locale`, `device`, `referrer`, `event`, `hour` (dimension values are `<dow>-<hour>`, 0 = Sunday, site time zone), `post`. `limit` 1-50, default 10.
+```json
+{ "dimension": "path", "from": "...", "to": "...",
+  "rows": [ { "dimension": "/events/{id}", "value": 184, "share": 0.31 } ] }
+```
+
+### `GET /api/v1/admin/analytics/content`
+Posts with reads in the range (from `post_read` events) and all-time reactions, most read first, max 50.
+```json
+{ "from": "...", "to": "...", "items": [ { "post_id": "uuid", "title": "...", "type": "event",
+  "published_at": "2026-10-02T14:00:00Z", "reads": 184, "reactions": 23 } ] }
+```
+
+### `GET /api/v1/admin/analytics/pipeline`
+Translation quality and content velocity in the range.
+```json
+{ "translations_produced": 48, "approved_unedited": 41, "approved_edited": 5, "pending_review": 2,
+  "median_lead_seconds": 11520, "posts_published": 9, "reactions_added": 61, "fine_tuning_pairs": 46 }
+```
+* `approved_unedited` = approvals that kept the AI text verbatim (`is_ai_generated` still true). `median_lead_seconds` = median `approved_at - created_at`, null when nothing was approved.
+
+### `GET /api/v1/admin/analytics/requests`
+Backend traffic per chi route pattern from the hourly `analytics_request_stats` rows.
+```json
+{ "from": "...", "to": "...", "routes": [ { "route": "/api/v1/posts", "count": 1200, "errors_5xx": 0, "errors_4xx": 3,
+  "error_rate": 0, "p50_ms": 38, "p95_ms": 210 } ] }
+```
+* `p95_ms` is the worst hourly p95 in the range (an upper bound); `p50_ms` the request-weighted mean of hourly medians.

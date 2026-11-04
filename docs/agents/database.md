@@ -478,6 +478,64 @@ create unique index on fine_tuning_examples (record_id, source_field, record_tab
 
 ---
 
+## Analytics tables (migration `000019`)
+
+First-party, cookie-free usage analytics. Three tables at three grains; the raw table is the source of truth, the other two are derived and can be rebuilt. Written by `service.AnalyticsService` and `analytics.Rollup`, read by the admin dashboard. Design notes in `docs/agents/backend.md` -> "Analytics".
+
+### `analytics_events`
+One row per visitor action, append-only. **No IP, no raw user agent, no user id, no cookie value.** `visitor_hash` is `sha256(secret || local-day || ip || ua)`, so it identifies a browser only within one calendar day in the site's time zone. Pruned past 400 days by the rollup worker.
+```sql
+create table if not exists analytics_events (
+  id            bigserial primary key,
+  occurred_at   timestamptz not null,
+  visitor_hash  text not null,           -- daily-rotating; never joinable across days
+  session_id    text not null,           -- client sessionStorage id, renewed after 30 idle minutes
+  event_name    text not null,           -- allow-listed in model.AnalyticsEventNames
+  path          text not null,           -- normalised route: no query, no locale prefix, UUIDs -> {id}
+  locale        text not null,           -- 'en' | 'vi'
+  referrer_host text,                    -- external referrer host only, 'www.' stripped; NULL = direct
+  device        text not null check (device in ('phone', 'tablet', 'desktop')),
+  duration_ms   integer,                 -- page_leave only: visible time, clamped to 6 h
+  is_returning  boolean not null default false,  -- client-reported (see backend.md); the hash cannot say
+  props         jsonb not null default '{}'       -- allow-listed keys: post_id, event_id, album_id, from, to, month, host, emoji, tag
+);
+create index on analytics_events (occurred_at);
+create index on analytics_events (event_name, occurred_at);
+create index on analytics_events (path, occurred_at);
+```
+> `is_returning`, not `returning`: `RETURNING` is a reserved word in Postgres and the first draft of this migration failed on it. See `known-quirks.md`.
+
+### `analytics_daily`
+Pre-aggregated numbers the dashboard reads. Rebuilt for today and yesterday on every rollup tick (delete-then-insert in one transaction), kept forever. `dimension` is `''` for a total; an empty string rather than NULL so the primary key can hold it.
+```sql
+create table if not exists analytics_daily (
+  day        date not null,              -- calendar day in ANALYTICS_TIMEZONE
+  metric     text not null,
+  dimension  text not null default '',
+  value      numeric not null,
+  primary key (day, metric, dimension)
+);
+```
+Metrics written per day: `visitors` (''), `visitors_locale` (en/vi), `sessions` (''), `sessions_locale` (en/vi), `returning_sessions` (''), `pageviews` (''), `pageviews_path` (path), `pageviews_device` (device), `pageviews_referrer` (host or `direct`), `pageviews_hour` (`<dow>-<hour>`, 0 = Sunday, local time), `events` (event_name, excluding page_view/page_leave), `post_reads` (post id), `session_seconds_median` ('').
+
+### `analytics_request_stats`
+Backend latency and status counts per hour per chi **route pattern**, flushed from `middleware.RequestStats` by the rollup worker. `/api/v1/health` is excluded. On conflict (a restart mid-hour flushed a partial bucket) counts add, the worst p95 wins and p50 is re-weighted.
+```sql
+create table if not exists analytics_request_stats (
+  hour         timestamptz not null,
+  route        text not null,            -- e.g. /api/v1/posts/{id} or (unmatched)
+  status_class text not null check (status_class in ('2xx', '3xx', '4xx', '5xx')),
+  count        integer not null,
+  p50_ms       integer not null,
+  p95_ms       integer not null,
+  primary key (hour, route, status_class)
+);
+```
+
+**Volume.** A few thousand raw rows a month at this congregation's traffic, roughly 300 bytes each - years away from the Supabase free-tier limit even before the 400-day prune.
+
+---
+
 ## Relationships
 ```
 posts       ──< post_images   (one post has many images)
@@ -557,6 +615,7 @@ backend/migrations/
 ├── 000013_source_locale.up.sql         ← posts/calendar_events/calendar_month_notes/translation_jobs += source_locale (seeds en_translation prompt)
 ├── 000017_month_theme_verse.up.sql     ← calendar_month_notes += theme/verse_text/verse_reference (the card above the calendar grid)
 ├── 000018_year_theme_verse.up.sql      ← moves those three to a new calendar_year_content, keyed by YEAR (000017 had the grain wrong)
+├── 000019_analytics.up.sql             ← analytics_events (raw, cookie-free), analytics_daily (rollup), analytics_request_stats (hourly latency)
 ├── 000013_source_locale.down.sql
 ├── 000014_calendar_places.up.sql       ← calendar_places + calendar_events.place_id (seeds place_name prompt)
 ├── 000014_calendar_places.down.sql

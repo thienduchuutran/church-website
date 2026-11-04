@@ -657,3 +657,19 @@ so confirm on the live page after deploy.
 
 **Verified:** by reading the computed cascade - the admin editor sits behind a Google admin session, so confirm on the live page after deploy by toggling the theme on `/admin/translations` and opening a body field.
 **Files affected:** `frontend/components/editor/RichBodyEditor.module.css`, `frontend/app/globals.css`.
+
+---
+
+## Migration 000019 failed with `syntax error at or near "returning"`, and the rollup logged `mismatched param and argument count`
+
+**Symptom (2026-10-28, first local run of the analytics migration).** `go run ./cmd/server` died in `runMigrations` with `ERROR: syntax error at or near "returning" (SQLSTATE 42601)` and golang-migrate left `schema_migrations` at version 19 with `dirty = true`, so every later boot refused to run until the row was reset.
+
+**Cause 1.** `returning` was a column name. `RETURNING` is a reserved word in Postgres (`INSERT ... RETURNING`); unquoted it cannot be a column. The column is now `is_returning`. Rule of thumb when naming a boolean: check it against the Postgres reserved-word list, and prefer an `is_`/`has_` prefix anyway.
+
+**Recovery.** golang-migrate does not roll the version back on failure. Reset it by hand, then restart the backend so it re-applies:
+```sql
+update schema_migrations set version = 18, dirty = false;
+```
+(Locally: `docker exec church-db-local psql -U postgres -d church_dev -c "..."`. On Supabase: the SQL editor.) Nothing from 000019 had been created, so no cleanup was needed; if a later migration fails part-way through, drop what it created before resetting.
+
+**Cause 2 (same session).** Once the tables existed, every rollup tick logged `rollup 2026-10-28: mismatched param and argument count`. pgx refuses to execute a statement when it is handed more arguments than the SQL references (`$1..$3` used, four passed). The rollup runs thirteen statements and only the hour-of-week one needs the time-zone argument, so `repository.AnalyticsRepository.RollupDay` now passes the fourth argument only to statements containing `$4`. Keep that rule in mind when adding a rollup statement: either reference every argument or trim the slice.

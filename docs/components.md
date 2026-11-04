@@ -216,7 +216,7 @@ Facebook-style card rendered for every post.
 | `showReactions` | `boolean` | `true` | Pass `false` in admin views to hide the reaction bar |
 
 **Anatomy** (top to bottom): lavender header strip (`bg-panel`) with the type badge + dates (`.t-meta`) → title (`.t-card text-primary`, magenta) → body (`.t-body text-muted`, Gentium Plus in mauve - a card body is never dark-on-white) → optional image(s) → optional external link button → `ReactionBar`. Badge labels, "Date TBD" and "Open link" are `Post` message keys; dates format in the active locale.  
-Event cards show the event date in mid magenta in the meta row; with no `event_date` they show "Date TBD". No emoji. Admins also see an `EventArchiveButton` in the header to move the event between the Upcoming and Past sections. The `<article>` carries `id="post-{id}"` so `EventRow` on the homepage can deep-link to it.  
+Event cards show the event date in mid magenta in the meta row; with no `event_date` they show "Date TBD". No emoji. Admins also see an `EventArchiveButton` in the header to move the event between the Upcoming and Past sections. The `<article>` carries `id="post-{id}"` so `EventRow` on the homepage can deep-link to it. A zero-height `ReadTracker` sentinel sits before the header strip and reports a `post_read` analytics event after two seconds on screen.  
 **Visual system (PRODUCT):** **`rounded-[14px]`** and **`border-border/60`**; elevation comes from the shared **`.card-lift`** class (see [Card elevation](#card-elevation) below) - never a hardcoded `shadow-*` utility. **Announcement** badge is solid magenta, **event** badge solid mid magenta, both white uppercase; every other type sits on `bg-panel` in ink. Card titles use the `.t-card` role.  
 **Client component:** no (server component; `ReactionBar` inside is client)
 
@@ -944,6 +944,92 @@ A small "?" circle that opens a tasteful info popover on click - a reusable expl
 **Behavior:** the popover is rendered through a **portal** and positioned with `fixed` coordinates from the trigger's rect, so it never gets clipped by an ancestor's `overflow` (e.g. inside the scrolling `EventModal` body). Closes on outside click, Escape, or scroll. First used for the calendar's "Show on website" address toggle to explain that the flag only affects the public site - the export always includes the address.
 
 **Client component:** yes (state, portal, outside-click/scroll listeners)
+
+---
+
+### Analytics (`components/features/analytics/`)
+
+The admin dashboard at `app/[locale]/admin/analytics/page.tsx` and the two tracking islands. Data comes from `lib/analytics-api.ts` (six admin GETs) against one shared `DateRange`; the page fetches everything in parallel on range change and holds the previous render at reduced opacity while a refetch is in flight. Admin UI is English-only like the other admin pages. Colors: `--viz-1` (plum) and `--viz-2` (violet), validated for both modes - see `frontend.md` -> "Analytics tracking".
+
+#### `TrackerMount`
+Renders nothing. Mounted once in `app/[locale]/layout.tsx`. Sets tracker context (`locale` from next-intl, `isAdmin` from `useAuth`), fires `page_view` on every `usePathname()` change (closing the previous page with `page_leave` + visible duration), wires `visibilitychange` / `pagehide` / `pageshow(persisted)`, and flushes any queue persisted from a previous visit.
+**Props:** none. **Client component:** yes.
+
+#### `ReadTracker`
+Invisible 1px sentinel placed inside `PostCard` before the header strip. An `IntersectionObserver` fires `post_read` once the sentinel has been on screen for two continuous seconds, once per post per tab (module-level `Set`).
+| Prop | Type | Description |
+|------|------|-------------|
+| `postId` | `string` | The post the read is attributed to (`props.post_id`) |
+**Client component:** yes.
+
+#### `DateRangePicker`
+The single filter row above every chart (never a filter per card). Preset pills (7 days / 30 days / 90 days / 12 months) plus a Custom mode that reveals two native date inputs.
+| Prop | Type | Description |
+|------|------|-------------|
+| `preset` | `RangePreset \| 'custom'` | Which pill is active |
+| `range` | `DateRange` | Current `{from, to}` (YYYY-MM-DD, inclusive) |
+| `onChange` | `(preset, range) => void` | Called with the new preset and resolved range |
+**Client component:** yes.
+
+#### `StatTile`
+Label, value in the body sans (proportional figures), and either a signed delta vs the previous period or a caption. Deltas are ink-colored on purpose - up is not always good.
+| Prop | Type | Description |
+|------|------|-------------|
+| `label` | `string` | Sentence case, no colon |
+| `value` | `string` | Pre-formatted (see `format.ts`) |
+| `delta` | `number \| null` | Ratio; omitted/null hides the line |
+| `caption` | `string` | Shown when there is no delta |
+**Client component:** no.
+
+#### `TrendChart`
+Recharts `AreaChart`: 2px lines, 10% wash, horizontal hairline grid only, legend whenever there are two series, tooltip in surface tokens, no animation. A "Show table" toggle renders the same rows as a table so every value is reachable without a pointer. Empty state when all values are zero.
+| Prop | Type | Description |
+|------|------|-------------|
+| `title` | `string` | Card heading |
+| `series` | `TrendSeries[]` | `{ key, label, points, colorVar }` - at most two; `colorVar` is `'--viz-1'` or `'--viz-2'` |
+| `bucket` | `'day' \| 'week'` | Labels the table's first column |
+**Client component:** yes.
+
+#### `HourHeatmap`
+7 x 24 grid (Sunday first) of page views from the `hour` breakdown (`<dow>-<hour>` dimensions). One hue mixed into the surface (`color-mix(in oklab, var(--viz-1) N%, var(--surface))`, 8% to 100%) - a sequential ramp. Every cell has a `title` and `aria-label`; a table twin sits behind a toggle; a five-step legend underneath.
+| Prop | Type | Description |
+|------|------|-------------|
+| `rows` | `AnalyticsBreakdownRow[]` | Output of `getBreakdown(..., 'hour', 50)` |
+**Client component:** yes.
+
+#### `BreakdownTable`
+Ordered top-N list: label, count + share, and a 6px bar in `--viz-1` (one hue for every row - nominal categories get no ramp).
+| Prop | Type | Description |
+|------|------|-------------|
+| `title` | `string` | Card heading |
+| `rows` | `AnalyticsBreakdownRow[]` | Sorted desc by the server |
+| `labelFor` | `(dimension) => string` | Optional display mapping (event names, device names, `direct`) |
+| `emptyText` | `string` | Optional empty state |
+**Client component:** no.
+
+#### `ContentTable`
+Per-post rows: title, type, published date, reads in range, reactions all-time. Sorted by reads server-side (max 50).
+| Prop | Type | Description |
+|------|------|-------------|
+| `items` | `ContentStat[]` | From `getContent` |
+**Client component:** no.
+
+#### `PipelinePanel`
+Definition list of translation-quality and velocity numbers; "Approved unedited" also prints its share of all approvals.
+| Prop | Type | Description |
+|------|------|-------------|
+| `stats` | `PipelineStats` | From `getPipeline` |
+**Client component:** no.
+
+#### `RequestsTable`
+Per-route request count, 5xx count, error rate, p50 and p95 (route in mono).
+| Prop | Type | Description |
+|------|------|-------------|
+| `routes` | `RouteStat[]` | From `getRequests` |
+**Client component:** no.
+
+#### `format.ts`
+`compact`, `percent`, `duration`, `shortDate`, `longDate`, `delta`, `DOW`, `hourLabel` - so a tile and a table print the same value the same way.
 
 ---
 

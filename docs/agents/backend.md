@@ -42,7 +42,8 @@ backend/
 │   │   ├── pages.go            ← GET /pages/:slug (locale-aware, returns sections + blocks), PUT /pages/:slug (sections OR blocks)
 │   │   └── admin_translations.go  ← GET list, PATCH approve, POST retranslate (admin review panel)
 │   │   ├── pages.go            ← GET /pages/:slug, PUT /pages/:slug
-│   │   └── assistant.go        ← POST /assistant/chat
+│   │   ├── assistant.go        ← POST /assistant/chat
+│   │   └── analytics.go        ← POST /analytics/events (public ingest, strict allow-lists) + 6 admin reads under /admin/analytics
 │   ├── service/
 │   │   ├── posts.go            ← CreatePost (DB + Discord + translation enqueue), List/Get with locale, Update with diff-based enqueue, SetArchived (no Discord side effect)
 │   │   ├── tag.go              ← CreateTag, GetAll, Replace/RemoveTag
@@ -53,7 +54,9 @@ backend/
 │   │   └── translation.go      ← List/Approve/Retranslate/CleanupOrphans for the admin review panel; Approve also fire-and-forgets a fine-tuning pair capture
 │   │   ├── pages.go            ← GetPageContent, UpdatePageContent
 │   │   ├── assistant.go        ← Chat orchestration (RAG pipeline)
-│   │   └── groq.go             ← Thin client for Groq LLM API
+│   │   ├── groq.go             ← Thin client for Groq LLM API
+│   │   ├── ratelimit.go        ← IPRateLimiter: the one per-IP sliding-window limiter (assistant 10/min, analytics 60/min)
+│   │   └── analytics.go        ← Privacy boundary: daily-salted visitor hash, bot/admin drop, path normalisation; read-side aggregation; rollup/prune
 │   ├── repository/
 │   │   ├── posts.go            ← InsertPost, GetPosts + GetPostByID (both take locale), UpdatePost, SetArchived, DeletePost
 │   │   ├── tag.go              ← CreateTag, GetAllTags, GetTagsByPostID, ReplacePostTags, RemovePostTag, GetPostIDsWithTags
@@ -62,7 +65,10 @@ backend/
 │   │   ├── calendar.go         ← GetEventsByMonth + GetMonthNote (both locale-aware; GetMonthNote LEFT JOINs translations once PER FIELD, since each is approved independently), GetEventByID (for diff), InsertEvent/UpdateEvent/DeleteEvent, UpsertMonthNote/Settings, event-type + palette queries
 │   │   ├── pages.go            ← GetSections (locale-aware), GetSectionsDetail (for diff), UpsertSections, GetBlocks (locale-aware, ordered by position, two COALESCE joins), ReplaceBlocks (transactional upsert + delete with translation cleanup)
 │   │   ├── translation.go      ← List with multi-table record_title JOIN, GetByID, Approve, Delete, orphan sweeps (DeleteOrphanedTranslations/PendingJobs)
-│   │   └── finetuning.go       ← CaptureFinetuningExample: idempotent INSERT of gold (en, vi) pairs into fine_tuning_examples
+│   │   ├── finetuning.go       ← CaptureFinetuningExample: idempotent INSERT of gold (en, vi) pairs into fine_tuning_examples
+│   │   └── analytics.go        ← Multi-row event INSERT, RollupDay (13 aggregate statements in one tx), reads over analytics_daily, request-stat upserts
+│   ├── analytics/              ← Rollup worker: rebuilds analytics_daily for today+yesterday every 10 min, flushes request stats hourly, prunes raw rows past 400 days
+│   │   └── rollup.go
 │   ├── translation/            ← Async EN→VI translation engine. See "Translation engine" section below.
 │   │   ├── models.go           ← TranslationJob, Translation, ContentType
 │   │   ├── prompt.go           ← PromptCache (5min TTL, falls back to stale on DB hiccup)
@@ -73,7 +79,7 @@ backend/
 │   │   ├── auth.go             ← Verify Supabase JWT → check admins table → attach to ctx
 │   │   ├── context.go          ← UserIDFromContext / AdminEmailFromContext / WithUserID (for tests)
 │   │   ├── cors.go             ← Allow frontend origin
-│   │   └── logger.go           ← Request logging
+│   │   └── logger.go           ← RequestStats: per-(hour, route pattern, status class) latency buckets for the analytics dashboard (health pings skipped)
 │   ├── model/
 │   │   └── types.go            ← Post, Admin, Reaction, PostImage, CalendarEvent, etc. (many include MachineTranslated)
 │   ├── discord/
@@ -120,6 +126,7 @@ It is field-level, not all-or-nothing. On an event whose `address_public` is fal
 | GET | `/api/v1/calendar/event-types` | The admin-growable event-type vocabulary (labels + per-type default icon/color) |
 | GET | `/api/v1/calendar/palette` | The shared custom color swatches saved by admins |
 | POST | `/api/v1/assistant/chat` | AI assistant chatbox with RAG context (rate-limited per IP) |
+| POST | `/api/v1/analytics/events` | Anonymous usage-event ingest from the in-page tracker. Batched (<=20), 16 KB cap, 60/min/IP, allow-listed event names and prop keys. Admin and bot batches are accepted and discarded. **Public on purpose.** |
 | GET | `/api/v1/admin/discord/callback` | Discord OAuth redirect target. **Public on purpose** - a browser redirect carries no Bearer token, so trust comes from the HMAC-signed `state`. Links the admin's Discord, then 303-redirects to `{FRONTEND_ORIGIN}/admin?discord=linked\|error`. Do NOT move into the admin group. See `docs/agents/discord.md`. |
 
 > Full request/response shapes and model definitions live in `docs/api.md`.
@@ -157,6 +164,20 @@ It is field-level, not all-or-nothing. On an event whose `address_public` is fal
 | POST | `/api/v1/admin/translations/cleanup-orphans` | Delete translations (and pending jobs) whose parent record was deleted. Returns `{"deleted_translations": N, "deleted_jobs": N}`. Only known table_names are swept; `fine_tuning_examples` is never touched. |
 | GET | `/api/v1/admin/discord/link` | Returns `{ url }` - the Discord OAuth consent URL. Frontend fetches this *with* the Bearer token, then redirects the browser to `url`. `503` when the OAuth env vars are unset. See `docs/agents/discord.md`. |
 | GET | `/api/v1/admin/discord/status` | `{ linked, discord_username?, discord_avatar_url? }` for the current admin - drives the composer's "posts as ..." note / link nudge. |
+
+---
+
+### Admin analytics reads (JWT required)
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/v1/admin/analytics/overview` | Headline totals for `?from&to` plus the previous equal period |
+| GET | `/api/v1/admin/analytics/timeseries` | `?metric&dimension&bucket=day\|week` daily/weekly points, gaps zero-filled |
+| GET | `/api/v1/admin/analytics/breakdown` | `?dimension=path\|locale\|device\|referrer\|event\|hour\|post&limit` top rows with share |
+| GET | `/api/v1/admin/analytics/content` | Per-post reads in range + all-time reactions |
+| GET | `/api/v1/admin/analytics/pipeline` | Translation quality (approved unedited vs edited, lead time) + posts/reactions velocity |
+| GET | `/api/v1/admin/analytics/requests` | Per-route request counts, error rate, p50/p95 from the logger buckets |
+
+Full shapes in `docs/api.md` -> "Admin analytics".
 
 ---
 
@@ -510,6 +531,30 @@ which re-resolves it to the correct place and leaves the old one behind.
 
 ---
 
+## Analytics (`service/analytics.go`, `internal/analytics/`, migration `000019`)
+
+First-party, cookie-free usage analytics. Decided 2026-10-21 (owner + chat): build our own pipeline rather than rely on a vendor dashboard, and keep Vercel Web Analytics mounted in the frontend as an independent cross-check of the visitor count. Plan and metric catalogue: `docs/scratchpad.md` (2026-10-28 entry).
+
+**Privacy is enforced in the service, not the handler.** `AnalyticsService.Ingest` is the only code that sees the client IP. It derives `visitor_hash = sha256(ANALYTICS_SALT_SECRET || local-day || ip || user-agent)[:32]` and nothing else about the client reaches the repository. Because the calendar day (in `ANALYTICS_TIMEZONE`, default `America/New_York`) is part of the hash, one phone is one visitor within a day and an unlinkable string tomorrow - enough to count daily uniques, not enough to follow anyone. Consequences worth knowing:
+
+- **`visitors` over a range is the sum of daily uniques**, not a de-duplicated count. The dashboard labels it so.
+- **Return rate cannot come from the hash.** The browser keeps only a last-visit date in `localStorage` and sends `returning: true` on page views when that date is within the previous 30 days (`frontend/lib/analytics.ts`, `computeReturning`).
+- **Admins are not visitors.** The tracker sets `is_admin` on the batch once `useAuth` resolves; the service discards the whole batch. Bot user agents (`IsBotUserAgent`, a short denylist) are discarded the same way. Both still get `202`.
+
+**Path normalisation** (`service.NormalizePath`): query/fragment dropped, leading `/en` or `/vi` dropped (locale is its own column), UUID segments collapsed to `{id}` with the first one copied into `props.post_id`. This is what keeps the "top pages" table bounded and keeps arbitrary client strings out of it; the handler additionally enforces the allow-lists in `model.AnalyticsEventNames` / `model.AnalyticsPropKeys`.
+
+**Three tables, three grains** (see `docs/agents/database.md` -> "Analytics tables"): raw `analytics_events`, pre-aggregated `analytics_daily` (what every dashboard read except the range-wide median and the content/pipeline joins goes through), and hourly `analytics_request_stats` from the logger middleware.
+
+**The rollup worker** (`analytics.Rollup`, same Start/Stop/once shape as `translation.Worker`) ticks every `ANALYTICS_ROLLUP_INTERVAL` seconds (default 600): it rebuilds today and yesterday in `analytics_daily` (delete-then-insert in one transaction, so re-running is free and late beacons from a phone that was offline still land), flushes completed hourly request buckets, and once a day deletes raw events older than 400 days. `Stop()` flushes the current partial hour so a deploy does not lose it; the repository merges partial buckets on conflict.
+
+**Request stats** (`middleware.RequestStats`) replace the old no-op `RequestLogger`. Buckets are keyed by chi route *pattern* (`/api/v1/posts/{id}`), never the URL, so cardinality is bounded by the route table; `/api/v1/health` is skipped because the cron-job.org pinger would dominate. Up to 2000 samples per bucket feed nearest-rank p50/p95.
+
+**Rate limiting** moved out of `AssistantService` into `service.IPRateLimiter` (`ratelimit.go`) so the analytics ingest and the assistant share one tested implementation. `AssistantService.CheckRateLimit` is a thin wrapper over it.
+
+**Testing.** Handler tests mock the service (`handler/analytics_test.go`); service tests cover the pure pieces - hashing rotation across local midnight, bot/device classification, path normalisation, timestamp clamping (`service/analytics_test.go`); the limiter and the logger buckets have their own tests. The SQL was exercised against the local Postgres on 2026-10-28 (ingest, bot drop, 400 on a bad name, 401 on an unauthenticated read, rollup rows checked by hand).
+
+---
+
 ## Environment variables
 
 In production all env vars live in **Render's dashboard** (Settings → Environment). There is no `.env` file on the Render container disk.
@@ -537,6 +582,11 @@ AWS_SECRET_ACCESS_KEY=...                          # R2 secret access key
 GEMINI_API_KEY=...                                 # All translations. Worker stays disabled when empty.
 SUPPORTED_LOCALES=vi                               # Comma-separated. Defaults to "vi" when empty.
 TRANSLATION_WORKER_INTERVAL=5                      # Poll interval in seconds. Defaults to 5.
+
+# Analytics (migration 000019)
+ANALYTICS_SALT_SECRET=...                          # Random 32+ bytes. Salts the daily visitor hash; without it the pipeline runs but logs a warning. Rotating it just restarts the hashes.
+ANALYTICS_TIMEZONE=America/New_York                # The congregation's zone: a "day" in analytics_daily ends at local midnight. Defaults to America/New_York (tzdata is embedded).
+ANALYTICS_ROLLUP_INTERVAL=600                      # Rollup tick in seconds. Defaults to 600.
 ```
 
 ---

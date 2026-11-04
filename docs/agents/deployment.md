@@ -71,7 +71,12 @@ DISCORD_OAUTH_STATE_SECRET
 DISCORD_GUILD_ID              <VGOMNE server id>   (nickname lookup on link; blank = account names only)
 DISCORD_PROXY_BASE            https://discord-webhook-proxy.<subdomain>.workers.dev
 DISCORD_PROXY_SECRET          <shared key, matches the Worker's PROXY_KEY>   [Secret]
+ANALYTICS_SALT_SECRET         <random 32+ bytes>                              [Secret]  salts the daily visitor hash (migration 000019)
+ANALYTICS_TIMEZONE            America/New_York                                 (default; a "day" in analytics ends at local midnight)
+ANALYTICS_ROLLUP_INTERVAL     600                                              (default; seconds between rollup ticks)
 ```
+
+> **`ANALYTICS_SALT_SECRET` must be set on Render.** Without it visitor hashes are unsalted and the backend logs a warning at boot. Generate one with `openssl rand -hex 32` (or PowerShell: `-join ((1..32) | % { '{0:x2}' -f (Get-Random -Max 256) })`).
 
 > **`DATABASE_URL` uses single `%40` for the `@` in the password** (URL encoding). Render does not have systemd's specifier quirk - do not double the `%` here.
 
@@ -106,6 +111,9 @@ NEXT_PUBLIC_API_URL            https://church-website-ff5w.onrender.com
 ```
 
 The frontend uses `NEXT_PUBLIC_API_URL` to build all `/api/v1/...` request URLs - it is the single switch that points the frontend at the backend. Changing it requires a redeploy.
+
+### Vercel Web Analytics (cross-check only)
+`@vercel/analytics` is mounted in `app/[locale]/layout.tsx` next to our own tracker. It is the independent reference number for visitors - ours is the system of record. It records nothing until **Vercel dashboard → project → Analytics → Enable** is switched on (free on Hobby, with a monthly event cap). No env var is needed. Compare its page-level visitor count with `/admin/analytics` monthly; they should agree within a few percent.
 
 ### `frontend/.npmrc`
 ```
