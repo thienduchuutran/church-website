@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { track } from '@/lib/analytics'
 import { useLocale, useTranslations } from 'next-intl'
 import type { Post } from '@/lib/types'
 import AlbumViewer from './AlbumViewer'
@@ -47,7 +48,7 @@ export default function AlbumGrid({ albums, isLoading }: AlbumGridProps) {
             <button
               key={album.id}
               type="button"
-              onClick={() => setSelectedAlbum(album)}
+              onClick={() => { setSelectedAlbum(album); track('gallery_album_open', { album_id: album.id }) }}
               className="card-lift group relative aspect-square overflow-hidden rounded-lg bg-panel focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
             >
               {/* Cover image */}

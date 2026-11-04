@@ -32,7 +32,8 @@
     "signOut": "Sign out",
     "openMenu": "Open navigation menu",
     "closeMenu": "Close navigation menu",
-    "follow": "Follow us"
+    "follow": "Follow us",
+    "analytics": "Analytics"
   },
   "Calendar": {
     "themeLabel": "This year's theme",
@@ -97,6 +98,7 @@
   "Footer": {
     "title": "Come sit with us.",
     "cta": "Plan a visit",
-    "rights": "Vietnamese Gospel Outreach Ministry New England"
+    "rights": "Vietnamese Gospel Outreach Ministry New England",
+    "privacy": "This site collects anonymous, cookie-free usage statistics."
   }
 }

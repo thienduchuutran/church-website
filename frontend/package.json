@@ -12,7 +12,8 @@
     "lint": "eslint",
     "test:color": "node --experimental-strip-types --test lib/__tests__/color.test.ts",
     "test:places": "node --experimental-strip-types --test lib/__tests__/places.test.ts",
-    "test:month-cache": "node --experimental-strip-types --test lib/__tests__/month-cache.test.ts"
+    "test:month-cache": "node --experimental-strip-types --test lib/__tests__/month-cache.test.ts",
+    "test:analytics": "node --experimental-strip-types --test lib/__tests__/analytics.test.ts"
   },
   "dependencies": {
     "@emoji-mart/data": "^1.2.1",
@@ -33,6 +34,7 @@
     "@tiptap/extension-underline": "^3.23.1",
     "@tiptap/react": "^3.23.1",
     "@tiptap/starter-kit": "^3.23.1",
+    "@vercel/analytics": "^1.5.0",
     "emoji-mart": "^5.6.0",
     "html-to-image": "^1.11.13",
     "html2canvas": "^1.4.1",
@@ -44,6 +46,7 @@
     "photoswipe": "^5.4.4",
     "react": "19.2.4",
     "react-dom": "19.2.4",
+    "recharts": "^3.3.0",
     "sanitize-html": "^2.14.0"
   },
   "devDependencies": {

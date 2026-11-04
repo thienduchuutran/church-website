@@ -53,6 +53,9 @@ export default async function SiteFooter() {
         <p className="mt-10 border-t border-white/15 pt-5 font-sans text-xs text-white/60">
           © {new Date().getFullYear()} VGOMNE · {t('rights')}
         </p>
+        {/* Honest about analytics: anonymous, cookie-free. One sentence, both
+            locales, no explainer. */}
+        <p className="mt-2 font-sans text-xs text-white/50">{t('privacy')}</p>
       </div>
     </footer>
   )

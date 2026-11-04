@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { flushNow, track } from '@/lib/analytics'
 import { useLocale, useTranslations } from 'next-intl'
 import { routing, type Locale } from '@/i18n/routing'
 import { markLocaleSwitch } from '@/lib/locale-transition'
@@ -79,6 +80,10 @@ export default function LanguageSwitcher({ className = '' }: { className?: strin
     // restores scroll position rather than jumping to the top.
     markLocaleSwitch(window.scrollY)
     setIsSwitching(true)
+    // Analytics: the switch is a hard navigation, so queue the event and
+    // push everything out now - a scheduled flush would never run.
+    track('locale_switch', { from: active, to: target })
+    flushNow()
     // Build the target URL from the RAW browser path. `localePrefix: 'always'`
     // means EVERY locale is prefixed (/en/..., /vi/...), so we strip whatever
     // locale prefix is on the current path and add the target's. Using the raw

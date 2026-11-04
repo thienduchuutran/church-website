@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { track } from '@/lib/analytics'
 import { flushSync } from 'react-dom'
 import { AnimatePresence, animate, motion, useDragControls, useMotionValue, useReducedMotion } from 'motion/react'
 import { useLocale } from 'next-intl'
@@ -363,14 +364,20 @@ export default function CalendarShell({
   // admin-only fields (private_address, title_source) appearing.
   useEffect(() => { fetchMonth(year, month) }, [year, month, fetchMonth])
 
+  // Analytics: one calendar_month_view per deliberate month change (arrows,
+  // swipe, Today). The initial month is covered by the page_view.
+  function trackMonth(y: number, m: number) {
+    track('calendar_month_view', { month: `${y}-${String(m).padStart(2, '0')}` })
+  }
+
   function prevMonth() {
-    if (month === 1) { setYear(year - 1); setMonth(12) }
-    else setMonth(month - 1)
+    if (month === 1) { setYear(year - 1); setMonth(12); trackMonth(year - 1, 12) }
+    else { setMonth(month - 1); trackMonth(year, month - 1) }
   }
 
   function nextMonth() {
-    if (month === 12) { setYear(year + 1); setMonth(1) }
-    else setMonth(month + 1)
+    if (month === 12) { setYear(year + 1); setMonth(1); trackMonth(year + 1, 1) }
+    else { setMonth(month + 1); trackMonth(year, month + 1) }
   }
 
   const today = new Date()
@@ -379,6 +386,7 @@ export default function CalendarShell({
     if (isOnCurrentMonth) return
     setYear(today.getFullYear())
     setMonth(today.getMonth() + 1)
+    trackMonth(today.getFullYear(), today.getMonth() + 1)
   }
 
   function handleDayClick(date: string) {
@@ -386,6 +394,7 @@ export default function CalendarShell({
     if (eventsOnDay.length > 0) {
       // Day has events → show the list popup (works for everyone)
       setDayListDate(date)
+      track('calendar_event_open', { event_id: eventsOnDay[0].id })
     } else if (isAdmin) {
       // Empty day + admin → straight to create modal
       setSelectedDate(date)

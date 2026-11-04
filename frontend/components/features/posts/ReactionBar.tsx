@@ -1,6 +1,7 @@
 'use client'
 
 import { useTranslations } from 'next-intl'
+import { track } from '@/lib/analytics'
 import { useEffect, useRef, useState } from 'react'
 import { apiGet, apiPostAnon, apiDeleteAnon } from '@/lib/api'
 
@@ -250,6 +251,7 @@ export default function ReactionBar({
       } else {
         // Add or switch reaction - backend does an upsert.
         await apiPostAnon('/api/v1/reactions', { post_id: postId, emoji, fingerprint: fp })
+        track('reaction_add', { post_id: postId, emoji })
         setCounts((prev) => {
           const next = { ...prev }
           // Decrement the old emoji if switching.

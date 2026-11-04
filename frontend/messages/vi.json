@@ -32,7 +32,8 @@
     "signOut": "Đăng xuất",
     "openMenu": "Mở menu điều hướng",
     "closeMenu": "Đóng menu điều hướng",
-    "follow": "Theo dõi chúng tôi"
+    "follow": "Theo dõi chúng tôi",
+    "analytics": "Thống kê"
   },
   "Calendar": {
     "themeLabel": "Chủ đề năm nay",
@@ -97,6 +98,7 @@
   "Footer": {
     "title": "Ghé thăm chúng tôi.",
     "cta": "Lên kế hoạch ghé thăm",
-    "rights": "Hội Thánh Tin Lành Việt Nam vùng New England"
+    "rights": "Hội Thánh Tin Lành Việt Nam vùng New England",
+    "privacy": "Trang này thu thập số liệu sử dụng ẩn danh, không dùng cookie."
   }
 }

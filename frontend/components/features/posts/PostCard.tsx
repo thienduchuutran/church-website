@@ -6,6 +6,7 @@ import AdminControls from '@/components/features/admin/AdminControls'
 import EventArchiveButton from '@/components/features/admin/EventArchiveButton'
 import { RichContent } from '@/components/editor/RichContent'
 import MachineTranslatedBadge from '@/components/ui/MachineTranslatedBadge'
+import ReadTracker from '@/components/features/analytics/ReadTracker'
 
 // The card is white paper with a lavender header strip: the strip carries the
 // type badge and the dates (the brand at chip scale), the paper carries a
@@ -54,6 +55,9 @@ export default function PostCard({
       id={`post-${post.id}`}
       className="card-lift scroll-mt-24 overflow-hidden rounded-[14px] border border-border/60 bg-surface"
     >
+      {/* Analytics: counts a post_read once this card has been on screen
+          for two seconds. Invisible, zero height. */}
+      <ReadTracker postId={post.id} />
       {/* Header strip */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 bg-panel px-4 py-2.5 sm:px-5">
         <span className={`t-meta rounded-full px-2.5 py-1 text-[0.7rem] ${badgeClass}`}>

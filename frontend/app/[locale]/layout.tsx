@@ -13,6 +13,8 @@ import Navbar from '@/components/ui/Navbar'
 import SiteFooter from '@/components/ui/SiteFooter'
 import PageTransition from '@/components/ui/PageTransition'
 import NavigationProgress from '@/components/ui/NavigationProgress'
+import TrackerMount from '@/components/features/analytics/TrackerMount'
+import { Analytics } from '@vercel/analytics/next'
 import { routing } from '@/i18n/routing'
 // Temporarily disabled: AI assistant is not working yet. Uncomment this import
 // and the <ChatBox /> mount below to re-enable.
@@ -140,6 +142,11 @@ export default async function LocaleLayout({
             <UnsavedChangesProvider>
             <EditModalProvider>
               <NavigationProgress />
+              {/* First-party analytics (lib/analytics.ts) plus Vercel Web
+                  Analytics as an independent cross-check of the visitor
+                  count. Both are cookie-free. */}
+              <TrackerMount />
+              <Analytics />
               <Navbar />
               <main id="main-content" tabIndex={-1} className="flex-1 scroll-mt-20">
                 <PageTransition>{children}</PageTransition>
