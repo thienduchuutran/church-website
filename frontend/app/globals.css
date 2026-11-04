@@ -51,6 +51,13 @@
   --muted: #6c4160;
   /* Lavender 60% over white: hairline borders and dividers. */
   --border: #d6d1fc;
+  /* Chart series for the admin analytics dashboard: brand plum + a violet
+     that the dataviz validator passes beside it (CVD dE 19, normal 22 on
+     this surface). Two slots on purpose: en vs vi is the only two-series
+     chart; everything else is one hue. Dark steps are selected, not
+     flipped - validated on the dark surface. */
+  --viz-1: #8e1d5f;
+  --viz-2: #6250d6;
   /* Hero band: the plum ink, so the darkness is the same family as the text.
      Magenta is 2.1:1 on it, which is why hero brand text is --secondary. */
   --hero-bg: #2c1323;
@@ -98,6 +105,8 @@
   --surface-dark: #221722;
   --muted-dark: #c9a9bf;
   --border-dark: #3d2d43;
+  --viz-1-dark: #d55181;
+  --viz-2-dark: #9085e9;
   --hero-bg-dark: #17101a;
   --hero-text-dark: #ffffff;
   /* Magenta-tinted shadows at 6-16% alpha are invisible on a #17101a field -
@@ -116,6 +125,8 @@
   color-scheme: dark;
   --background: var(--background-dark);
   --foreground: var(--foreground-dark);
+  --viz-1: var(--viz-1-dark);
+  --viz-2: var(--viz-2-dark);
   --primary: var(--primary-dark);
   --primary-light: var(--primary-light-dark);
   --secondary: var(--secondary-dark);
@@ -177,6 +188,8 @@
     color-scheme: dark;
     --background: var(--background-dark);
     --foreground: var(--foreground-dark);
+    --viz-1: var(--viz-1-dark);
+    --viz-2: var(--viz-2-dark);
     --primary: var(--primary-dark);
     --primary-light: var(--primary-light-dark);
     --secondary: var(--secondary-dark);

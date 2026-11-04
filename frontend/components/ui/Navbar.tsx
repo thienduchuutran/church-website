@@ -356,6 +356,18 @@ export default function Navbar() {
                           </Link>
                         </li>
                       )}
+                      {showAdmin && (
+                        <li>
+                          <Link
+                            href="/admin/analytics"
+                            className={`${PILL} w-full rounded-lg ${
+                              pathname.startsWith('/admin/analytics') ? 'bg-accent text-white' : 'text-foreground hover:bg-accent/15 hover:text-accent'
+                            }`}
+                          >
+                            {t('analytics')}
+                          </Link>
+                        </li>
+                      )}
                       <li>
                         <button type="button" onClick={signOut} className={`${PILL} w-full rounded-lg ${PILL_IDLE}`}>
                           {t('signOut')}
