@@ -91,7 +91,9 @@ frontend/
 │       │   ├── ContentTable.tsx        ← Per-post reads + reactions
 │       │   ├── PipelinePanel.tsx       ← Translation quality + content velocity
 │       │   ├── RequestsTable.tsx       ← Backend p50/p95/error rate per route
-│       │   ├── AudienceToggle.tsx      ← Public / Admins / All pills; scopes every panel
+│       │   ├── AudienceToggle.tsx      ← "Who to count": Visitors / Admins / Everyone pills; scopes every panel
+│       │   ├── SectionTitle.tsx        ← Card heading + the "i" InfoTip; every panel uses it
+│       │   ├── copy.ts                 ← EVERY dashboard label and plain-language explanation; change wording here, never in a component
 │       │   └── format.ts               ← compact/percent/duration/date helpers shared by the above
 │       └── assistant/
 │           ├── ChatBox.tsx             ← Floating AI assistant widget

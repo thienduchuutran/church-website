@@ -1075,3 +1075,4 @@ Backend traffic per chi route pattern from the hourly `analytics_request_stats` 
   "error_rate": 0, "p50_ms": 38, "p95_ms": 210 } ] }
 ```
 * `p95_ms` is the worst hourly p95 in the range (an upper bound); `p50_ms` the request-weighted mean of hourly medians.
+* The `(unmatched)` route (requests that matched no chi pattern) is never returned.

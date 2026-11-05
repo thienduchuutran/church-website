@@ -623,6 +623,7 @@ backend/migrations/
 ├── 000019_analytics.up.sql             ← analytics_events (raw, cookie-free), analytics_daily (rollup), analytics_request_stats (hourly latency)
 ├── 000020_reactions_created_at.up.sql  ← adds reactions.created_at on production (local already had it from 000001); no back-fill, old rows stay NULL
 ├── 000021_analytics_audience.up.sql    ← audience ('public'|'admin') on analytics_events and in the analytics_daily key; existing rows default public
+├── 000022_drop_unmatched_request_stats.up.sql ← deletes the "(unmatched)" request-stat rows (CORS preflights recorded before the logger skipped OPTIONS); down is a no-op
 ├── 000013_source_locale.down.sql
 ├── 000014_calendar_places.up.sql       ← calendar_places + calendar_events.place_id (seeds place_name prompt)
 ├── 000014_calendar_places.down.sql

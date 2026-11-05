@@ -931,7 +931,7 @@ The multi-day ribbon used to render an event that spans more than one day across
 ---
 
 ## `InfoTip`
-A small "?" circle that opens a tasteful info popover on click - a reusable explainer for any setting that needs a note.
+A small "i" circle that opens a tasteful info popover on hover (desktop) or tap (touch) - a reusable explainer for any setting or metric that needs a note. Fades and scales in over 150 ms and fades out before unmounting.
 
 **File:** `components/ui/InfoTip.tsx`
 
@@ -940,8 +940,9 @@ A small "?" circle that opens a tasteful info popover on click - a reusable expl
 |------|------|---------|-------------|
 | `children` | `ReactNode` | required | The explanation rendered inside the popover |
 | `label` | `string` | `'More info'` | Accessible label for the trigger button |
+| `hover` | `boolean` | `true` | Open on mouse-enter (120 ms delay) and close on mouse-leave (160 ms delay) as well as on click. Click still toggles so phones work |
 
-**Behavior:** the popover is rendered through a **portal** and positioned with `fixed` coordinates from the trigger's rect, so it never gets clipped by an ancestor's `overflow` (e.g. inside the scrolling `EventModal` body). Closes on outside click, Escape, or scroll. First used for the calendar's "Show on website" address toggle to explain that the flag only affects the public site - the export always includes the address.
+**Behavior:** the popover is rendered through a **portal** and positioned with `fixed` coordinates from the trigger's rect, so it never gets clipped by an ancestor's `overflow` (e.g. inside the scrolling `EventModal` body). Closes on outside click, Escape, scroll, or when the pointer leaves both trigger and popover. Since 2026-11-05 it is also the "i" beside every metric on the analytics dashboard. First used for the calendar's "Show on website" address toggle to explain that the flag only affects the public site - the export always includes the address.
 
 **Client component:** yes (state, portal, outside-click/scroll listeners)
 
@@ -949,7 +950,17 @@ A small "?" circle that opens a tasteful info popover on click - a reusable expl
 
 ### Analytics (`components/features/analytics/`)
 
-The admin dashboard at `app/[locale]/admin/analytics/page.tsx` and the two tracking islands. Data comes from `lib/analytics-api.ts` (six admin GETs) against one shared `DateRange`; the page fetches everything in parallel on range change and holds the previous render at reduced opacity while a refetch is in flight. Admin UI is English-only like the other admin pages. Colors: `--viz-1` (plum) and `--viz-2` (violet), validated for both modes - see `frontend.md` -> "Analytics tracking".
+The admin dashboard at `app/[locale]/admin/analytics/page.tsx` and the two tracking islands. Data comes from `lib/analytics-api.ts` (six admin GETs) against one shared `DateRange` and one shared `Audience`; the page fetches everything in parallel on a change and holds the previous render at reduced opacity while a refetch is in flight. Admin UI is English-only like the other admin pages. Colors: `--viz-1` (plum) and `--viz-2` (violet), validated for both modes - see `frontend.md` -> "Analytics tracking".
+
+**Every label and explanation lives in `copy.ts`.** The page is read by church leaders, not engineers, so labels are everyday phrases ("Visits", "Came back", "Typical visit length", "Website health") and every metric carries an `InfoTip` "i" whose text says how it is counted in two or three plain sentences. Technical words (session, median, p95) appear only inside a tip, after the plain phrase. `copy.ts` exports `TILES`, `SECTIONS`, `PIPELINE_ROWS`, `POST_COLUMNS`, `HEALTH_COLUMNS`, `AUDIENCE`, plus the `EVENT_LABELS` / `DEVICE_LABELS` / `TYPE_LABELS` maps; each entry is a `Copy = { label, tip }`. Change wording there, not in the components. This is the one admin screen where the owner asked for explanations inside the UI (2026-11-05); it does not loosen the no-helper-text rule on forms.
+
+#### `SectionTitle`
+Card heading (`.t-card`) with the "i" beside it and an optional right-hand control (a table toggle). Every panel uses it so the explanation sits in the same place everywhere.
+| Prop | Type | Description |
+|------|------|-------------|
+| `copy` | `Copy` | Label + tip from `copy.ts` |
+| `right` | `ReactNode` | Optional control rendered on the right |
+**Client component:** no.
 
 #### `TrackerMount`
 Renders nothing. Mounted once in `app/[locale]/layout.tsx`. Sets tracker context (`locale` from next-intl), resolves tracker auth from `useAuth` (`setAuth({ token })` once `loading` is false; a signed-out `hint` releases the hold on first paint), fires `page_view` on every `usePathname()` change (closing the previous page with `page_leave` + visible duration), wires `visibilitychange` / `pagehide` / `pageshow(persisted)`, and flushes any queue persisted from a previous visit. The token travels in the `Authorization` header; the server decides audience from it.  
@@ -963,7 +974,7 @@ Invisible 1px sentinel placed inside `PostCard` before the header strip. An `Int
 **Client component:** yes.
 
 #### `AudienceToggle`
-Three pills - Public / Admins / All - in the filter row beside the date range. Scopes every panel on the page at once. Default Public, the leadership-facing view.
+Labelled "Who to count" with its "i"; three pills - Visitors / Admins / Everyone (`AUDIENCE.options`) - in the filter row beside the date range. Scopes every panel on the page at once. Default Visitors (`public`), the leadership-facing view.
 | Prop | Type | Description |
 |------|------|-------------|
 | `value` | `Audience` | `'public' \| 'admin' \| 'all'` |
@@ -980,20 +991,19 @@ The single filter row above every chart (never a filter per card). Preset pills 
 **Client component:** yes.
 
 #### `StatTile`
-Label, value in the body sans (proportional figures), and either a signed delta vs the previous period or a caption. Deltas are ink-colored on purpose - up is not always good.
+Plain-language label with its "i" explanation, value in the body sans (proportional figures), and either a signed delta vs the previous period or a caption. Deltas are ink-colored on purpose - up is not always good.
 | Prop | Type | Description |
 |------|------|-------------|
-| `label` | `string` | Sentence case, no colon |
+| `copy` | `Copy` | Label + tip from `copy.ts` (`TILES.*`) |
 | `value` | `string` | Pre-formatted (see `format.ts`) |
 | `delta` | `number \| null` | Ratio; omitted/null hides the line |
 | `caption` | `string` | Shown when there is no delta |
 **Client component:** no.
 
 #### `TrendChart`
-Recharts `AreaChart`: 2px lines, 10% wash, horizontal hairline grid only, legend whenever there are two series, tooltip in surface tokens, no animation. A "Show table" toggle renders the same rows as a table so every value is reachable without a pointer. Empty state when all values are zero.
+Recharts `AreaChart`: 2px lines, 10% wash, horizontal hairline grid only, legend whenever there are two series, tooltip in surface tokens, no animation. A "Show table" toggle renders the same rows as a table so every value is reachable without a pointer. Empty state when all values are zero. Heading and tip come from `SECTIONS.trend` ("Visitors per day" / "per week" by bucket).
 | Prop | Type | Description |
 |------|------|-------------|
-| `title` | `string` | Card heading |
 | `series` | `TrendSeries[]` | `{ key, label, points, colorVar }` - at most two; `colorVar` is `'--viz-1'` or `'--viz-2'` |
 | `bucket` | `'day' \| 'week'` | Labels the table's first column |
 **Client component:** yes.
@@ -1009,28 +1019,28 @@ Recharts `AreaChart`: 2px lines, 10% wash, horizontal hairline grid only, legend
 Ordered top-N list: label, count + share, and a 6px bar in `--viz-1` (one hue for every row - nominal categories get no ramp).
 | Prop | Type | Description |
 |------|------|-------------|
-| `title` | `string` | Card heading |
+| `copy` | `Copy` | Heading + tip (`SECTIONS.topPages` / `actions` / `devices` / `sources`) |
 | `rows` | `AnalyticsBreakdownRow[]` | Sorted desc by the server |
 | `labelFor` | `(dimension) => string` | Optional display mapping (event names, device names, `direct`) |
 | `emptyText` | `string` | Optional empty state |
 **Client component:** no.
 
 #### `ContentTable`
-Per-post rows: title, type, published date, reads in range, reactions all-time. Sorted by reads server-side (max 50).
+Per-post rows: post, kind, published date, times read in range, reactions all-time. Sorted by reads server-side (max 50). Column headers for the two numbers carry their own "i" (`POST_COLUMNS`).
 | Prop | Type | Description |
 |------|------|-------------|
 | `items` | `ContentStat[]` | From `getContent` |
 **Client component:** no.
 
 #### `PipelinePanel`
-Definition list of translation-quality and velocity numbers; "Approved unedited" also prints its share of all approvals.
+Definition list of translation-quality and velocity numbers in plain words (`PIPELINE_ROWS`), each row with its own "i"; "Approved without changes" also prints its share of all approvals.
 | Prop | Type | Description |
 |------|------|-------------|
 | `stats` | `PipelineStats` | From `getPipeline` |
 **Client component:** no.
 
 #### `RequestsTable`
-Per-route request count, 5xx count, error rate, p50 and p95 (route in mono).
+Titled "Website health". Per-route request count, failures, failure rate, usual speed (p50) and slow moments (p95), every column header with its own "i" (`HEALTH_COLUMNS`). Route patterns are shown with plain names ("Posts list", "Calendar", "This dashboard") from a map in the component; unknown patterns fall back to the raw pattern. `(unmatched)` never appears: the backend excludes it and migration `000022` deleted the historical rows.
 | Prop | Type | Description |
 |------|------|-------------|
 | `routes` | `RouteStat[]` | From `getRequests` |
