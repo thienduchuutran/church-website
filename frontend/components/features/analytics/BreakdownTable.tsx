@@ -1,4 +1,6 @@
 import type { AnalyticsBreakdownRow } from '@/lib/analytics-api'
+import SectionTitle from './SectionTitle'
+import type { Copy } from './copy'
 import { compact, percent } from './format'
 
 // A top-N list with a share bar. One hue (--viz-1) for every bar because the
@@ -6,12 +8,12 @@ import { compact, percent } from './format'
 // what the bar length already says. Bars are thin (6px) with the share text in
 // ink beside them, never on them.
 export default function BreakdownTable({
-  title,
+  copy,
   rows,
   labelFor = (d) => d,
   emptyText = 'Nothing yet.',
 }: {
-  title: string
+  copy: Copy
   rows: AnalyticsBreakdownRow[]
   labelFor?: (dimension: string) => string
   emptyText?: string
@@ -19,7 +21,7 @@ export default function BreakdownTable({
   const max = rows.reduce((m, r) => Math.max(m, r.value), 0)
   return (
     <section className="rounded-[14px] border border-border/60 bg-surface p-4">
-      <h3 className="t-card mb-3 text-foreground">{title}</h3>
+      <SectionTitle copy={copy} />
       {rows.length === 0 ? (
         <p className="py-6 text-center font-sans text-sm text-muted">{emptyText}</p>
       ) : (

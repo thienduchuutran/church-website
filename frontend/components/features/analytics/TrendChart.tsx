@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import type { AnalyticsPoint } from '@/lib/analytics-api'
+import SectionTitle from './SectionTitle'
+import { SECTIONS } from './copy'
 import { compact, shortDate } from './format'
 
 export interface TrendSeries {
@@ -13,20 +15,14 @@ export interface TrendSeries {
   colorVar: string
 }
 
+const toggleClass = 'font-sans text-xs text-muted underline-offset-2 hover:text-accent hover:underline'
+
 // Line-over-time with up to two series. Marks follow the dataviz specs: 2px
 // lines, a 10% wash under each, hairline horizontal grid only, legend present
 // whenever there are two series, text in ink tokens never in the series hue.
 // A table twin sits behind a toggle so every value is reachable without a
 // pointer.
-export default function TrendChart({
-  title,
-  series,
-  bucket,
-}: {
-  title: string
-  series: TrendSeries[]
-  bucket: 'day' | 'week'
-}) {
+export default function TrendChart({ series, bucket }: { series: TrendSeries[]; bucket: 'day' | 'week' }) {
   const [asTable, setAsTable] = useState(false)
 
   // Merge series on the day key so Recharts gets one row per bucket.
@@ -43,19 +39,17 @@ export default function TrendChart({
 
   return (
     <section className="rounded-[14px] border border-border/60 bg-surface p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="t-card text-foreground">{title}</h3>
-        <button
-          type="button"
-          onClick={() => setAsTable((v) => !v)}
-          className="font-sans text-xs text-muted underline-offset-2 hover:text-accent hover:underline"
-        >
-          {asTable ? 'Show chart' : 'Show table'}
-        </button>
-      </div>
+      <SectionTitle
+        copy={{ ...SECTIONS.trend, label: bucket === 'week' ? 'Visitors per week' : 'Visitors per day' }}
+        right={
+          <button type="button" onClick={() => setAsTable((v) => !v)} className={toggleClass}>
+            {asTable ? 'Show chart' : 'Show table'}
+          </button>
+        }
+      />
 
       {empty ? (
-        <p className="py-10 text-center font-sans text-sm text-muted">No visits recorded in this range yet.</p>
+        <p className="py-10 text-center font-sans text-sm text-muted">No visits recorded in this period yet.</p>
       ) : asTable ? (
         <div className="max-h-80 overflow-auto">
           <table className="w-full font-sans text-sm">

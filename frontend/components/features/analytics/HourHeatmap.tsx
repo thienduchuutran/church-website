@@ -2,10 +2,12 @@
 
 import { useState } from 'react'
 import type { AnalyticsBreakdownRow } from '@/lib/analytics-api'
+import SectionTitle from './SectionTitle'
+import { SECTIONS } from './copy'
 import { DOW, hourLabel } from './format'
 
 // Day-of-week x hour grid of page views. Magnitude is one hue (the brand plum,
-// --viz-1) mixed into the surface from 6% to 100% - a sequential ramp, never a
+// --viz-1) mixed into the surface from 8% to 100% - a sequential ramp, never a
 // rainbow. Rows are Sunday first because that is the day this congregation's
 // week turns on. Each cell carries a title so hover and screen readers both
 // get the number; a table twin sits behind the toggle.
@@ -24,18 +26,20 @@ export default function HourHeatmap({ rows }: { rows: AnalyticsBreakdownRow[] })
 
   return (
     <section className="rounded-[14px] border border-border/60 bg-surface p-4">
-      <div className="mb-3 flex items-center justify-between gap-3">
-        <h3 className="t-card text-foreground">When people read</h3>
-        <button
-          type="button"
-          onClick={() => setAsTable((v) => !v)}
-          className="font-sans text-xs text-muted underline-offset-2 hover:text-accent hover:underline"
-        >
-          {asTable ? 'Show grid' : 'Show table'}
-        </button>
-      </div>
+      <SectionTitle
+        copy={SECTIONS.heatmap}
+        right={
+          <button
+            type="button"
+            onClick={() => setAsTable((v) => !v)}
+            className="font-sans text-xs text-muted underline-offset-2 hover:text-accent hover:underline"
+          >
+            {asTable ? 'Show grid' : 'Show table'}
+          </button>
+        }
+      />
       {empty ? (
-        <p className="py-10 text-center font-sans text-sm text-muted">No page views in this range yet.</p>
+        <p className="py-10 text-center font-sans text-sm text-muted">No page views in this period yet.</p>
       ) : asTable ? (
         <div className="max-h-80 overflow-auto">
           <table className="w-full font-sans text-xs">
@@ -78,7 +82,7 @@ export default function HourHeatmap({ rows }: { rows: AnalyticsBreakdownRow[] })
               ))}
             </div>
             <p className="mt-2 flex items-center gap-2 font-sans text-[11px] text-muted">
-              <span>fewer</span>
+              <span>quieter</span>
               <span className="flex gap-[2px]">
                 {[0.08, 0.3, 0.55, 0.8, 1].map((a) => (
                   <span
@@ -88,7 +92,7 @@ export default function HourHeatmap({ rows }: { rows: AnalyticsBreakdownRow[] })
                   />
                 ))}
               </span>
-              <span>more</span>
+              <span>busier</span>
             </p>
           </div>
         </div>
@@ -107,8 +111,8 @@ function RowCells({ day, row, max }: { day: string; row: number[]; max: number }
           <span
             key={h}
             role="img"
-            aria-label={`${day} ${hourLabel(h)}: ${v} views`}
-            title={`${day} ${hourLabel(h)}: ${v} views`}
+            aria-label={`${day} ${hourLabel(h)}: ${v} page views`}
+            title={`${day} ${hourLabel(h)}: ${v} page views`}
             className="aspect-square rounded-[3px] bg-panel/60"
             style={v === 0 ? undefined : { background: `color-mix(in oklab, var(--viz-1) ${Math.round(alpha * 100)}%, var(--surface))` }}
           />
