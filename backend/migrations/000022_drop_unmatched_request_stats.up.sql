@@ -1,0 +1,14 @@
+-- 000022_drop_unmatched_request_stats.up.sql
+-- Remove the "(unmatched)" rows from analytics_request_stats.
+--
+-- Until migration 000021's logger fix, CORS preflight (OPTIONS) requests were
+-- recorded under the route "(unmatched)" because the CORS middleware answers
+-- them before chi matches a route. 283 such rows landed on the first
+-- production day, all from one browser, and they read on the dashboard like
+-- an attack. They are browser plumbing, not traffic, so the history is
+-- deleted rather than relabelled.
+--
+-- From here on the repository also leaves "(unmatched)" out of the dashboard
+-- query, so the occasional scanner probing a path that does not exist never
+-- becomes a row the owner has to interpret. Idempotent.
+delete from analytics_request_stats where route = '(unmatched)';

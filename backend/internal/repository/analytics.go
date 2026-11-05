@@ -430,6 +430,7 @@ func (r *AnalyticsRepository) RouteStats(ctx context.Context, start, end time.Ti
 		        MAX(p95_ms)::int
 		   FROM analytics_request_stats
 		  WHERE hour >= $1 AND hour < $2
+		    AND route <> '(unmatched)'
 		  GROUP BY route
 		  ORDER BY SUM(count) DESC`,
 		start, end,
