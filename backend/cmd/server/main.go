@@ -206,7 +206,13 @@ func main() {
 			log.Printf("warning: ANALYTICS_TIMEZONE %q invalid (%v) - falling back to UTC", tzName, err)
 			analyticsLoc = time.UTC
 		}
-		analyticsSvc := service.NewAnalyticsService(repository.NewAnalyticsRepository(dbPool), analyticsSalt, analyticsLoc)
+		// Comma-separated emails whose (verified) traffic is dropped entirely -
+		// the owner testing the site is not a visitor. Compared, never stored.
+		var excludeEmails []string
+		if raw := os.Getenv("ANALYTICS_EXCLUDE_EMAILS"); raw != "" {
+			excludeEmails = strings.Split(raw, ",")
+		}
+		analyticsSvc := service.NewAnalyticsService(repository.NewAnalyticsRepository(dbPool), analyticsSalt, analyticsLoc, excludeEmails)
 		analyticsHandler = handler.NewAnalyticsHandler(analyticsSvc)
 		rollupInterval := 10 * time.Minute
 		if raw := os.Getenv("ANALYTICS_ROLLUP_INTERVAL"); raw != "" {
@@ -531,11 +537,16 @@ func main() {
 		//     anonymous write, rate-limited per IP, with a strict allow-list
 		//     on what it may contain (see handler.validateEvent). Do NOT move
 		//     it into the RequireAdmin group - a tracker that only counts
-		//     admins counts nobody.
+		//     admins counts nobody. OptionalAdmin is mounted so a signed-in
+		//     admin's batches are tagged (or excluded) from a verified token.
 		//   ADMIN-ONLY: every GET under /admin/analytics - the dashboard is
 		//     a leadership-facing view, not public content.
 		if analyticsHandler != nil {
-			r.Post("/analytics/events", analyticsHandler.Ingest)
+			// OptionalAdmin, not RequireAdmin: a missing or invalid token is an
+			// anonymous visitor. A verified admin token is how the server decides
+			// audience=admin and applies ANALYTICS_EXCLUDE_EMAILS - the client
+			// never asserts who it is.
+			r.With(appMiddleware.OptionalAdmin(adminRepo, jwksCache)).Post("/analytics/events", analyticsHandler.Ingest)
 
 			r.Group(func(r chi.Router) {
 				r.Use(appMiddleware.RequireAdmin(adminRepo, jwksCache))

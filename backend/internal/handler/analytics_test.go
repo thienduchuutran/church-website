@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/thienduchuutran/church-website/backend/internal/middleware"
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 )
 
@@ -20,45 +21,50 @@ type mockAnalyticsService struct {
 	limited   bool
 	ingestErr error
 	gotEvents []model.AnalyticsEventIn
-	gotAdmin  bool
+	gotEmail  string
+	gotLegacy bool
 	gotIP     string
+	ingested  bool
 
-	overview  *model.AnalyticsOverview
-	points    []model.AnalyticsPoint
-	rows      []model.AnalyticsBreakdownRow
-	content   []model.ContentStat
-	pipeline  *model.PipelineStats
-	routes    []model.RouteStat
-	readErr   error
-	gotFrom   time.Time
-	gotTo     time.Time
-	gotMetric string
-	gotDim    string
-	gotBucket string
-	gotLimit  int
+	overview    *model.AnalyticsOverview
+	points      []model.AnalyticsPoint
+	rows        []model.AnalyticsBreakdownRow
+	content     []model.ContentStat
+	pipeline    *model.PipelineStats
+	routes      []model.RouteStat
+	readErr     error
+	gotAudience string
+	gotFrom     time.Time
+	gotTo       time.Time
+	gotMetric   string
+	gotDim      string
+	gotBucket   string
+	gotLimit    int
 }
 
 func (m *mockAnalyticsService) Allow(_ string) bool { return !m.limited }
-func (m *mockAnalyticsService) Ingest(_ context.Context, ip, _ string, isAdmin bool, events []model.AnalyticsEventIn) error {
+func (m *mockAnalyticsService) Ingest(_ context.Context, ip, _ string, adminEmail string, legacyIsAdmin bool, events []model.AnalyticsEventIn) error {
+	m.ingested = true
 	m.gotIP = ip
-	m.gotAdmin = isAdmin
+	m.gotEmail = adminEmail
+	m.gotLegacy = legacyIsAdmin
 	m.gotEvents = events
 	return m.ingestErr
 }
-func (m *mockAnalyticsService) Overview(_ context.Context, from, to time.Time) (*model.AnalyticsOverview, error) {
-	m.gotFrom, m.gotTo = from, to
+func (m *mockAnalyticsService) Overview(_ context.Context, audience string, from, to time.Time) (*model.AnalyticsOverview, error) {
+	m.gotAudience, m.gotFrom, m.gotTo = audience, from, to
 	return m.overview, m.readErr
 }
-func (m *mockAnalyticsService) Timeseries(_ context.Context, metric, dimension string, from, to time.Time, bucket string) ([]model.AnalyticsPoint, error) {
-	m.gotMetric, m.gotDim, m.gotFrom, m.gotTo, m.gotBucket = metric, dimension, from, to, bucket
+func (m *mockAnalyticsService) Timeseries(_ context.Context, audience, metric, dimension string, from, to time.Time, bucket string) ([]model.AnalyticsPoint, error) {
+	m.gotAudience, m.gotMetric, m.gotDim, m.gotFrom, m.gotTo, m.gotBucket = audience, metric, dimension, from, to, bucket
 	return m.points, m.readErr
 }
-func (m *mockAnalyticsService) Breakdown(_ context.Context, dimension string, from, to time.Time, limit int) ([]model.AnalyticsBreakdownRow, error) {
-	m.gotDim, m.gotFrom, m.gotTo, m.gotLimit = dimension, from, to, limit
+func (m *mockAnalyticsService) Breakdown(_ context.Context, audience, dimension string, from, to time.Time, limit int) ([]model.AnalyticsBreakdownRow, error) {
+	m.gotAudience, m.gotDim, m.gotFrom, m.gotTo, m.gotLimit = audience, dimension, from, to, limit
 	return m.rows, m.readErr
 }
-func (m *mockAnalyticsService) Content(_ context.Context, from, to time.Time) ([]model.ContentStat, error) {
-	m.gotFrom, m.gotTo = from, to
+func (m *mockAnalyticsService) Content(_ context.Context, audience string, from, to time.Time) ([]model.ContentStat, error) {
+	m.gotAudience, m.gotFrom, m.gotTo = audience, from, to
 	return m.content, m.readErr
 }
 func (m *mockAnalyticsService) Pipeline(_ context.Context, from, to time.Time) (*model.PipelineStats, error) {
@@ -75,10 +81,19 @@ func validBatch() string {
 }
 
 func postEvents(h *AnalyticsHandler, body string) *httptest.ResponseRecorder {
+	return postEventsAs(h, body, "")
+}
+
+// postEventsAs simulates what middleware.OptionalAdmin does when the bearer
+// token verified and the email is an admin: the email lands on the context.
+func postEventsAs(h *AnalyticsHandler, body, adminEmail string) *httptest.ResponseRecorder {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/analytics/events", bytes.NewBufferString(body))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (iPhone)")
 	req.RemoteAddr = "203.0.113.9:51234"
+	if adminEmail != "" {
+		req = req.WithContext(middleware.WithAdminEmail(req.Context(), adminEmail))
+	}
 	rec := httptest.NewRecorder()
 	h.Ingest(rec, req)
 	return rec
@@ -104,9 +119,26 @@ func TestAnalyticsHandler_Ingest_success(t *testing.T) {
 	if !svc.gotEvents[0].Returning {
 		t.Fatal("returning flag was dropped")
 	}
+	if svc.gotEmail != "" {
+		t.Fatalf("anonymous request must carry no admin email, got %q", svc.gotEmail)
+	}
 }
 
-func TestAnalyticsHandler_Ingest_passesAdminFlag(t *testing.T) {
+func TestAnalyticsHandler_Ingest_adminEmailComesFromContextNotBody(t *testing.T) {
+	svc := &mockAnalyticsService{}
+	h := NewAnalyticsHandler(svc)
+
+	rec := postEventsAs(h, validBatch(), "pastor@example.org")
+
+	if rec.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d body=%s", rec.Code, rec.Body)
+	}
+	if svc.gotEmail != "pastor@example.org" {
+		t.Fatalf("expected the verified email forwarded, got %q", svc.gotEmail)
+	}
+}
+
+func TestAnalyticsHandler_Ingest_legacyAdminFlagStillForwarded(t *testing.T) {
 	svc := &mockAnalyticsService{}
 	h := NewAnalyticsHandler(svc)
 	body := strings.Replace(validBatch(), `{"events"`, `{"is_admin":true,"events"`, 1)
@@ -116,8 +148,8 @@ func TestAnalyticsHandler_Ingest_passesAdminFlag(t *testing.T) {
 	if rec.Code != http.StatusAccepted {
 		t.Fatalf("expected 202, got %d body=%s", rec.Code, rec.Body)
 	}
-	if !svc.gotAdmin {
-		t.Fatal("is_admin flag was not forwarded to the service")
+	if !svc.gotLegacy {
+		t.Fatal("legacy is_admin flag was not forwarded to the service")
 	}
 }
 
@@ -152,7 +184,7 @@ func TestAnalyticsHandler_Ingest_tooManyEvents(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for %d events, got %d", maxEventsPerBatch+1, rec.Code)
 	}
-	if svc.gotEvents != nil {
+	if svc.ingested {
 		t.Fatal("service must not be called when the batch is rejected")
 	}
 }
@@ -217,7 +249,6 @@ func TestAnalyticsHandler_Ingest_allowsWhitelistedProps(t *testing.T) {
 
 func TestAnalyticsHandler_Ingest_bodyTooLarge(t *testing.T) {
 	h := NewAnalyticsHandler(&mockAnalyticsService{})
-	// One event whose path alone is bigger than the whole body budget.
 	big := strings.Repeat("a", maxIngestBodyBytes+1)
 	body := strings.Replace(validBatch(), `"path":"/events"`, `"path":"/`+big+`"`, 1)
 	rec := postEvents(h, body)
@@ -233,7 +264,7 @@ func TestAnalyticsHandler_Ingest_rateLimited(t *testing.T) {
 	if rec.Code != http.StatusTooManyRequests {
 		t.Fatalf("expected 429, got %d", rec.Code)
 	}
-	if svc.gotEvents != nil {
+	if svc.ingested {
 		t.Fatal("service must not ingest when rate limited")
 	}
 }
@@ -257,7 +288,7 @@ func getAdmin(h http.HandlerFunc, target string) *httptest.ResponseRecorder {
 
 func TestAnalyticsHandler_Overview_success(t *testing.T) {
 	svc := &mockAnalyticsService{overview: &model.AnalyticsOverview{
-		From: "2026-10-01", To: "2026-10-07",
+		From: "2026-10-01", To: "2026-10-07", Audience: "public",
 		Current: model.AnalyticsTotals{Visitors: 42},
 	}}
 	h := NewAnalyticsHandler(svc)
@@ -279,6 +310,51 @@ func TestAnalyticsHandler_Overview_success(t *testing.T) {
 	}
 }
 
+func TestAnalyticsHandler_Audience_defaultsToPublic(t *testing.T) {
+	svc := &mockAnalyticsService{overview: &model.AnalyticsOverview{}}
+	h := NewAnalyticsHandler(svc)
+	getAdmin(h.Overview, "/api/v1/admin/analytics/overview")
+	if svc.gotAudience != "public" {
+		t.Fatalf("expected default audience public, got %q", svc.gotAudience)
+	}
+}
+
+func TestAnalyticsHandler_Audience_forwardedOnEveryRead(t *testing.T) {
+	svc := &mockAnalyticsService{overview: &model.AnalyticsOverview{}}
+	h := NewAnalyticsHandler(svc)
+	cases := []struct {
+		fn     http.HandlerFunc
+		target string
+	}{
+		{h.Overview, "/api/v1/admin/analytics/overview?audience=admin"},
+		{h.Timeseries, "/api/v1/admin/analytics/timeseries?metric=visitors&audience=admin"},
+		{h.Breakdown, "/api/v1/admin/analytics/breakdown?dimension=path&audience=admin"},
+		{h.Content, "/api/v1/admin/analytics/content?audience=admin"},
+	}
+	for _, c := range cases {
+		svc.gotAudience = ""
+		if rec := getAdmin(c.fn, c.target); rec.Code != http.StatusOK {
+			t.Fatalf("%s: expected 200, got %d body=%s", c.target, rec.Code, rec.Body)
+		}
+		if svc.gotAudience != "admin" {
+			t.Fatalf("%s: audience not forwarded, got %q", c.target, svc.gotAudience)
+		}
+	}
+	svc.gotAudience = ""
+	getAdmin(h.Overview, "/api/v1/admin/analytics/overview?audience=all")
+	if svc.gotAudience != "all" {
+		t.Fatalf("expected all, got %q", svc.gotAudience)
+	}
+}
+
+func TestAnalyticsHandler_Audience_badValue(t *testing.T) {
+	h := NewAnalyticsHandler(&mockAnalyticsService{overview: &model.AnalyticsOverview{}})
+	rec := getAdmin(h.Overview, "/api/v1/admin/analytics/overview?audience=everyone")
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for unknown audience, got %d", rec.Code)
+	}
+}
+
 func TestAnalyticsHandler_Overview_defaultsToLast30Days(t *testing.T) {
 	svc := &mockAnalyticsService{overview: &model.AnalyticsOverview{}}
 	h := NewAnalyticsHandler(svc)
@@ -297,9 +373,9 @@ func TestAnalyticsHandler_Overview_defaultsToLast30Days(t *testing.T) {
 func TestAnalyticsHandler_Overview_badRange(t *testing.T) {
 	h := NewAnalyticsHandler(&mockAnalyticsService{overview: &model.AnalyticsOverview{}})
 	for _, q := range []string{
-		"?from=2026-10-07&to=2026-10-01", // reversed
-		"?from=not-a-date",               // unparseable
-		"?from=2020-01-01&to=2026-10-01", // longer than the retention window
+		"?from=2026-10-07&to=2026-10-01",
+		"?from=not-a-date",
+		"?from=2020-01-01&to=2026-10-01",
 	} {
 		rec := getAdmin(h.Overview, "/api/v1/admin/analytics/overview"+q)
 		if rec.Code != http.StatusBadRequest {

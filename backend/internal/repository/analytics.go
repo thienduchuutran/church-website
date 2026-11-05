@@ -14,8 +14,14 @@ import (
 )
 
 // AnalyticsRepository is the only code that touches the three analytics
-// tables from migration 000019. No logic here beyond SQL: hashing, clamping
-// and bot filtering happen in service.AnalyticsService before a row arrives.
+// tables from migrations 000019 and 000021. No logic here beyond SQL:
+// hashing, clamping, bot filtering and the audience decision happen in
+// service.AnalyticsService before a row arrives.
+//
+// Every read takes an `audience` of "public", "admin" or "all". The SQL
+// pattern is always the same: `($n = 'all' OR audience = $n)`, then SUM over
+// whatever rows match, so "all" is the two slices added together rather than
+// a third stored slice.
 type AnalyticsRepository struct {
 	pool *pgxpool.Pool
 }
@@ -31,24 +37,35 @@ func (r *AnalyticsRepository) InsertEvents(ctx context.Context, events []model.A
 	if len(events) == 0 {
 		return nil
 	}
+	const cols = 12
 	var sb strings.Builder
 	sb.WriteString(`INSERT INTO analytics_events
-		(occurred_at, visitor_hash, session_id, event_name, path, locale, referrer_host, device, duration_ms, is_returning, props)
+		(audience, occurred_at, visitor_hash, session_id, event_name, path, locale, referrer_host, device, duration_ms, is_returning, props)
 		VALUES `)
-	args := make([]any, 0, len(events)*11)
+	args := make([]any, 0, len(events)*cols)
 	for i, e := range events {
 		if i > 0 {
 			sb.WriteString(", ")
 		}
-		base := i * 11
-		sb.WriteString(fmt.Sprintf("($%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d, $%d)",
-			base+1, base+2, base+3, base+4, base+5, base+6, base+7, base+8, base+9, base+10, base+11))
+		base := i * cols
+		sb.WriteString("(")
+		for c := 1; c <= cols; c++ {
+			if c > 1 {
+				sb.WriteString(", ")
+			}
+			sb.WriteString(fmt.Sprintf("$%d", base+c))
+		}
+		sb.WriteString(")")
 		props, err := json.Marshal(e.Props)
 		if err != nil {
 			return fmt.Errorf("marshal props: %w", err)
 		}
+		audience := e.Audience
+		if audience == "" {
+			audience = model.AudiencePublic
+		}
 		args = append(args,
-			e.OccurredAt, e.VisitorHash, e.SessionID, e.Name, e.Path, e.Locale,
+			audience, e.OccurredAt, e.VisitorHash, e.SessionID, e.Name, e.Path, e.Locale,
 			e.ReferrerHost, e.Device, e.DurationMs, e.Returning, props,
 		)
 	}
@@ -56,11 +73,11 @@ func (r *AnalyticsRepository) InsertEvents(ctx context.Context, events []model.A
 	return err
 }
 
-// RollupDay rebuilds every analytics_daily row for one calendar day. The
-// delete-then-insert runs in one transaction so a reader never sees a
-// half-built day. `start`/`end` are the UTC instants bracketing the day in
-// the site's time zone; `tz` is that zone's name, used for the hour-of-week
-// histogram so "Sunday 10am" means Sunday 10am in Saugus.
+// RollupDay rebuilds every analytics_daily row for one calendar day, per
+// audience. The delete-then-insert runs in one transaction so a reader never
+// sees a half-built day. `start`/`end` are the UTC instants bracketing the
+// day in the site's time zone; `tz` is that zone's name, used for the
+// hour-of-week histogram so "Sunday 10am" means Sunday 10am in Saugus.
 func (r *AnalyticsRepository) RollupDay(ctx context.Context, day string, start, end time.Time, tz string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -72,83 +89,88 @@ func (r *AnalyticsRepository) RollupDay(ctx context.Context, day string, start, 
 		return fmt.Errorf("clear day: %w", err)
 	}
 
-	// Each statement below produces (metric, dimension, value) rows for the
-	// day. They are separate statements rather than one giant UNION so a
-	// future metric is one more block, not a rewrite.
+	// Each statement produces (metric, dimension, audience, value) rows for
+	// the day. Separate statements rather than one giant UNION so a future
+	// metric is one more block, not a rewrite.
 	statements := []string{
 		// Unique visitors, total and per locale.
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'visitors', '', COUNT(DISTINCT visitor_hash)
-		   FROM analytics_events
-		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3`,
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'visitors_locale', locale, COUNT(DISTINCT visitor_hash)
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'visitors', '', audience, COUNT(DISTINCT visitor_hash)
 		   FROM analytics_events
 		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY locale`,
+		  GROUP BY audience`,
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'visitors_locale', locale, audience, COUNT(DISTINCT visitor_hash)
+		   FROM analytics_events
+		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
+		  GROUP BY audience, locale`,
 		// Sessions, total, per locale, and returning.
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'sessions', '', COUNT(DISTINCT session_id)
-		   FROM analytics_events
-		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3`,
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'sessions_locale', locale, COUNT(DISTINCT session_id)
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'sessions', '', audience, COUNT(DISTINCT session_id)
 		   FROM analytics_events
 		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY locale`,
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'returning_sessions', '', COUNT(DISTINCT session_id)
+		  GROUP BY audience`,
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'sessions_locale', locale, audience, COUNT(DISTINCT session_id)
 		   FROM analytics_events
-		  WHERE event_name = 'page_view' AND is_returning AND occurred_at >= $2 AND occurred_at < $3`,
+		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
+		  GROUP BY audience, locale`,
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'returning_sessions', '', audience, COUNT(DISTINCT session_id)
+		   FROM analytics_events
+		  WHERE event_name = 'page_view' AND is_returning AND occurred_at >= $2 AND occurred_at < $3
+		  GROUP BY audience`,
 		// Pageviews, total and by path / device / referrer / hour-of-week.
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'pageviews', '', COUNT(*)
-		   FROM analytics_events
-		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3`,
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'pageviews_path', path, COUNT(*)
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'pageviews', '', audience, COUNT(*)
 		   FROM analytics_events
 		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY path`,
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'pageviews_device', device, COUNT(*)
+		  GROUP BY audience`,
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'pageviews_path', path, audience, COUNT(*)
 		   FROM analytics_events
 		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY device`,
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'pageviews_referrer', COALESCE(referrer_host, 'direct'), COUNT(*)
+		  GROUP BY audience, path`,
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'pageviews_device', device, audience, COUNT(*)
 		   FROM analytics_events
 		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY COALESCE(referrer_host, 'direct')`,
+		  GROUP BY audience, device`,
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'pageviews_referrer', COALESCE(referrer_host, 'direct'), audience, COUNT(*)
+		   FROM analytics_events
+		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
+		  GROUP BY audience, COALESCE(referrer_host, 'direct')`,
 		// dimension is "<dow>-<hour>", dow 0 = Sunday, in the site's time zone.
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
 		 SELECT $1::date, 'pageviews_hour',
 		        EXTRACT(DOW  FROM occurred_at AT TIME ZONE $4)::int || '-' ||
 		        EXTRACT(HOUR FROM occurred_at AT TIME ZONE $4)::int,
-		        COUNT(*)
+		        audience, COUNT(*)
 		   FROM analytics_events
 		  WHERE event_name = 'page_view' AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY 3`,
+		  GROUP BY audience, 3`,
 		// Non-pageview events by name, and post reads by post.
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'events', event_name, COUNT(*)
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'events', event_name, audience, COUNT(*)
 		   FROM analytics_events
 		  WHERE event_name NOT IN ('page_view', 'page_leave') AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY event_name`,
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'post_reads', props->>'post_id', COUNT(*)
+		  GROUP BY audience, event_name`,
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'post_reads', props->>'post_id', audience, COUNT(*)
 		   FROM analytics_events
 		  WHERE event_name = 'post_read' AND props ? 'post_id' AND occurred_at >= $2 AND occurred_at < $3
-		  GROUP BY props->>'post_id'`,
+		  GROUP BY audience, props->>'post_id'`,
 		// Median visible seconds per session, from page_leave durations.
-		`INSERT INTO analytics_daily (day, metric, dimension, value)
-		 SELECT $1::date, 'session_seconds_median', '',
+		`INSERT INTO analytics_daily (day, metric, dimension, audience, value)
+		 SELECT $1::date, 'session_seconds_median', '', audience,
 		        COALESCE(percentile_cont(0.5) WITHIN GROUP (ORDER BY secs), 0)
-		   FROM (SELECT session_id, SUM(duration_ms) / 1000.0 AS secs
+		   FROM (SELECT audience, session_id, SUM(duration_ms) / 1000.0 AS secs
 		           FROM analytics_events
 		          WHERE event_name = 'page_leave' AND duration_ms IS NOT NULL
 		            AND occurred_at >= $2 AND occurred_at < $3
-		          GROUP BY session_id) s`,
+		          GROUP BY audience, session_id) s
+		  GROUP BY audience`,
 	}
 	for _, stmt := range statements {
 		// pgx refuses an argument the statement never references, so the
@@ -164,29 +186,33 @@ func (r *AnalyticsRepository) RollupDay(ctx context.Context, day string, start, 
 	return tx.Commit(ctx)
 }
 
-// SumMetric totals one (metric, dimension) over inclusive calendar days.
-func (r *AnalyticsRepository) SumMetric(ctx context.Context, metric, dimension string, from, to time.Time) (float64, error) {
+// SumMetric totals one (metric, dimension) over inclusive calendar days for
+// an audience ("all" sums both slices).
+func (r *AnalyticsRepository) SumMetric(ctx context.Context, metric, dimension, audience string, from, to time.Time) (float64, error) {
 	var v float64
 	err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(value), 0)::float8
 		   FROM analytics_daily
-		  WHERE metric = $1 AND dimension = $2 AND day >= $3::date AND day <= $4::date`,
-		metric, dimension, from.Format("2006-01-02"), to.Format("2006-01-02"),
+		  WHERE metric = $1 AND dimension = $2 AND day >= $3::date AND day <= $4::date
+		    AND ($5 = 'all' OR audience = $5)`,
+		metric, dimension, from.Format("2006-01-02"), to.Format("2006-01-02"), audience,
 	).Scan(&v)
 	return v, err
 }
 
 // PeakMetric returns the day with the largest value and that value.
-func (r *AnalyticsRepository) PeakMetric(ctx context.Context, metric, dimension string, from, to time.Time) (string, float64, error) {
+func (r *AnalyticsRepository) PeakMetric(ctx context.Context, metric, dimension, audience string, from, to time.Time) (string, float64, error) {
 	var day time.Time
 	var v float64
 	err := r.pool.QueryRow(ctx,
-		`SELECT day, value::float8
+		`SELECT day, SUM(value)::float8 AS v
 		   FROM analytics_daily
 		  WHERE metric = $1 AND dimension = $2 AND day >= $3::date AND day <= $4::date
-		  ORDER BY value DESC, day DESC
+		    AND ($5 = 'all' OR audience = $5)
+		  GROUP BY day
+		  ORDER BY v DESC, day DESC
 		  LIMIT 1`,
-		metric, dimension, from.Format("2006-01-02"), to.Format("2006-01-02"),
+		metric, dimension, from.Format("2006-01-02"), to.Format("2006-01-02"), audience,
 	).Scan(&day, &v)
 	if err == pgx.ErrNoRows {
 		return "", 0, nil
@@ -198,13 +224,15 @@ func (r *AnalyticsRepository) PeakMetric(ctx context.Context, metric, dimension 
 }
 
 // Series returns the per-day values for one (metric, dimension), ascending.
-func (r *AnalyticsRepository) Series(ctx context.Context, metric, dimension string, from, to time.Time) ([]model.AnalyticsPoint, error) {
+func (r *AnalyticsRepository) Series(ctx context.Context, metric, dimension, audience string, from, to time.Time) ([]model.AnalyticsPoint, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT day, value::float8
+		`SELECT day, SUM(value)::float8
 		   FROM analytics_daily
 		  WHERE metric = $1 AND dimension = $2 AND day >= $3::date AND day <= $4::date
+		    AND ($5 = 'all' OR audience = $5)
+		  GROUP BY day
 		  ORDER BY day`,
-		metric, dimension, from.Format("2006-01-02"), to.Format("2006-01-02"),
+		metric, dimension, from.Format("2006-01-02"), to.Format("2006-01-02"), audience,
 	)
 	if err != nil {
 		return nil, err
@@ -226,13 +254,14 @@ func (r *AnalyticsRepository) Series(ctx context.Context, metric, dimension stri
 // Breakdown sums a dimensioned metric over the range and returns the top
 // rows plus the grand total (over all rows, not just the returned ones) so
 // the caller can compute shares.
-func (r *AnalyticsRepository) Breakdown(ctx context.Context, metric string, from, to time.Time, limit int) ([]model.AnalyticsBreakdownRow, float64, error) {
+func (r *AnalyticsRepository) Breakdown(ctx context.Context, metric, audience string, from, to time.Time, limit int) ([]model.AnalyticsBreakdownRow, float64, error) {
 	fromS, toS := from.Format("2006-01-02"), to.Format("2006-01-02")
 	var total float64
 	if err := r.pool.QueryRow(ctx,
 		`SELECT COALESCE(SUM(value), 0)::float8 FROM analytics_daily
-		  WHERE metric = $1 AND day >= $2::date AND day <= $3::date`,
-		metric, fromS, toS,
+		  WHERE metric = $1 AND day >= $2::date AND day <= $3::date
+		    AND ($4 = 'all' OR audience = $4)`,
+		metric, fromS, toS, audience,
 	).Scan(&total); err != nil {
 		return nil, 0, err
 	}
@@ -240,10 +269,11 @@ func (r *AnalyticsRepository) Breakdown(ctx context.Context, metric string, from
 		`SELECT dimension, SUM(value)::float8 AS v
 		   FROM analytics_daily
 		  WHERE metric = $1 AND day >= $2::date AND day <= $3::date
+		    AND ($4 = 'all' OR audience = $4)
 		  GROUP BY dimension
 		  ORDER BY v DESC, dimension
-		  LIMIT $4`,
-		metric, fromS, toS, limit,
+		  LIMIT $5`,
+		metric, fromS, toS, audience, limit,
 	)
 	if err != nil {
 		return nil, 0, err
@@ -263,7 +293,7 @@ func (r *AnalyticsRepository) Breakdown(ctx context.Context, metric string, from
 // MedianSessionSeconds computes the range-wide median directly from raw
 // events. A median of daily medians would be wrong, and at this traffic the
 // raw query is cheap.
-func (r *AnalyticsRepository) MedianSessionSeconds(ctx context.Context, start, end time.Time) (int, error) {
+func (r *AnalyticsRepository) MedianSessionSeconds(ctx context.Context, audience string, start, end time.Time) (int, error) {
 	var v *float64
 	err := r.pool.QueryRow(ctx,
 		`SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY secs)
@@ -271,8 +301,9 @@ func (r *AnalyticsRepository) MedianSessionSeconds(ctx context.Context, start, e
 		           FROM analytics_events
 		          WHERE event_name = 'page_leave' AND duration_ms IS NOT NULL
 		            AND occurred_at >= $1 AND occurred_at < $2
+		            AND ($3 = 'all' OR audience = $3)
 		          GROUP BY session_id) s`,
-		start, end,
+		start, end, audience,
 	).Scan(&v)
 	if err != nil {
 		return 0, err
@@ -284,10 +315,10 @@ func (r *AnalyticsRepository) MedianSessionSeconds(ctx context.Context, start, e
 }
 
 // ContentStats lists posts (newest first among equals) with their reads in
-// the window and all-time reactions. Posts are matched on the post_id the
-// tracker put in props; it is compared as text so a malformed id can never
-// make the cast fail.
-func (r *AnalyticsRepository) ContentStats(ctx context.Context, start, end time.Time) ([]model.ContentStat, error) {
+// the window for the audience and all-time reactions. Posts are matched on
+// the post_id the tracker put in props; it is compared as text so a
+// malformed id can never make the cast fail.
+func (r *AnalyticsRepository) ContentStats(ctx context.Context, audience string, start, end time.Time) ([]model.ContentStat, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT p.id::text, p.title, p.type::text, COALESCE(p.created_at, now()),
 		        COALESCE(rd.reads, 0), COALESCE(rc.reactions, 0)
@@ -295,12 +326,13 @@ func (r *AnalyticsRepository) ContentStats(ctx context.Context, start, end time.
 		   LEFT JOIN (SELECT props->>'post_id' AS pid, COUNT(*)::int AS reads
 		                FROM analytics_events
 		               WHERE event_name = 'post_read' AND occurred_at >= $1 AND occurred_at < $2
+		                 AND ($3 = 'all' OR audience = $3)
 		               GROUP BY props->>'post_id') rd ON rd.pid = p.id::text
 		   LEFT JOIN (SELECT post_id, COUNT(*)::int AS reactions FROM reactions GROUP BY post_id) rc ON rc.post_id = p.id
 		  WHERE p.created_at < $2
 		  ORDER BY COALESCE(rd.reads, 0) DESC, p.created_at DESC
 		  LIMIT 50`,
-		start, end,
+		start, end, audience,
 	)
 	if err != nil {
 		return nil, err
@@ -320,7 +352,8 @@ func (r *AnalyticsRepository) ContentStats(ctx context.Context, start, end time.
 // PipelineStats counts translation work and content velocity in the window.
 // "Approved unedited" is approved_at set with is_ai_generated still true -
 // the repository's Approve flips that flag only when the reviewer changed
-// the text (see repository/translation.go).
+// the text (see repository/translation.go). reactions.created_at is NULL
+// for rows that predate migration 000020; they fall outside any range.
 func (r *AnalyticsRepository) PipelineStats(ctx context.Context, start, end time.Time) (*model.PipelineStats, error) {
 	var (
 		s    model.PipelineStats

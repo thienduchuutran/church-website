@@ -114,7 +114,7 @@ func TestClampOccurredAt(t *testing.T) {
 
 func TestVisitorHash_RotatesDailyAndIsStableWithinADay(t *testing.T) {
 	loc, _ := time.LoadLocation("America/New_York")
-	s := NewAnalyticsService(nil, "secret", loc)
+	s := NewAnalyticsService(nil, "secret", loc, nil)
 
 	// 11pm and 11:59pm Boston time are the same day there even though UTC
 	// has already rolled over - the hash must not split the visitor.
@@ -134,7 +134,7 @@ func TestVisitorHash_RotatesDailyAndIsStableWithinADay(t *testing.T) {
 	if s.visitorHash(late, "1.2.3.5", "ua") == a {
 		t.Fatal("different IP must hash differently")
 	}
-	other := NewAnalyticsService(nil, "another-secret", loc)
+	other := NewAnalyticsService(nil, "another-secret", loc, nil)
 	if other.visitorHash(late, "1.2.3.4", "ua") == a {
 		t.Fatal("different secret must hash differently")
 	}
@@ -145,7 +145,7 @@ func TestVisitorHash_RotatesDailyAndIsStableWithinADay(t *testing.T) {
 
 func TestDayBounds_UsesSiteTimeZone(t *testing.T) {
 	loc, _ := time.LoadLocation("America/New_York")
-	s := NewAnalyticsService(nil, "x", loc)
+	s := NewAnalyticsService(nil, "x", loc, nil)
 	from := time.Date(2026, 10, 28, 0, 0, 0, 0, time.UTC)
 	start, end := s.dayBounds(from, from)
 	// EDT is UTC-4 on this date: local midnight is 04:00Z.
@@ -154,5 +154,25 @@ func TestDayBounds_UsesSiteTimeZone(t *testing.T) {
 	}
 	if end.Sub(start) != 24*time.Hour {
 		t.Fatalf("expected a 24h window, got %s", end.Sub(start))
+	}
+}
+
+func TestDecideAudience(t *testing.T) {
+	s := NewAnalyticsService(nil, "x", time.UTC, []string{" Owner@Example.org ", ""})
+
+	if aud, drop := s.decideAudience("", false); aud != "public" || drop {
+		t.Fatalf("anonymous: want public/keep, got %s/%v", aud, drop)
+	}
+	if aud, drop := s.decideAudience("pastor@example.org", false); aud != "admin" || drop {
+		t.Fatalf("verified admin: want admin/keep, got %s/%v", aud, drop)
+	}
+	if _, drop := s.decideAudience("owner@example.org", false); !drop {
+		t.Fatal("excluded owner must be dropped, case-insensitively")
+	}
+	if _, drop := s.decideAudience("", true); !drop {
+		t.Fatal("legacy is_admin with no token must still be dropped")
+	}
+	if aud, drop := s.decideAudience("pastor@example.org", true); aud != "admin" || drop {
+		t.Fatal("a verified token wins over the legacy flag")
 	}
 }

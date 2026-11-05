@@ -93,7 +93,10 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 // pattern once a route has matched.
 func (s *RequestStats) Middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.skip[r.URL.Path] {
+		// CORS preflights are answered by the CORS middleware before chi
+		// routes anything, so they would all land in one "(unmatched)"
+		// bucket. They are browser plumbing, not traffic.
+		if s.skip[r.URL.Path] || r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
 			return
 		}

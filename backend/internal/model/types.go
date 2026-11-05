@@ -1143,9 +1143,19 @@ type AnalyticsEventIn struct {
 	Props      map[string]any `json:"props,omitempty"`
 }
 
+// Audience values. Decided server-side from a verified Supabase token
+// (middleware.OptionalAdmin), never from the client. AudienceAll is a read
+// filter only and is never stored.
+const (
+	AudiencePublic = "public"
+	AudienceAdmin  = "admin"
+	AudienceAll    = "all"
+)
+
 // AnalyticsBatch is the request body of POST /api/v1/analytics/events.
-// IsAdmin is set by the tracker when the signed-in visitor is an admin so the
-// service can drop the batch - the owner editing posts is not a visitor.
+// IsAdmin is legacy: older bundles asserted it and the server dropped the
+// batch. It is still honoured when no verified token is present, and
+// ignored when one is - the token decides.
 type AnalyticsBatch struct {
 	IsAdmin bool               `json:"is_admin"`
 	Events  []AnalyticsEventIn `json:"events"`
@@ -1154,6 +1164,7 @@ type AnalyticsBatch struct {
 // AnalyticsEvent is the server-side row written to analytics_events. It never
 // carries the IP or raw user agent: VisitorHash and Device are what survive.
 type AnalyticsEvent struct {
+	Audience     string
 	OccurredAt   time.Time
 	VisitorHash  string
 	SessionID    string
@@ -1189,6 +1200,7 @@ type AnalyticsTotals struct {
 type AnalyticsOverview struct {
 	From     string          `json:"from"`
 	To       string          `json:"to"`
+	Audience string          `json:"audience"`
 	Current  AnalyticsTotals `json:"current"`
 	Previous AnalyticsTotals `json:"previous"`
 }

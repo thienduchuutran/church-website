@@ -90,3 +90,20 @@ func TestStatusClass(t *testing.T) {
 		}
 	}
 }
+
+func TestRequestStats_SkipsCORSPreflights(t *testing.T) {
+	stats := NewRequestStats()
+	r := chi.NewRouter()
+	r.Use(stats.Middleware)
+	r.Get("/x", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	// What the CORS middleware does for a preflight: answer 204 before routing.
+	r.Options("/x", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodOptions, "/x", nil))
+	r.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/x", nil))
+
+	got := stats.Snapshot(time.Now().Add(2 * time.Hour))
+	if len(got) != 1 || got[0].Count != 1 {
+		t.Fatalf("expected only the GET to be recorded, got %+v", got)
+	}
+}

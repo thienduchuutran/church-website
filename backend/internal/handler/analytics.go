@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/thienduchuutran/church-website/backend/internal/middleware"
 	"github.com/thienduchuutran/church-website/backend/internal/model"
 )
 
@@ -32,11 +33,13 @@ const (
 // in mockAnalyticsService without a database.
 type analyticsService interface {
 	Allow(ip string) bool
-	Ingest(ctx context.Context, ip, userAgent string, isAdmin bool, events []model.AnalyticsEventIn) error
-	Overview(ctx context.Context, from, to time.Time) (*model.AnalyticsOverview, error)
-	Timeseries(ctx context.Context, metric, dimension string, from, to time.Time, bucket string) ([]model.AnalyticsPoint, error)
-	Breakdown(ctx context.Context, dimension string, from, to time.Time, limit int) ([]model.AnalyticsBreakdownRow, error)
-	Content(ctx context.Context, from, to time.Time) ([]model.ContentStat, error)
+	// adminEmail is whatever middleware.OptionalAdmin verified ("" when
+	// anonymous); legacyIsAdmin is the old client-asserted body flag.
+	Ingest(ctx context.Context, ip, userAgent, adminEmail string, legacyIsAdmin bool, events []model.AnalyticsEventIn) error
+	Overview(ctx context.Context, audience string, from, to time.Time) (*model.AnalyticsOverview, error)
+	Timeseries(ctx context.Context, audience, metric, dimension string, from, to time.Time, bucket string) ([]model.AnalyticsPoint, error)
+	Breakdown(ctx context.Context, audience, dimension string, from, to time.Time, limit int) ([]model.AnalyticsBreakdownRow, error)
+	Content(ctx context.Context, audience string, from, to time.Time) ([]model.ContentStat, error)
 	Pipeline(ctx context.Context, from, to time.Time) (*model.PipelineStats, error)
 	Requests(ctx context.Context, from, to time.Time) ([]model.RouteStat, error)
 }
@@ -55,6 +58,7 @@ var (
 	allowedMetrics   = map[string]bool{"visitors": true, "sessions": true, "pageviews": true, "returning_sessions": true, "events": true, "session_seconds_median": true, "post_reads": true, "visitors_locale": true, "sessions_locale": true}
 	allowedBuckets   = map[string]bool{"day": true, "week": true}
 	allowedBreakdown = map[string]bool{"path": true, "locale": true, "device": true, "referrer": true, "event": true, "hour": true, "post": true}
+	allowedAudiences = map[string]bool{model.AudiencePublic: true, model.AudienceAdmin: true, model.AudienceAll: true}
 )
 
 // clientIP strips the port from RemoteAddr. chi's RealIP middleware has
@@ -70,6 +74,10 @@ func clientIP(r *http.Request) string {
 // is anonymous. Order matters - the rate check runs before the body is read
 // so a flood costs one map lookup, and the size cap is enforced by the
 // reader so an oversized body is never buffered.
+//
+// Who sent the batch comes from the request context, where
+// middleware.OptionalAdmin put a verified admin email (or nothing). The body
+// never gets to say who it is from.
 func (h *AnalyticsHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 	ip := clientIP(r)
 	if !h.svc.Allow(ip) {
@@ -103,7 +111,8 @@ func (h *AnalyticsHandler) Ingest(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := h.svc.Ingest(r.Context(), ip, r.UserAgent(), batch.IsAdmin, batch.Events); err != nil {
+	adminEmail := middleware.AdminEmailFromContext(r.Context())
+	if err := h.svc.Ingest(r.Context(), ip, r.UserAgent(), adminEmail, batch.IsAdmin, batch.Events); err != nil {
 		log.Printf("analytics ingest: %v", err)
 		writeError(w, http.StatusInternalServerError, "failed to record events")
 		return
@@ -182,14 +191,32 @@ func parseRange(r *http.Request) (time.Time, time.Time, string) {
 	return from, to, ""
 }
 
+// parseAudience reads ?audience=public|admin|all. Public is the default
+// because the dashboard's default view is the leadership-facing one.
+func parseAudience(r *http.Request) (string, string) {
+	a := r.URL.Query().Get("audience")
+	if a == "" {
+		return model.AudiencePublic, ""
+	}
+	if !allowedAudiences[a] {
+		return "", "audience must be public, admin or all"
+	}
+	return a, ""
+}
+
 // Overview handles GET /api/v1/admin/analytics/overview.
 func (h *AnalyticsHandler) Overview(w http.ResponseWriter, r *http.Request) {
+	audience, msg := parseAudience(r)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	from, to, msg := parseRange(r)
 	if msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	out, err := h.svc.Overview(r.Context(), from, to)
+	out, err := h.svc.Overview(r.Context(), audience, from, to)
 	if err != nil {
 		log.Printf("analytics overview: %v", err)
 		writeError(w, http.StatusInternalServerError, "failed to load overview")
@@ -219,12 +246,17 @@ func (h *AnalyticsHandler) Timeseries(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "dimension too long")
 		return
 	}
+	audience, msg := parseAudience(r)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	from, to, msg := parseRange(r)
 	if msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	points, err := h.svc.Timeseries(r.Context(), metric, dimension, from, to, bucket)
+	points, err := h.svc.Timeseries(r.Context(), audience, metric, dimension, from, to, bucket)
 	if err != nil {
 		log.Printf("analytics timeseries: %v", err)
 		writeError(w, http.StatusInternalServerError, "failed to load series")
@@ -237,6 +269,7 @@ func (h *AnalyticsHandler) Timeseries(w http.ResponseWriter, r *http.Request) {
 		"metric":    metric,
 		"dimension": dimension,
 		"bucket":    bucket,
+		"audience":  audience,
 		"from":      from.Format("2006-01-02"),
 		"to":        to.Format("2006-01-02"),
 		"points":    points,
@@ -263,12 +296,17 @@ func (h *AnalyticsHandler) Breakdown(w http.ResponseWriter, r *http.Request) {
 	if limit > maxBreakdownLimit {
 		limit = maxBreakdownLimit
 	}
+	audience, msg := parseAudience(r)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	from, to, msg := parseRange(r)
 	if msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	rows, err := h.svc.Breakdown(r.Context(), dimension, from, to, limit)
+	rows, err := h.svc.Breakdown(r.Context(), audience, dimension, from, to, limit)
 	if err != nil {
 		log.Printf("analytics breakdown: %v", err)
 		writeError(w, http.StatusInternalServerError, "failed to load breakdown")
@@ -279,6 +317,7 @@ func (h *AnalyticsHandler) Breakdown(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"dimension": dimension,
+		"audience":  audience,
 		"from":      from.Format("2006-01-02"),
 		"to":        to.Format("2006-01-02"),
 		"rows":      rows,
@@ -287,12 +326,17 @@ func (h *AnalyticsHandler) Breakdown(w http.ResponseWriter, r *http.Request) {
 
 // Content handles GET /api/v1/admin/analytics/content.
 func (h *AnalyticsHandler) Content(w http.ResponseWriter, r *http.Request) {
+	audience, msg := parseAudience(r)
+	if msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	from, to, msg := parseRange(r)
 	if msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
-	items, err := h.svc.Content(r.Context(), from, to)
+	items, err := h.svc.Content(r.Context(), audience, from, to)
 	if err != nil {
 		log.Printf("analytics content: %v", err)
 		writeError(w, http.StatusInternalServerError, "failed to load content stats")
@@ -302,13 +346,15 @@ func (h *AnalyticsHandler) Content(w http.ResponseWriter, r *http.Request) {
 		items = []model.ContentStat{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"from":  from.Format("2006-01-02"),
-		"to":    to.Format("2006-01-02"),
-		"items": items,
+		"audience": audience,
+		"from":     from.Format("2006-01-02"),
+		"to":       to.Format("2006-01-02"),
+		"items":    items,
 	})
 }
 
-// Pipeline handles GET /api/v1/admin/analytics/pipeline.
+// Pipeline handles GET /api/v1/admin/analytics/pipeline. No audience: it
+// reads the content tables, not visitor events.
 func (h *AnalyticsHandler) Pipeline(w http.ResponseWriter, r *http.Request) {
 	from, to, msg := parseRange(r)
 	if msg != "" {
@@ -324,7 +370,8 @@ func (h *AnalyticsHandler) Pipeline(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, out)
 }
 
-// Requests handles GET /api/v1/admin/analytics/requests.
+// Requests handles GET /api/v1/admin/analytics/requests. No audience:
+// backend traffic is not per-visitor.
 func (h *AnalyticsHandler) Requests(w http.ResponseWriter, r *http.Request) {
 	from, to, msg := parseRange(r)
 	if msg != "" {
