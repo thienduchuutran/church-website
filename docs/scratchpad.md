@@ -8,6 +8,145 @@ Plans still stage here while they await approval; once shipped, the write-up mov
 
 ---
 
+# BUILT 2026-11-05 - Analytics audience: verified admin tagging, owner exclusion, two noise fixes
+
+**Status:** built as planned, all four phases; defaults accepted by the owner (Public default, old rows left, signed-out browsing counts as public). Write-up in `docs/progress.md` 2026-11-05. Original plan text follows. Earlier status: plan only. Follows the first production day of the
+analytics dashboard (shipped 2026-11-04), where the owner's own browsing showed up
+as public traffic and CORS preflights showed up as a backend route.
+
+**Goal.** Three things the owner asked for after reading the first real numbers:
+
+1. Exclude *only* the owner's own account from every count, and do it in a way nobody
+   can forge or accidentally trigger.
+2. Keep every other admin's activity, but tag it `admin` so the dashboard can show
+   Public, Admins, or All. Default view: Public - the numbers shown to church leaders
+   are visitors only.
+3. Stop two sources of noise found on day one: `(unmatched)` request stats that are
+   really CORS `OPTIONS` preflights, and admin page views that slipped through because
+   the first batch left before auth had resolved.
+
+**Why verify with the token instead of trusting the browser.** Today the tracker sends
+`is_admin: true` and the server believes it. That is fine for *dropping* (a liar only
+hides themselves) but useless for *tagging* (a liar could pollute the admin bucket) and
+useless for excluding one specific person (the client would have to send an email, and
+anyone could send anyone's). The backend already has `middleware.OptionalAdmin`
+(`auth.go:82`, used on `GET /calendar`): with a Bearer token it verifies the JWT
+against Supabase's keys, looks the email up in `admins`, and puts the email on the
+request context; with no token or a bad one it lets the request through as anonymous.
+Mounting it on the ingest route gives the server a verified identity for free. The
+email is compared and never stored - the row only ever gets `public` or `admin`.
+
+**Design constraints read from the code (2026-11-05):**
+
+1. `OptionalAdmin` sets `ctxAdminEmail` only when the email is in `admins`; a signed-in
+   non-admin looks anonymous. That is the behaviour we want: non-admin Google users are
+   public visitors.
+2. `analytics_daily` is keyed `(day, metric, dimension)`. Audience has to join the key
+   or Public and Admin rows collide. Every read query filters on it.
+3. `middleware.RequestStats` records anything the CORS middleware answered (OPTIONS ->
+   204) under `(unmatched)` because chi never matched a route. 283 such rows on day
+   one, all the owner's own preflights.
+4. `TrackerMount` sets `isAdmin` from `useAuth()` *after* auth resolves; the tracker's
+   first flush can run before that. `useAuth` also exposes `hint` (sessionStorage) which
+   knows the answer on first paint for a returning admin, and `session.access_token`
+   which is what the ingest needs.
+5. The existing `is_admin` batch flag stays accepted for one release so phones with a
+   cached old bundle keep working; the server ignores it once the token is present.
+
+---
+
+## Phase 1 - Database
+
+| File | Change | Why |
+|---|---|---|
+| `backend/migrations/000021_analytics_audience.up.sql` | `alter table analytics_events add column if not exists audience text not null default 'public' check (audience in ('public','admin'))`. `alter table analytics_daily` : add `audience text not null default 'public'`, drop PK, add PK `(day, metric, dimension, audience)`. Index `analytics_events (audience, occurred_at)`. | Audience is a first-class slice of every number, so it has to live in the raw row and in the rollup key. Default `'public'` makes every existing row (all collected before admins were tagged) public, which is what they were treated as. Written idempotently like 000019/000020. |
+| `backend/migrations/000021_analytics_audience.down.sql` | Drop the index, restore the three-column PK (deleting admin rows first, since they would collide), drop both columns. | Reversible. Admin rows have nowhere to go in the old key, so the down says so explicitly rather than failing on a PK violation. |
+
+---
+
+## Phase 2 - Backend
+
+| File | Change | Why |
+|---|---|---|
+| `backend/internal/handler/analytics_test.go` | **First.** New tests: batch with an admin email on the context -> service receives `audience=admin`; batch with no email -> `public`; batch whose email is in the exclude list -> service receives `excluded=true` and still 202; `is_admin: true` with no token -> still dropped (compat); `?audience=admin\|public\|all` forwarded on every read, bad value -> 400, missing -> `public`. | Pins the trust model: audience comes from the context the middleware set, never from the body. |
+| `backend/internal/middleware/logger_test.go` | **First.** An `OPTIONS` request is not recorded. | The preflight fix, as a test before the one-line change. |
+| `backend/internal/middleware/logger.go` | Skip `r.Method == http.MethodOptions` alongside the health-path skip. | Preflights are answered by CORS before routing; they are browser plumbing, not traffic. |
+| `backend/internal/model/types.go` | `AnalyticsEvent.Audience string`; `AnalyticsBatch.IsAdmin` kept, documented as legacy; const `AudiencePublic/AudienceAdmin`; `Audience` field on `AnalyticsOverview` so the response says which slice it is. | Shapes before logic; the API response carries the slice so the dashboard cannot mislabel it. |
+| `backend/internal/service/analytics.go` | `Ingest(ctx, ip, ua, adminEmail string, legacyIsAdmin bool, events)`: if `adminEmail` is in `excludeEmails` (lower-cased set from env) -> return nil (drop). Else `audience = admin` when `adminEmail != ""`, else `public`; legacy `legacyIsAdmin` with no email -> drop (one-release compat). Every read method gains an `audience` argument (`public`, `admin`, `all`). `RollupDay` passes nothing new - the repository groups by audience. | The service stays the privacy boundary: the email is used for one comparison and never reaches the repository. |
+| `backend/internal/repository/analytics.go` | Insert `audience`. Every `RollupDay` statement adds `audience` to the SELECT and `GROUP BY`. `SumMetric`/`PeakMetric`/`Series`/`Breakdown`: `audience = $n` or, for `all`, sum across both. `MedianSessionSeconds`, `ContentStats` (reads subquery), `RouteStats` unchanged except the audience filter where a raw table is read. | Raw SQL only; audience is one more column in the key. |
+| `backend/internal/handler/analytics.go` | `Ingest` reads `middleware.AdminEmailFromContext(r.Context())` and passes it with the legacy flag. `parseAudience(r)`: `public` default, `admin`, `all`, else 400. Threaded through all six reads. | Three jobs only: parse, validate, call. |
+| `backend/cmd/server/main.go` | `r.With(appMiddleware.OptionalAdmin(adminRepo, jwksCache)).Post("/analytics/events", ...)`. Read `ANALYTICS_EXCLUDE_EMAILS` (comma list) into the service. Route comment updated: still public, token optional. | `OptionalAdmin` is the existing, tested way to get a verified identity without requiring one. |
+| `backend/.env.example`, Render env | `ANALYTICS_EXCLUDE_EMAILS=thienductranhuu2784@gmail.com` | The owner's self-exclusion, as configuration not code, so a second owner can be added without a deploy. |
+
+---
+
+## Phase 3 - Frontend tracking
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/lib/__tests__/analytics.test.ts` | **First.** `flush()` is a no-op while `authState === 'unknown'`; becomes active on `setAuth({ token })` or `setAuth({ token: null })`; a 10 s safety timer releases the hold if auth never resolves; the transport receives the token. | The hold is the fix for admin views leaking; the safety timer is the fix for the hold itself failing. |
+| `frontend/lib/analytics.ts` | `Tracker.setAuth(state: 'unknown' \| { token: string \| null })`; flush gate; transport signature gains `token`; browser transport sets `Authorization: Bearer` when present. Remove `is_admin` from new batches (server still accepts it). | The token is what lets the server decide; the client no longer asserts anything about itself. |
+| `frontend/components/features/analytics/TrackerMount.tsx` | On mount: if `hint` says signed-out -> `setAuth({ token: null })` immediately (public visitors never wait). If `hint` says signed-in or is null -> `setAuth('unknown')` until `loading` is false, then `setAuth({ token: session?.access_token ?? null })`. | A returning public visitor pays no delay; only a signed-in browser waits for its token. |
+
+---
+
+## Phase 4 - Dashboard
+
+| File | Change | Why |
+|---|---|---|
+| `frontend/lib/analytics-api.ts` | `audience: 'public' \| 'admin' \| 'all'` on every fetcher; `AnalyticsOverview.audience`. | Mirrors the API. |
+| `frontend/components/features/analytics/AudienceToggle.tsx` | Three pills next to the date range: Public / Admins / All. | One filter row above everything; same pill style as the range presets. |
+| `frontend/app/[locale]/admin/analytics/page.tsx` | `audience` state, default `public`; passed to every fetch; subtitle shows the slice. | Default is the leadership-facing view. |
+| `docs/components.md`, `docs/agents/frontend.md` | AudienceToggle entry; tracker rules updated (token, hold, no `is_admin`). | Component doc rule. |
+
+### End-to-end flow (what changes)
+
+```
+signed-in admin opens /vi/events
+  -> TrackerMount: hint says signed-in -> tracker holds flush
+  -> auth resolves -> setAuth({ token }) -> flush with Authorization: Bearer
+  -> OptionalAdmin verifies JWT, finds email in admins -> context email set
+  -> handler passes email -> service: in ANALYTICS_EXCLUDE_EMAILS? drop : audience=admin
+  -> row written with audience='admin' -> rollup groups by audience
+  -> dashboard default ?audience=public never shows it; Admins pill does
+anonymous visitor: hint says signed-out -> flush immediately, no token -> audience='public'
+```
+
+### Security callouts
+
+- **Nothing new is trusted from the client.** Audience and exclusion both derive from a
+  JWT verified against Supabase's public keys and the `admins` table. The `is_admin`
+  body flag is now ignored whenever a token is present and removed from new bundles.
+- **The exclusion email is compared, never stored.** It lives in Render env and in the
+  request context for the duration of one request.
+- **Ingest stays public.** `OptionalAdmin` never rejects; a missing or invalid token
+  means anonymous, exactly as on `GET /calendar`.
+- **Token exposure.** The tracker now sends the Supabase access token to the backend on
+  every flush, which the dashboard and every admin write already do. Same origin
+  allow-list, same HTTPS.
+
+### Scope estimate
+
+| Phase | Rough time |
+|---|---|
+| 1 Database | 0.5 h |
+| 2 Backend (tests first, audience threading, exclude list, OPTIONS skip) | 0.5 day |
+| 3 Frontend tracking (hold + token + tests) | 2 h |
+| 4 Dashboard (toggle, plumbing) | 2 h |
+| Docs (`api.md`, `backend.md`, `database.md`, `frontend.md`, `components.md`, `progress.md`, known-quirks for the preflight and the leak) | 1 h |
+
+### Open questions for the owner
+
+1. **Default slice.** Public is proposed. Say if you would rather land on All.
+2. **Old rows.** Everything collected 2026-11-04/05 is labelled public by the default,
+   including your own leaked views. Leave them (they are tiny and will be dwarfed in a
+   week) or delete rows from those two days? Proposal: leave them.
+3. **Exclusion when signed out.** On a device where you are not signed in you count as
+   a public visitor. That is the proposed behaviour; an IP-based exclusion could be
+   added later if it bothers you.
+
+---
+
 # BUILT 2026-10-28 (awaiting push) - First-party analytics with an admin dashboard
 
 **Status:** all four phases built and verified locally (see `docs/progress.md` 2026-10-28 for the verification list and the deviations: types co-located in `lib/analytics-api.ts`, a sixth `/requests` read, `post_read` via a 2 s on-screen sentinel, Discord deliveries dropped for lack of a log). Original plan text follows unchanged. Earlier status: plan only. Owner approved the metric list 2026-10-28 and dropped the assistant-questions metric. Vendor fork resolved in chat on 2026-10-21: build our own

@@ -339,6 +339,8 @@ First-party, cookie-free usage analytics ingest. **Public on purpose** - every v
 
 Rate limit: 60 batches per minute per IP. Body cap: 16 KB. At most 20 events per batch.
 
+**Optional `Authorization: Bearer <supabase jwt>`.** The route runs behind `OptionalAdmin`: a valid token whose email is in `admins` makes the server tag the batch `audience=admin` (or drop it entirely when the email is in `ANALYTICS_EXCLUDE_EMAILS`); no token, an invalid token, or a non-admin email means `audience=public`. The client never asserts who it is. The email is compared and never stored.
+
 **Request body**
 ```json
 {
@@ -361,7 +363,7 @@ Rate limit: 60 batches per minute per IP. Body cap: 16 KB. At most 20 events per
 * `path` must be a relative path (<= 300 chars); the server strips the query string and the locale prefix and collapses UUID segments to `{id}`.
 * `locale` is `en` or `vi`; `session_id` is 8-64 chars; `occurred_at` is Unix ms (clamped to the last 7 days).
 * `props` keys are limited to `post_id`, `event_id`, `album_id`, `from`, `to`, `month`, `host`, `emoji`, `tag`; values are strings (<= 120 chars), numbers or booleans.
-* `is_admin: true` makes the server discard the whole batch (admins are not visitors). Bot user agents are discarded the same way.
+* `is_admin: true` is legacy (bundles before 2026-11-05). It is honoured only when no token is present - the batch is dropped - and ignored otherwise. Bot user agents are discarded regardless.
 
 **Response `202`** - empty body (also for discarded admin/bot batches)
 **Response `400`** - invalid JSON, empty or oversized batch, unknown event name, bad locale/path/session id, non-whitelisted prop
@@ -1020,6 +1022,8 @@ Swatches are a **picker convenience only**. An event stores its color by value, 
 ## Admin analytics (JWT required)
 
 All six reads take the same optional range: `?from=YYYY-MM-DD&to=YYYY-MM-DD` (inclusive calendar days in the site's time zone, default the last 30 days, max 400 days). `400` on a reversed, unparseable or too-long range.
+
+`overview`, `timeseries`, `breakdown` and `content` also take `?audience=public|admin|all` (default `public`; `400` on anything else). `public` and `admin` are the two stored slices; `all` is their sum. `pipeline` and `requests` have no audience - they are not per-visitor. Responses echo the `audience` they were computed for.
 
 ### `GET /api/v1/admin/analytics/overview`
 Headline tiles for the range and for the equally long period just before it.

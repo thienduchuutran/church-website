@@ -126,7 +126,7 @@ It is field-level, not all-or-nothing. On an event whose `address_public` is fal
 | GET | `/api/v1/calendar/event-types` | The admin-growable event-type vocabulary (labels + per-type default icon/color) |
 | GET | `/api/v1/calendar/palette` | The shared custom color swatches saved by admins |
 | POST | `/api/v1/assistant/chat` | AI assistant chatbox with RAG context (rate-limited per IP) |
-| POST | `/api/v1/analytics/events` | Anonymous usage-event ingest from the in-page tracker. Batched (<=20), 16 KB cap, 60/min/IP, allow-listed event names and prop keys. Admin and bot batches are accepted and discarded. **Public on purpose.** |
+| POST | `/api/v1/analytics/events` | Anonymous usage-event ingest from the in-page tracker. Batched (<=20), 16 KB cap, 60/min/IP, allow-listed event names and prop keys. Runs behind `OptionalAdmin`: a verified admin token tags the batch `admin` or drops it (`ANALYTICS_EXCLUDE_EMAILS`); otherwise `public`. Bot batches are accepted and discarded. **Public on purpose.** |
 | GET | `/api/v1/admin/discord/callback` | Discord OAuth redirect target. **Public on purpose** - a browser redirect carries no Bearer token, so trust comes from the HMAC-signed `state`. Links the admin's Discord, then 303-redirects to `{FRONTEND_ORIGIN}/admin?discord=linked\|error`. Do NOT move into the admin group. See `docs/agents/discord.md`. |
 
 > Full request/response shapes and model definitions live in `docs/api.md`.
@@ -539,7 +539,8 @@ First-party, cookie-free usage analytics. Decided 2026-10-21 (owner + chat): bui
 
 - **`visitors` over a range is the sum of daily uniques**, not a de-duplicated count. The dashboard labels it so.
 - **Return rate cannot come from the hash.** The browser keeps only a last-visit date in `localStorage` and sends `returning: true` on page views when that date is within the previous 30 days (`frontend/lib/analytics.ts`, `computeReturning`).
-- **Admins are not visitors.** The tracker sets `is_admin` on the batch once `useAuth` resolves; the service discards the whole batch. Bot user agents (`IsBotUserAgent`, a short denylist) are discarded the same way. Both still get `202`.
+- **Audience is decided from a verified token, never from the client** (migration `000021`, 2026-11-05). The ingest route runs behind `middleware.OptionalAdmin`: a valid Supabase JWT whose email is in `admins` puts the email on the request context; anything else is anonymous. `AnalyticsService.decideAudience` then does one of three things - email in `ANALYTICS_EXCLUDE_EMAILS` (the owner): drop the batch; any other admin: `audience=admin`; nobody: `audience=public`. The email is compared and never written. Every row and every `analytics_daily` key carries `audience`; reads take `?audience=public|admin|all` (default public). The legacy client flag `is_admin` is honoured only when no token is present, so phones with a cached old bundle keep hiding their admin. Bot user agents (`IsBotUserAgent`) are discarded regardless. All of these still get `202`.
+- **Why the first version leaked.** The old tracker set `is_admin` after `useAuth` resolved, and its first batch could leave before that. On the first production day the owner's own page views counted as public. The tracker now holds its first flush until auth is known (`TrackerAuth`, `frontend/lib/analytics.ts`) and sends the token instead of a flag.
 
 **Path normalisation** (`service.NormalizePath`): query/fragment dropped, leading `/en` or `/vi` dropped (locale is its own column), UUID segments collapsed to `{id}` with the first one copied into `props.post_id`. This is what keeps the "top pages" table bounded and keeps arbitrary client strings out of it; the handler additionally enforces the allow-lists in `model.AnalyticsEventNames` / `model.AnalyticsPropKeys`.
 
@@ -547,7 +548,7 @@ First-party, cookie-free usage analytics. Decided 2026-10-21 (owner + chat): bui
 
 **The rollup worker** (`analytics.Rollup`, same Start/Stop/once shape as `translation.Worker`) ticks every `ANALYTICS_ROLLUP_INTERVAL` seconds (default 600): it rebuilds today and yesterday in `analytics_daily` (delete-then-insert in one transaction, so re-running is free and late beacons from a phone that was offline still land), flushes completed hourly request buckets, and once a day deletes raw events older than 400 days. `Stop()` flushes the current partial hour so a deploy does not lose it; the repository merges partial buckets on conflict.
 
-**Request stats** (`middleware.RequestStats`) replace the old no-op `RequestLogger`. Buckets are keyed by chi route *pattern* (`/api/v1/posts/{id}`), never the URL, so cardinality is bounded by the route table; `/api/v1/health` is skipped because the cron-job.org pinger would dominate. Up to 2000 samples per bucket feed nearest-rank p50/p95.
+**Request stats** (`middleware.RequestStats`) replace the old no-op `RequestLogger`. Buckets are keyed by chi route *pattern* (`/api/v1/posts/{id}`), never the URL, so cardinality is bounded by the route table; `/api/v1/health` is skipped because the cron-job.org pinger would dominate, and `OPTIONS` is skipped because CORS preflights are answered before chi routes anything and were piling up as `(unmatched)` (283 on the first production day, all one browser). Up to 2000 samples per bucket feed nearest-rank p50/p95.
 
 **Rate limiting** moved out of `AssistantService` into `service.IPRateLimiter` (`ratelimit.go`) so the analytics ingest and the assistant share one tested implementation. `AssistantService.CheckRateLimit` is a thin wrapper over it.
 
@@ -587,6 +588,7 @@ TRANSLATION_WORKER_INTERVAL=5                      # Poll interval in seconds. D
 ANALYTICS_SALT_SECRET=...                          # Random 32+ bytes. Salts the daily visitor hash; without it the pipeline runs but logs a warning. Rotating it just restarts the hashes.
 ANALYTICS_TIMEZONE=America/New_York                # The congregation's zone: a "day" in analytics_daily ends at local midnight. Defaults to America/New_York (tzdata is embedded).
 ANALYTICS_ROLLUP_INTERVAL=600                      # Rollup tick in seconds. Defaults to 600.
+ANALYTICS_EXCLUDE_EMAILS=owner@example.org         # Comma list. Verified admin emails whose traffic is dropped entirely. Compared, never stored.
 ```
 
 ---

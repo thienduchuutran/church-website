@@ -91,6 +91,7 @@ frontend/
 │       │   ├── ContentTable.tsx        ← Per-post reads + reactions
 │       │   ├── PipelinePanel.tsx       ← Translation quality + content velocity
 │       │   ├── RequestsTable.tsx       ← Backend p50/p95/error rate per route
+│       │   ├── AudienceToggle.tsx      ← Public / Admins / All pills; scopes every panel
 │       │   └── format.ts               ← compact/percent/duration/date helpers shared by the above
 │       └── assistant/
 │           ├── ChatBox.tsx             ← Floating AI assistant widget
@@ -393,7 +394,8 @@ Never put the Supabase service role key in the frontend. Never.
 - **Adding an event** = one `track('<name>', props)` call at an existing handler, with the name and prop keys already in the server allow-lists (`backend/internal/model/types.go` `AnalyticsEventNames` / `AnalyticsPropKeys`). Anything else is a silent 400 and the batch is dropped. Current calls: `ReadTracker` (post_read), `CalendarShell` (calendar_month_view on arrows/swipe/Today, calendar_event_open when a day with events is tapped), `AlbumGrid` (gallery_album_open), `ReactionBar` (reaction_add), `LanguageSwitcher` (locale_switch, followed by `flushNow()` because the switch is a hard navigation).
 - **Duration is visible time only** (`visibilitychange`), so a backgrounded phone tab does not inflate session length.
 - **Failed batches persist and retry** with backoff (5 s doubling to 60 s), which is what survives Render's cold start. The `pagehide` flush is best-effort and NOT persisted - re-sending it next visit would double count.
-- **Admin sessions are tagged** (`is_admin` on the batch, from `useAuth`) and the server discards them, so editing posts never counts as a visit.
+- **Who sent a batch is decided by the server, from the token.** `TrackerMount` calls `tracker.setAuth({ token })` once `useAuth` resolves; the tracker sends the Supabase access token in the `Authorization` header and nothing about identity in the body (the old `is_admin` flag is gone). Until auth is known the tracker **holds** every flush (`TrackerAuth = 'unknown'`, released by `setAuth`, or by a 10 s safety timer that sends as anonymous). A returning signed-out visitor is released on first paint from the `hint` in session storage, so public visitors never wait. This hold exists because the first production day leaked the owner's own page views as public: the first batch left before auth had resolved.
+- **Dashboard audience.** Every fetcher in `lib/analytics-api.ts` takes `audience: 'public' | 'admin' | 'all'` (default public); `AudienceToggle` on the page sets it for all panels at once.
 - `NEXT_PUBLIC_ANALYTICS_DISABLED=1` turns the tracker into a no-op (local dev).
 - Chart colors are the `--viz-1` / `--viz-2` tokens in `globals.css`, validated with the dataviz palette checker in both modes (light: plum `#8e1d5f` + violet `#6250d6`; dark: `#d55181` + `#9085e9`). Do not paint chart marks with `--primary`/`--accent` directly - the dark steps of those were never checked as a pair.
 

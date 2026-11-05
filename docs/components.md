@@ -952,7 +952,7 @@ A small "?" circle that opens a tasteful info popover on click - a reusable expl
 The admin dashboard at `app/[locale]/admin/analytics/page.tsx` and the two tracking islands. Data comes from `lib/analytics-api.ts` (six admin GETs) against one shared `DateRange`; the page fetches everything in parallel on range change and holds the previous render at reduced opacity while a refetch is in flight. Admin UI is English-only like the other admin pages. Colors: `--viz-1` (plum) and `--viz-2` (violet), validated for both modes - see `frontend.md` -> "Analytics tracking".
 
 #### `TrackerMount`
-Renders nothing. Mounted once in `app/[locale]/layout.tsx`. Sets tracker context (`locale` from next-intl, `isAdmin` from `useAuth`), fires `page_view` on every `usePathname()` change (closing the previous page with `page_leave` + visible duration), wires `visibilitychange` / `pagehide` / `pageshow(persisted)`, and flushes any queue persisted from a previous visit.
+Renders nothing. Mounted once in `app/[locale]/layout.tsx`. Sets tracker context (`locale` from next-intl), resolves tracker auth from `useAuth` (`setAuth({ token })` once `loading` is false; a signed-out `hint` releases the hold on first paint), fires `page_view` on every `usePathname()` change (closing the previous page with `page_leave` + visible duration), wires `visibilitychange` / `pagehide` / `pageshow(persisted)`, and flushes any queue persisted from a previous visit. The token travels in the `Authorization` header; the server decides audience from it.  
 **Props:** none. **Client component:** yes.
 
 #### `ReadTracker`
@@ -960,6 +960,14 @@ Invisible 1px sentinel placed inside `PostCard` before the header strip. An `Int
 | Prop | Type | Description |
 |------|------|-------------|
 | `postId` | `string` | The post the read is attributed to (`props.post_id`) |
+**Client component:** yes.
+
+#### `AudienceToggle`
+Three pills - Public / Admins / All - in the filter row beside the date range. Scopes every panel on the page at once. Default Public, the leadership-facing view.
+| Prop | Type | Description |
+|------|------|-------------|
+| `value` | `Audience` | `'public' \| 'admin' \| 'all'` |
+| `onChange` | `(a: Audience) => void` | Called with the new slice |
 **Client component:** yes.
 
 #### `DateRangePicker`

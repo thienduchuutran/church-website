@@ -74,6 +74,7 @@ DISCORD_PROXY_SECRET          <shared key, matches the Worker's PROXY_KEY>   [Se
 ANALYTICS_SALT_SECRET         <random 32+ bytes>                              [Secret]  salts the daily visitor hash (migration 000019)
 ANALYTICS_TIMEZONE            America/New_York                                 (default; a "day" in analytics ends at local midnight)
 ANALYTICS_ROLLUP_INTERVAL     600                                              (default; seconds between rollup ticks)
+ANALYTICS_EXCLUDE_EMAILS      thienductranhuu2784@gmail.com                    comma list of admin emails whose traffic is dropped from analytics (owner self-exclusion; compared against the verified token, never stored)
 ```
 
 > **`ANALYTICS_SALT_SECRET` must be set on Render.** Without it visitor hashes are unsalted and the backend logs a warning at boot. Generate one with `openssl rand -hex 32` (or PowerShell: `-join ((1..32) | % { '{0:x2}' -f (Get-Random -Max 256) })`).

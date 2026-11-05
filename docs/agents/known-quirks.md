@@ -687,3 +687,19 @@ update schema_migrations set version = 18, dirty = false;
 **Fix.** Migration `000020_reactions_created_at` adds the column idempotently, in two statements on purpose: `add column if not exists created_at timestamptz` first, then `set default now()`. A single `add column ... default now()` would have stamped every pre-existing reaction with the deploy moment, and the dashboard would have reported hundreds of reactions "added" on deploy day. Old rows stay NULL (time genuinely unknown) and are excluded from range counts; the all-time reactions column on the Content table is unaffected. The down migration only drops the default - it never drops the column, because locally the column pre-dates this migration and carries real data.
 
 **Rule for future queries.** "It passed against the local DB" proves the SQL is valid, not that production has the same columns. When a query touches a column no existing production query reads, check `scripts/rds-schema.sql` and the Supabase table editor before shipping - or, better, make the new migration add what you rely on with `if not exists`, which costs nothing when the column is already there.
+
+---
+
+## The owner's own page views showed up as public traffic, and 283 "(unmatched)" requests appeared on the dashboard
+
+**Symptom (2026-11-05, first production day of `/admin/analytics`).** Top pages listed `/admin/analytics` (3 views) and `/` (6 views) that were all the owner's own browsing, which the admin exclusion was supposed to drop. The backend requests table showed a route called `(unmatched)` with 283 requests at 0 ms.
+
+**Cause 1 - the admin flag arrived too late.** The tracker sent `is_admin: true` on a batch once `useAuth` had resolved. Its first batch could leave before that, with the flag still false, and the server counted it as a visitor. Also, a client-asserted flag could only ever *drop* a batch; it could not safely *tag* one, because anyone could claim to be an admin.
+
+**Fix.** Identity comes from the server now. The ingest route runs behind `middleware.OptionalAdmin` (the same middleware `GET /calendar` uses); the tracker sends the Supabase access token in the `Authorization` header and never says who it is. `AnalyticsService.decideAudience` drops batches from `ANALYTICS_EXCLUDE_EMAILS` (the owner), tags any other admin `audience=admin`, and everyone else `public` (migration `000021`). The tracker holds every flush until auth is known (`TrackerAuth`), released by `setAuth()` or a 10 s safety timer. A signed-out returning visitor is released on first paint from the session-storage hint. The old `is_admin` flag is honoured only when no token is present, for phones with a cached bundle.
+
+**Cause 2 - CORS preflights.** Every cross-origin request with a JSON body or an Authorization header is preceded by an `OPTIONS` request the browser sends on its own. The CORS middleware answers it with 204 before chi routes anything, so `RequestStats` filed every one under `(unmatched)`. Eleven dashboard requests = eleven preflights; the tracker adds one per flush. 283 was one person's afternoon, not an attack. Hackers show up as 404s and 401s on paths that do not exist, not as fast 204s on your own routes.
+
+**Fix.** `RequestStats.Middleware` skips `r.Method == OPTIONS` alongside the health-path skip, with a test.
+
+**Rule.** Never trust a client to say who it is for anything that *tags* rather than *hides*; verify. And when a count on the dashboard looks like an attack, read the method and the status class first - the volume of preflights is a multiple of the real requests, by design.

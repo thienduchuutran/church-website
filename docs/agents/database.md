@@ -499,23 +499,26 @@ create table if not exists analytics_events (
   device        text not null check (device in ('phone', 'tablet', 'desktop')),
   duration_ms   integer,                 -- page_leave only: visible time, clamped to 6 h
   is_returning  boolean not null default false,  -- client-reported (see backend.md); the hash cannot say
-  props         jsonb not null default '{}'       -- allow-listed keys: post_id, event_id, album_id, from, to, month, host, emoji, tag
+  props         jsonb not null default '{}',      -- allow-listed keys: post_id, event_id, album_id, from, to, month, host, emoji, tag
+  audience      text not null default 'public' check (audience in ('public', 'admin'))  -- migration 000021; from a verified JWT, never the client
 );
 create index on analytics_events (occurred_at);
 create index on analytics_events (event_name, occurred_at);
 create index on analytics_events (path, occurred_at);
+create index on analytics_events (audience, occurred_at);
 ```
 > `is_returning`, not `returning`: `RETURNING` is a reserved word in Postgres and the first draft of this migration failed on it. See `known-quirks.md`.
 
 ### `analytics_daily`
-Pre-aggregated numbers the dashboard reads. Rebuilt for today and yesterday on every rollup tick (delete-then-insert in one transaction), kept forever. `dimension` is `''` for a total; an empty string rather than NULL so the primary key can hold it.
+Pre-aggregated numbers the dashboard reads. Rebuilt for today and yesterday on every rollup tick (delete-then-insert in one transaction), kept forever. `dimension` is `''` for a total; an empty string rather than NULL so the primary key can hold it. `audience` joined the key in migration `000021` - every number is computed per slice, and "all" on the dashboard is the two slices summed at read time.
 ```sql
 create table if not exists analytics_daily (
   day        date not null,              -- calendar day in ANALYTICS_TIMEZONE
   metric     text not null,
   dimension  text not null default '',
+  audience   text not null default 'public',  -- 'public' | 'admin' (000021)
   value      numeric not null,
-  primary key (day, metric, dimension)
+  primary key (day, metric, dimension, audience)
 );
 ```
 Metrics written per day: `visitors` (''), `visitors_locale` (en/vi), `sessions` (''), `sessions_locale` (en/vi), `returning_sessions` (''), `pageviews` (''), `pageviews_path` (path), `pageviews_device` (device), `pageviews_referrer` (host or `direct`), `pageviews_hour` (`<dow>-<hour>`, 0 = Sunday, local time), `events` (event_name, excluding page_view/page_leave), `post_reads` (post id), `session_seconds_median` ('').
@@ -619,6 +622,7 @@ backend/migrations/
 ├── 000018_year_theme_verse.up.sql      ← moves those three to a new calendar_year_content, keyed by YEAR (000017 had the grain wrong)
 ├── 000019_analytics.up.sql             ← analytics_events (raw, cookie-free), analytics_daily (rollup), analytics_request_stats (hourly latency)
 ├── 000020_reactions_created_at.up.sql  ← adds reactions.created_at on production (local already had it from 000001); no back-fill, old rows stay NULL
+├── 000021_analytics_audience.up.sql    ← audience ('public'|'admin') on analytics_events and in the analytics_daily key; existing rows default public
 ├── 000013_source_locale.down.sql
 ├── 000014_calendar_places.up.sql       ← calendar_places + calendar_events.place_id (seeds place_name prompt)
 ├── 000014_calendar_places.down.sql
