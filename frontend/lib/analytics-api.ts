@@ -19,6 +19,7 @@ export interface AnalyticsTotals {
 export interface AnalyticsOverview {
   from: string
   to: string
+  audience: Audience
   current: AnalyticsTotals
   previous: AnalyticsTotals
 }
@@ -77,6 +78,10 @@ export type TimeseriesMetric =
 
 export type BreakdownDimension = 'path' | 'locale' | 'device' | 'referrer' | 'event' | 'hour' | 'post'
 
+// Which visitors a read covers. The server tags every row from a verified
+// token; 'all' is the two slices summed. Default everywhere is 'public'.
+export type Audience = 'public' | 'admin' | 'all'
+
 export interface DateRange {
   from: string // YYYY-MM-DD inclusive
   to: string // YYYY-MM-DD inclusive
@@ -128,18 +133,18 @@ function qs(range: DateRange, extra: Record<string, string | number | undefined>
   return `?${p.toString()}`
 }
 
-export function getOverview(token: string, range: DateRange): Promise<AnalyticsOverview> {
-  return apiGet(`/api/v1/admin/analytics/overview${qs(range)}`, token)
+export function getOverview(token: string, range: DateRange, audience: Audience = 'public'): Promise<AnalyticsOverview> {
+  return apiGet(`/api/v1/admin/analytics/overview${qs(range, { audience })}`, token)
 }
 
 export async function getTimeseries(
   token: string,
   range: DateRange,
   metric: TimeseriesMetric,
-  opts: { dimension?: string; bucket?: 'day' | 'week' } = {},
+  opts: { dimension?: string; bucket?: 'day' | 'week'; audience?: Audience } = {},
 ): Promise<AnalyticsPoint[]> {
   const res = await apiGet(
-    `/api/v1/admin/analytics/timeseries${qs(range, { metric, dimension: opts.dimension, bucket: opts.bucket })}`,
+    `/api/v1/admin/analytics/timeseries${qs(range, { metric, dimension: opts.dimension, bucket: opts.bucket, audience: opts.audience ?? 'public' })}`,
     token,
   )
   return res.points as AnalyticsPoint[]
@@ -150,13 +155,14 @@ export async function getBreakdown(
   range: DateRange,
   dimension: BreakdownDimension,
   limit = 10,
+  audience: Audience = 'public',
 ): Promise<AnalyticsBreakdownRow[]> {
-  const res = await apiGet(`/api/v1/admin/analytics/breakdown${qs(range, { dimension, limit })}`, token)
+  const res = await apiGet(`/api/v1/admin/analytics/breakdown${qs(range, { dimension, limit, audience })}`, token)
   return res.rows as AnalyticsBreakdownRow[]
 }
 
-export async function getContent(token: string, range: DateRange): Promise<ContentStat[]> {
-  const res = await apiGet(`/api/v1/admin/analytics/content${qs(range)}`, token)
+export async function getContent(token: string, range: DateRange, audience: Audience = 'public'): Promise<ContentStat[]> {
+  const res = await apiGet(`/api/v1/admin/analytics/content${qs(range, { audience })}`, token)
   return res.items as ContentStat[]
 }
 

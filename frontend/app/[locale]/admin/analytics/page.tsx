@@ -14,6 +14,7 @@ import {
   rangeDays,
   type AnalyticsBreakdownRow,
   type AnalyticsOverview,
+  type Audience,
   type AnalyticsPoint,
   type ContentStat,
   type DateRange,
@@ -22,6 +23,7 @@ import {
   type RouteStat,
 } from '@/lib/analytics-api'
 import DateRangePicker from '@/components/features/analytics/DateRangePicker'
+import AudienceToggle from '@/components/features/analytics/AudienceToggle'
 import StatTile from '@/components/features/analytics/StatTile'
 import TrendChart from '@/components/features/analytics/TrendChart'
 import HourHeatmap from '@/components/features/analytics/HourHeatmap'
@@ -68,6 +70,8 @@ export default function AdminAnalyticsPage() {
 
   const [preset, setPreset] = useState<RangePreset | 'custom'>('30d')
   const [range, setRange] = useState<DateRange>(() => presetRange('30d'))
+  // Public by default: the view shown to church leaders is visitors only.
+  const [audience, setAudience] = useState<Audience>('public')
   const [data, setData] = useState<Data | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -80,15 +84,15 @@ export default function AdminAnalyticsPage() {
     setError(null)
     try {
       const [overview, en, vi, paths, devices, referrers, hours, events, content, pipeline, requests] = await Promise.all([
-        getOverview(token, range),
-        getTimeseries(token, range, 'visitors_locale', { dimension: 'en', bucket }),
-        getTimeseries(token, range, 'visitors_locale', { dimension: 'vi', bucket }),
-        getBreakdown(token, range, 'path', 10),
-        getBreakdown(token, range, 'device', 3),
-        getBreakdown(token, range, 'referrer', 8),
-        getBreakdown(token, range, 'hour', 50),
-        getBreakdown(token, range, 'event', 10),
-        getContent(token, range),
+        getOverview(token, range, audience),
+        getTimeseries(token, range, 'visitors_locale', { dimension: 'en', bucket, audience }),
+        getTimeseries(token, range, 'visitors_locale', { dimension: 'vi', bucket, audience }),
+        getBreakdown(token, range, 'path', 10, audience),
+        getBreakdown(token, range, 'device', 3, audience),
+        getBreakdown(token, range, 'referrer', 8, audience),
+        getBreakdown(token, range, 'hour', 50, audience),
+        getBreakdown(token, range, 'event', 10, audience),
+        getContent(token, range, audience),
         getPipeline(token, range),
         getRequests(token, range),
       ])
@@ -98,7 +102,7 @@ export default function AdminAnalyticsPage() {
     } finally {
       setBusy(false)
     }
-  }, [token, range, bucket])
+  }, [token, range, bucket, audience])
 
   useEffect(() => {
     void load()
@@ -128,14 +132,17 @@ export default function AdminAnalyticsPage() {
             {longDate(range.from)} to {longDate(range.to)} · anonymous, cookie-free
           </p>
         </div>
-        <DateRangePicker
-          preset={preset}
-          range={range}
-          onChange={(p, r) => {
-            setPreset(p)
-            setRange(r)
-          }}
-        />
+        <div className="flex flex-wrap items-center gap-3">
+          <AudienceToggle value={audience} onChange={setAudience} />
+          <DateRangePicker
+            preset={preset}
+            range={range}
+            onChange={(p, r) => {
+              setPreset(p)
+              setRange(r)
+            }}
+          />
+        </div>
       </div>
 
       {error && (
