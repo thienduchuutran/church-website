@@ -18,17 +18,30 @@ import { externalReferrer, getTracker } from '@/lib/analytics'
 export default function TrackerMount() {
   const pathname = usePathname()
   const locale = useLocale()
-  const { isAdmin, loading } = useAuth()
+  const { session, loading, hint } = useAuth()
 
-  // Context first, so the first page view is already stamped correctly. The
-  // admin flag is applied as soon as auth resolves; events queued before that
-  // are sent in a later batch that carries the resolved flag, and the server
-  // drops the whole batch when it is true.
   useEffect(() => {
     const t = getTracker()
     if (!t) return
-    t.setContext({ locale, isAdmin: loading ? false : isAdmin })
-  }, [locale, isAdmin, loading])
+    t.setContext({ locale })
+  }, [locale])
+
+  // The tracker starts with auth unknown and sends nothing until told. A
+  // returning signed-out visitor is released on first paint via the session
+  // storage hint, so public visitors never wait. A signed-in browser waits
+  // for the real session so its first batch carries the token - the server
+  // decides admin/public/excluded from that, never from a client flag.
+  useEffect(() => {
+    const t = getTracker()
+    if (!t) return
+    if (!loading) {
+      t.setAuth({ token: session?.access_token ?? null })
+      return
+    }
+    if (hint && !hint.signedIn) {
+      t.setAuth({ token: null })
+    }
+  }, [loading, session, hint])
 
   // One page view per route change. document.referrer is only meaningful
   // on the first page of a session; the tracker enforces that, this just

@@ -8,6 +8,7 @@ import {
   Tracker,
   computeReturning,
   externalReferrer,
+  AUTH_HOLD_MAX_MS,
   MAX_BATCH,
   MAX_PERSISTED,
   SESSION_IDLE_MS,
@@ -26,14 +27,14 @@ function memStore(): Store & { map: Map<string, string> } {
 }
 
 function harness(opts: { accept?: boolean | (() => boolean) } = {}) {
-  const sent: { batch: AnalyticsBatch; final: boolean }[] = []
+  const sent: { batch: AnalyticsBatch; final: boolean; token: string | null }[] = []
   let clock = Date.parse('2026-10-28T15:00:00Z')
   const local = memStore()
   const session = memStore()
   let counter = 0
   const tracker = new Tracker({
-    transport: async (batch, final) => {
-      sent.push({ batch, final })
+    transport: async (batch, final, token) => {
+      sent.push({ batch, final, token })
       const a = opts.accept ?? true
       return typeof a === 'function' ? a() : a
     },
@@ -206,13 +207,58 @@ test('the referrer is attached to the first page view of a session only', async 
   assert.equal(views[1].referrer, undefined)
 })
 
-test('admin context travels on the batch, not on each event', async () => {
+test('the token travels to the transport, never inside the batch', async () => {
   const h = harness()
-  h.tracker.setContext({ isAdmin: true })
+  h.tracker.setAuth({ token: 'jwt-abc' })
   h.tracker.track('page_view', '/admin')
   await h.tracker.flush()
-  assert.equal(h.sent[0].batch.is_admin, true)
-  assert.equal('is_admin' in h.sent[0].batch.events[0], false)
+  assert.equal(h.sent[0].token, 'jwt-abc')
+  assert.equal('is_admin' in h.sent[0].batch, false)
+  assert.equal(JSON.stringify(h.sent[0].batch).includes('jwt-abc'), false)
+})
+
+function heldHarness() {
+  const sent: { token: string | null }[] = []
+  const scheduled: { fn: () => void; ms: number }[] = []
+  const tracker = new Tracker({
+    transport: async (_batch, _final, token) => {
+      sent.push({ token })
+      return true
+    },
+    local: memStore(),
+    session: memStore(),
+    holdForAuth: true,
+    schedule: (fn, ms) => void scheduled.push({ fn, ms }),
+  })
+  return { tracker, sent, scheduled }
+}
+
+test('with holdForAuth, nothing is sent until auth resolves', async () => {
+  const h = heldHarness()
+  h.tracker.track('page_view', '/')
+  await h.tracker.flush()
+  assert.equal(h.sent.length, 0, 'held while auth is unknown')
+  assert.equal(h.tracker.authResolved, false)
+
+  h.tracker.setAuth({ token: 'jwt-1' })
+  for (const s of h.scheduled.splice(0)) s.fn()
+  await Promise.resolve()
+  await h.tracker.flush()
+  assert.equal(h.sent.length, 1)
+  assert.equal(h.sent[0].token, 'jwt-1')
+})
+
+test('the auth hold gives up after AUTH_HOLD_MAX_MS and sends as anonymous', async () => {
+  const h = heldHarness()
+  h.tracker.track('page_view', '/')
+  const safety = h.scheduled.find((s) => s.ms === AUTH_HOLD_MAX_MS)
+  assert.ok(safety, 'a safety timer is armed on construction')
+  safety.fn()
+  for (const s of h.scheduled.splice(0)) s.fn()
+  await Promise.resolve()
+  await h.tracker.flush()
+  assert.equal(h.sent.length, 1)
+  assert.equal(h.sent[0].token, null)
 })
 
 test('finalFlush closes the page and uses the fire-and-forget path', () => {

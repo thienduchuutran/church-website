@@ -61,8 +61,10 @@ export interface AnalyticsEvent {
   props?: AnalyticsProps
 }
 
+// is_admin is legacy. New bundles no longer send it: the server decides who
+// sent a batch from the verified Supabase token in the Authorization header.
 export interface AnalyticsBatch {
-  is_admin: boolean
+  is_admin?: boolean
   events: AnalyticsEvent[]
 }
 
@@ -76,7 +78,14 @@ export interface Store {
 
 // Sends one batch. Resolves true when the server accepted it. `final` marks a
 // pagehide flush, where the transport should use a fire-and-forget method.
-export type Transport = (batch: AnalyticsBatch, final: boolean) => Promise<boolean>
+// `token` is the signed-in visitor's Supabase access token, or null.
+export type Transport = (batch: AnalyticsBatch, final: boolean, token: string | null) => Promise<boolean>
+
+// Auth state as the tracker sees it. While 'unknown' nothing is sent: the
+// first batch of a signed-in admin must carry the token, or the server
+// cannot tell it apart from a visitor. That exact leak happened on the first
+// production day.
+export type TrackerAuth = 'unknown' | { token: string | null }
 
 export interface TrackerDeps {
   transport: Transport
@@ -86,6 +95,10 @@ export interface TrackerDeps {
   randomId?: () => string
   // Hook for the browser shell to defer a flush; tests call flush() directly.
   schedule?: (fn: () => void, ms: number) => void
+  // Start with auth unknown and hold flushes until setAuth() is called (or
+  // AUTH_HOLD_MAX_MS passes). The browser shell sets this; tests default to
+  // resolved-anonymous so the queue behaviour can be tested on its own.
+  holdForAuth?: boolean
 }
 
 export const MAX_BATCH = 20
@@ -93,6 +106,10 @@ export const MAX_PERSISTED = 200
 export const FLUSH_INTERVAL_MS = 5_000
 export const SESSION_IDLE_MS = 30 * 60 * 1000
 export const RETURNING_WINDOW_DAYS = 30
+// If auth has not resolved by then, send as anonymous rather than lose the
+// events. A signed-in admin whose auth took longer than this is counted as
+// public for that one batch - the lesser evil.
+export const AUTH_HOLD_MAX_MS = 10_000
 
 const KEY_QUEUE = 'vgomne_analytics_queue'
 const KEY_LAST_VISIT = 'vgomne_last_visit'
@@ -137,12 +154,12 @@ export function externalReferrer(referrer: string, ownHost: string): string | un
 
 interface Context {
   locale: string
-  isAdmin: boolean
 }
 
 export class Tracker {
   private queue: AnalyticsEvent[] = []
-  private ctx: Context = { locale: 'en', isAdmin: false }
+  private ctx: Context = { locale: 'en' }
+  private auth: TrackerAuth = { token: null }
   private flushing = false
   private failures = 0
   private nextAllowedAt = 0
@@ -167,14 +184,37 @@ export class Tracker {
     this.now = deps.now ?? (() => Date.now())
     this.randomId = deps.randomId ?? fallbackRandomId
     this.schedule = deps.schedule
+    if (deps.holdForAuth) {
+      this.auth = 'unknown'
+      this.schedule?.(() => {
+        if (this.auth === 'unknown') this.setAuth({ token: null })
+      }, AUTH_HOLD_MAX_MS)
+    }
     this.restorePersisted()
   }
 
-  // Context is set by TrackerMount from next-intl and useAuth. Locale is
-  // stamped on every event; isAdmin travels on the batch so the server can
-  // discard the whole thing.
+  // Context is set by TrackerMount from next-intl. Locale is stamped on
+  // every event.
   setContext(ctx: Partial<Context>) {
     this.ctx = { ...this.ctx, ...ctx }
+  }
+
+  // setAuth is called by TrackerMount once useAuth knows whether there is a
+  // session. Resolving releases any held flush. The token travels in the
+  // Authorization header; the server verifies it and decides the audience.
+  setAuth(state: TrackerAuth) {
+    this.auth = state
+    if (state !== 'unknown' && this.queue.length > 0) {
+      this.schedule?.(() => void this.flush(), 0)
+    }
+  }
+
+  get authResolved(): boolean {
+    return this.auth !== 'unknown'
+  }
+
+  private token(): string | null {
+    return this.auth === 'unknown' ? null : this.auth.token
   }
 
   // disable() is the dev switch (NEXT_PUBLIC_ANALYTICS_DISABLED=1). Nothing
@@ -293,6 +333,7 @@ export class Tracker {
   // 5 s, 10 s, 20 s ... up to 60 s so a sleeping backend is not hammered.
   async flush(): Promise<void> {
     if (this.disabled || this.flushing || this.queue.length === 0) return
+    if (this.auth === 'unknown') return
     if (this.now() < this.nextAllowedAt) {
       this.schedule?.(() => void this.flush(), this.nextAllowedAt - this.now())
       return
@@ -301,7 +342,7 @@ export class Tracker {
     const batch = this.queue.splice(0, MAX_BATCH)
     let ok = false
     try {
-      ok = await this.deps.transport({ is_admin: this.ctx.isAdmin, events: batch }, false)
+      ok = await this.deps.transport({ events: batch }, false, this.token())
     } catch {
       ok = false
     }
@@ -331,7 +372,7 @@ export class Tracker {
     this.closePage()
     if (this.queue.length === 0) return
     const batch = this.queue.splice(0, MAX_BATCH)
-    void this.deps.transport({ is_admin: this.ctx.isAdmin, events: batch }, true).catch(() => undefined)
+    void this.deps.transport({ events: batch }, true, this.token()).catch(() => undefined)
     this.persist()
   }
 
@@ -404,13 +445,15 @@ function webStore(storage: globalThis.Storage | undefined): Store {
 // persisted. The pagehide flush uses fetch with keepalive, which the browser
 // lets finish after the document is gone; sendBeacon would too, but cannot
 // carry a JSON content type on every browser.
-const browserTransport: Transport = async (batch, final) => {
+const browserTransport: Transport = async (batch, final, token) => {
   const body = JSON.stringify(batch)
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+  if (token) headers.Authorization = 'Bearer ' + token
   if (final) {
     try {
       void fetch(ENDPOINT, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body,
         keepalive: true,
       })
@@ -424,7 +467,7 @@ const browserTransport: Transport = async (batch, final) => {
   try {
     const res = await fetch(ENDPOINT, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body,
       keepalive: true,
       signal: controller.signal,
@@ -451,6 +494,7 @@ export function getTracker(): Tracker | null {
     schedule: (fn, ms) => {
       window.setTimeout(fn, ms)
     },
+    holdForAuth: true,
   })
   if (process.env.NEXT_PUBLIC_ANALYTICS_DISABLED === '1') {
     singleton.disable()
