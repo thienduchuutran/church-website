@@ -977,3 +977,7 @@ for exactly that.
 **Verified.** `go test ./...` green (handler, service, middleware, limiter, model); `npm run test:analytics` 13/13; `tsc --noEmit` clean; end-to-end against the local Postgres: ingest 202, bot UA dropped, unknown name 400, unauthenticated admin read 401, rollup rows inspected by hand (hour bucket `3-10` = Wednesday 10am local). Two bugs found and fixed on that run are in `known-quirks.md` (`returning` reserved word; pgx argument count).
 
 **Not done / owner's call.** `ANALYTICS_SALT_SECRET` must be added on Render before deploy; Vercel Web Analytics must be enabled in the Vercel project; the heatmap has no service-time marker until the owner provides service times.
+
+### 2026-11-05 addendum - first production load found schema drift
+
+Deployed 2026-11-04. Ten of eleven dashboard requests succeeded on the first real load; the pipeline panel 500ed because production's `reactions` table never had `created_at` (Supabase-era table, `000001` baselined rather than run). Migration `000020` adds the column idempotently without back-filling. Full write-up in `known-quirks.md`. Lesson recorded there: a query passing against the local DB proves the SQL, not production's columns.

@@ -96,6 +96,8 @@ create table reactions (
 ```
 > Fingerprint abuse (spam reactions) is rate-limited in the Go service layer, not at the DB level.
 
+> **`created_at` is nullable on production.** Production's table predates the migration runner and never had the column; migration `000020` added it without back-filling, so reactions made before 2026-11-05 have `created_at = NULL` (time unknown). Range counts in analytics skip them; all-time counts include them. See `known-quirks.md`.
+
 ---
 
 ### `page_content`
@@ -616,6 +618,7 @@ backend/migrations/
 ├── 000017_month_theme_verse.up.sql     ← calendar_month_notes += theme/verse_text/verse_reference (the card above the calendar grid)
 ├── 000018_year_theme_verse.up.sql      ← moves those three to a new calendar_year_content, keyed by YEAR (000017 had the grain wrong)
 ├── 000019_analytics.up.sql             ← analytics_events (raw, cookie-free), analytics_daily (rollup), analytics_request_stats (hourly latency)
+├── 000020_reactions_created_at.up.sql  ← adds reactions.created_at on production (local already had it from 000001); no back-fill, old rows stay NULL
 ├── 000013_source_locale.down.sql
 ├── 000014_calendar_places.up.sql       ← calendar_places + calendar_events.place_id (seeds place_name prompt)
 ├── 000014_calendar_places.down.sql
