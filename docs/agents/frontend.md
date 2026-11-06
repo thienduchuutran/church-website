@@ -19,7 +19,9 @@ Tailwind CSS. No inline styles. No separate CSS files unless absolutely necessar
 frontend/
 ├── app/
 │   ├── globals.css                     ← Tailwind CSS entry point (lives at the root, imported by [locale]/layout.tsx)
-│   ├── favicon.ico
+│   ├── favicon.ico                     ← Browser-tab icon (16/32/48 px), the church logo. All three icon files are resized copies of public/logo.jpg; Next.js adds the <link> tags for them by file name, so nothing in layout.tsx refers to them. The PNGs inside the .ico must be RGBA or the build fails with "The PNG is not in RGBA format".
+│   ├── icon.png                        ← 192 px tab icon for high-density screens
+│   ├── apple-icon.png                  ← 180 px iOS home-screen icon (opaque - iOS paints transparency black)
 │   └── [locale]/                       ← Every page lives here. Locale is "en" | "vi", resolved by next-intl middleware.
 │       ├── layout.tsx                  ← The de-facto root layout: <html>, <body>, fonts (Baloo 2 headings + calendar masthead, Nunito prose + UI - both with the vietnamese subset), NextIntlClientProvider, Navbar, SiteFooter.
 │       ├── page.tsx                    ← Homepage
