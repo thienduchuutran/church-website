@@ -974,7 +974,7 @@ Invisible 1px sentinel placed inside `PostCard` before the header strip. An `Int
 **Client component:** yes.
 
 #### `AudienceToggle`
-Labelled "Who to count" with its "i"; three pills - Visitors / Admins / Everyone (`AUDIENCE.options`) - in the filter row beside the date range. Scopes every panel on the page at once. Default Visitors (`public`), the leadership-facing view.
+Three pills - Visitors / Admins / Everyone (`AUDIENCE_OPTIONS` in `copy.ts`) - in the filter row beside the date range. No label or tip beside them: the owner removed "Who to count" and its explanation on 2026-11-06, the pill names stand on their own. Scopes every panel on the page at once. Default Visitors (`public`), the leadership-facing view.
 | Prop | Type | Description |
 |------|------|-------------|
 | `value` | `Audience` | `'public' \| 'admin' \| 'all'` |

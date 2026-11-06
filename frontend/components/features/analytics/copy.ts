@@ -154,11 +154,9 @@ export const HEALTH_COLUMNS = {
   },
 } satisfies Record<string, Copy>
 
-// export const AUDIENCE = {
-//   label: 'Who to count',
-//   tip: '',
-//   options: { public: 'Visitors', admin: 'Admins', all: 'Everyone' } as const,
-// }
+// The three pills on the audience toggle. The owner removed the "Who to
+// count" label and its tip (2026-11-06): the pill names explain themselves.
+export const AUDIENCE_OPTIONS = { public: 'Visitors', admin: 'Admins', all: 'Everyone' } as const
 
 export const EVENT_LABELS: Record<string, string> = {
   post_read: 'Read a post',
