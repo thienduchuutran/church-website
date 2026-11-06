@@ -15,7 +15,7 @@ export interface Copy {
 export const TILES = {
   visitors: {
     label: 'Daily visitors',
-    tip: 'How many different people came to the site, counted once per day. If the same person comes on Monday and again on Tuesday, that counts as 2. We cannot recognise the same person across days, on purpose - nothing about anyone is stored.',
+    tip: 'Different people who came, counted once per day. Someone who visits on two days counts as 2.',
   },
   peak: {
     label: 'Busiest day',
@@ -23,15 +23,15 @@ export const TILES = {
   },
   visits: {
     label: 'Visits',
-    tip: 'One visit is one person opening the site and reading until they leave or go quiet for 30 minutes. Opening a second browser tab counts as a second visit. One person can make several visits.',
+    tip: 'One visit is one person reading the site until they leave or pause for 30 minutes. A person can visit many times.',
   },
   visitLength: {
     label: 'Typical visit length',
-    tip: 'How long a visit usually lasts, counting only the time the page was actually on screen. Half of visits are shorter than this, half are longer. A phone left in a pocket does not count.',
+    tip: 'How long a visit usually lasts, counting only time the page was on screen. Half are shorter, half longer.',
   },
   cameBack: {
     label: 'Came back',
-    tip: 'Share of visits made by someone who had already visited on another day in the last 30 days. Their own browser remembers the date of their last visit; we never store who they are.',
+    tip: 'Share of visits from people who had already visited on another day in the last 30 days.',
   },
   vietnamese: {
     label: 'Reading in Vietnamese',
@@ -42,7 +42,7 @@ export const TILES = {
 export const SECTIONS = {
   trend: {
     label: 'Visitors over time',
-    tip: 'Different visitors per day (or per week for long periods), split by the language they were reading in. Click "Show table" to see the exact numbers.',
+    tip: 'Different visitors each day, split by the language they read in. Use the table toggle for exact numbers.',
   },
   heatmap: {
     label: 'When people visit',
@@ -54,7 +54,7 @@ export const SECTIONS = {
   },
   actions: {
     label: 'What people did',
-    tip: 'Things people did beyond just opening pages: reading a post, switching language, browsing the calendar, opening an album, reacting.',
+    tip: 'What people did beyond opening pages: reading posts, switching language, browsing the calendar, reacting.',
   },
   devices: {
     label: 'Phone or computer',
@@ -62,30 +62,30 @@ export const SECTIONS = {
   },
   sources: {
     label: 'How people found us',
-    tip: 'The website they were on just before arriving. "Direct / typed" means they typed the address, used a bookmark, or came from an app that hides where they came from (most chat apps do).',
+    tip: 'The site people came from. "Direct / typed" means a typed address, a bookmark, or a chat app that hides its origin.',
   },
   posts: {
     label: 'Which posts got read',
-    tip: 'Each post with how many times it was read in this period and how many reactions it has in total. A post counts as read when it stayed on screen for a couple of seconds.',
+    tip: 'Each post with how often it was read this period and its total reactions. Read means on screen for a few seconds.',
   },
   pipeline: {
     label: 'Translations and new content',
-    tip: 'How the automatic English to Vietnamese translation is doing, and how much new content was published in this period.',
+    tip: 'How the automatic Vietnamese translation is doing, and how much new content was published.',
   },
   health: {
     label: 'Website health',
-    tip: 'How the server behind the site is holding up: how many requests each part received, how many failed, and how fast it answered. Numbers arrive once an hour.',
+    tip: 'How the server is holding up: requests per part of the site, how many failed, and how fast it answered.',
   },
 } satisfies Record<string, Copy>
 
 export const PIPELINE_ROWS = {
   produced: {
     label: 'Translations the AI wrote',
-    tip: 'New Vietnamese translations the AI produced in this period, one per field (a post title and its body are two).',
+    tip: 'New Vietnamese translations the AI wrote this period. A title and its body count as two.',
   },
   approvedUnedited: {
     label: 'Approved without changes',
-    tip: 'Translations a bilingual admin approved exactly as the AI wrote them. The percentage is the share of all approvals. Higher means the AI is doing well.',
+    tip: 'Translations an admin approved exactly as the AI wrote them. Higher means the AI is doing well.',
   },
   approvedEdited: {
     label: 'Approved after edits',
@@ -93,15 +93,15 @@ export const PIPELINE_ROWS = {
   },
   pending: {
     label: 'Waiting for review',
-    tip: 'Translations currently showing on the site that no admin has checked yet. This is the review backlog, right now, not just this period.',
+    tip: 'Translations live on the site that no admin has checked yet. This is today\'s backlog, not this period.',
   },
   lead: {
     label: 'Typical wait until approved',
-    tip: 'How long a translation usually waited between the AI writing it and an admin approving it. Half waited less, half waited more.',
+    tip: 'How long a translation usually waited between the AI writing it and an admin approving it.',
   },
   trainingPairs: {
     label: 'Saved examples for training the AI',
-    tip: 'Approved translations saved as examples. One day these could train a translation model of our own that knows how this congregation speaks.',
+    tip: 'Approved translations saved as examples, so one day an AI of our own can learn how this congregation speaks.',
   },
   postsPublished: {
     label: 'Posts published',
@@ -109,7 +109,7 @@ export const PIPELINE_ROWS = {
   },
   reactionsAdded: {
     label: 'Reactions added',
-    tip: 'Thumbs-up, hearts and other reactions visitors left on posts in this period. Reactions from before 5 Nov 2026 have no date and are not counted here, though they still show on the posts.',
+    tip: 'Reactions left on posts this period. Reactions from before 5 Nov 2026 have no date and are not counted here.',
   },
 } satisfies Record<string, Copy>
 
@@ -146,11 +146,11 @@ export const HEALTH_COLUMNS = {
   },
   p50: {
     label: 'Usual speed',
-    tip: 'How long a typical request took to answer, in milliseconds (1000 ms is one second). Half were faster, half slower.',
+    tip: 'How long a typical request took, in milliseconds (1000 ms is a second). Half were faster, half slower.',
   },
   p95: {
     label: 'Slow moments',
-    tip: 'How long the slowest 1 in 20 requests took, in the worst hour of this period. Shows the bad moments the typical number hides.',
+    tip: 'How long the slowest 1 in 20 requests took, in the worst hour. Shows the bad moments the usual speed hides.',
   },
 } satisfies Record<string, Copy>
 
