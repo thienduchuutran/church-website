@@ -32,7 +32,7 @@ import ContentTable from '@/components/features/analytics/ContentTable'
 import PipelinePanel from '@/components/features/analytics/PipelinePanel'
 import RequestsTable from '@/components/features/analytics/RequestsTable'
 import SectionTitle from '@/components/features/analytics/SectionTitle'
-import { AUDIENCE, DEVICE_LABELS, EVENT_LABELS, SECTIONS, TILES } from '@/components/features/analytics/copy'
+import { DEVICE_LABELS, EVENT_LABELS, SECTIONS, TILES } from '@/components/features/analytics/copy'
 import { compact, delta, duration, longDate, percent } from '@/components/features/analytics/format'
 
 interface Data {
@@ -120,7 +120,7 @@ export default function AdminAnalyticsPage() {
         <div>
           <h1 className="t-title text-foreground">How the site is doing</h1>
           <p className="mt-1 font-sans text-sm text-muted">
-            {longDate(range.from)} to {longDate(range.to)} · {AUDIENCE.options[audience]} · anonymous, no cookies
+            {longDate(range.from)} to {longDate(range.to)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

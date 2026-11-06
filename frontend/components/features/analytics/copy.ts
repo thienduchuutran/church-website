@@ -154,11 +154,11 @@ export const HEALTH_COLUMNS = {
   },
 } satisfies Record<string, Copy>
 
-export const AUDIENCE = {
-  label: 'Who to count',
-  tip: 'Visitors: people who are not signed in as admins - the congregation and the public. Admins: signed-in admins using the site. Everyone: both together. The owner\'s own visits are left out entirely.',
-  options: { public: 'Visitors', admin: 'Admins', all: 'Everyone' } as const,
-}
+// export const AUDIENCE = {
+//   label: 'Who to count',
+//   tip: '',
+//   options: { public: 'Visitors', admin: 'Admins', all: 'Everyone' } as const,
+// }
 
 export const EVENT_LABELS: Record<string, string> = {
   post_read: 'Read a post',
